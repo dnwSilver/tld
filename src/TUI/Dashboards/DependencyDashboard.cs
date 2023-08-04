@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Text;
 using System.Text.Json;
 using Pastel;
@@ -44,12 +45,19 @@ public class DependencyDashboard : IControl<Project>
 
     private string GetDependencies(Source source, IEnumerable<Dependency> conventionDependencies)
     {
-        var package = DownloadPackage(source);
+        try
+        {
+            var package = DownloadPackage(source);
 
-        return string.Join("",
-                conventionDependencies
-                       .Select(package.Dependencies.GetVersion)
-                       .Select(GetCurrentVersion));
+            return string.Join("",
+                    conventionDependencies
+                           .Select(package.Dependencies.GetVersion)
+                           .Select(GetCurrentVersion));
+        }
+        catch
+        {
+            return "󰋔 We tried to send a request but couldn't. Check your configuration.".Pastel(Palette.ErrorColor);
+        }
     }
 
     private readonly static Dictionary<string, Package> Packages = new();
@@ -62,26 +70,20 @@ public class DependencyDashboard : IControl<Project>
         }
 
         using HttpClient client = new();
-        var json = client.GetStringAsync(source.Repo).GetAwaiter().GetResult();
+        var endpoint = source.Tags.Have("gitlab") ? GetGitlabEndpoint(source) : source.Repo;
+        var json = client.GetStringAsync(endpoint).GetAwaiter().GetResult();
         var package = JsonSerializer.Deserialize<Package>(json);
         Packages.Add(source.Repo, package);
         return package;
     }
 
-    // private string GetVersions(string title)
-    // {
-    //     // var source = sources[index];
-    //     // var package = DownloadPackage(source);
-    //     // var resultText = package.Dependencies.React;
-    //     // resultText = new string(' ', ColumnWidth - resultText.Width()) + resultText;
-    //     // if (selectedRowNumber == index + 1)
-    //     // {
-    //     //     resultText = resultText.PastelBg("292928");
-    //     // }
-    //
-    //     return resultText;
-    // }
-
+    private static string GetGitlabEndpoint(Source source)
+    {
+        var token = Environment.GetEnvironmentVariable("TLD_GITLAB_PAT");
+        return $"{source.Repo}/api/v4/projects/{source.ProjectId}/repository/files/package.json/raw?" +
+               $"private_token={token}&ref=master";
+    }
+    
     private static string GetConventionVersion(Dependency dependency)
     {
         return dependency.Icon.Pastel(dependency.Color) + dependency.Version.Primary();
