@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using TUI.Settings;
 using YamlDotNet.Serialization;
 
 
@@ -14,8 +15,8 @@ public class Project
     public string Name { get; set; }
 
     [YamlMember]
-    public Dependency[] Dependencies { get; set; }
+    public DependencyDto[] Dependencies { get; set; }
 
     [YamlMember]
-    public IList<Source> Sources { get; set; }
+    public IList<SourceDto> Sources { get; set; }
 }

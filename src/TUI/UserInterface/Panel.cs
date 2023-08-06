@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Pastel;
 using TUI.Domain;
+using TUI.Settings;
 
 
 namespace TUI.UserInterface;
@@ -14,7 +15,7 @@ public static class Panel
     private const int TagCount = 5;
     private const int TagWidth = 2;
 
-    public static void RenderRows(Source[] sources, int selectedRowNumber)
+    public static void RenderRows(SourceDto[] sources, int selectedRowNumber)
     {
         for (var index = 0; index < sources.Length; index++)
         {

@@ -17,7 +17,30 @@ public class Header : IControl
             Console.WriteLine(new string(' ', Console.WindowWidth - LogoWidth));
         }
 
+        RenderHints();
+        RenderHotkeys();
         RenderLogo();
+    }
+
+    private void RenderHotkeys()
+    {
+        Console.SetCursorPosition(30, Theme.Padding);
+        Console.Write("󰬌 toggle header".Hint());
+        Console.SetCursorPosition(30, Theme.Padding + 1);
+        Console.Write("󰬘 quit".Hint());
+        Console.SetCursorPosition(30, Theme.Padding + 2);
+        Console.Write(" select previous".Hint());
+        Console.SetCursorPosition(30, Theme.Padding + 3);
+        Console.Write(" select next".Hint());
+    }
+
+    private void RenderHints()
+    {
+        Console.SetCursorPosition(0, Theme.Padding);
+        Console.WriteLine(' '.Repeat(Theme.Padding) + "󰎔  Too new: ".Hint() + "1.20.0".Info());
+        Console.WriteLine(' '.Repeat(Theme.Padding) + "  So good: ".Hint() + "1.20.0".Primary());
+        Console.WriteLine(' '.Repeat(Theme.Padding) + "  Be nice: ".Hint() + "1.20.0".Warning());
+        Console.WriteLine(' '.Repeat(Theme.Padding) + "󰬟  Too old: ".Hint() + "1.20.0".Error());
     }
 
     private void RenderLogo()

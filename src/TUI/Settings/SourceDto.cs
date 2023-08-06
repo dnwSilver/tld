@@ -1,10 +1,10 @@
 using YamlDotNet.Serialization;
 
 
-namespace TUI.Domain;
+namespace TUI.Settings;
 
 [YamlSerializable]
-public class Source
+public class SourceDto
 {
     [YamlMember]
     public string[] Tags { get; set; }
@@ -13,7 +13,6 @@ public class Source
     public string Name { get; set; }
 
     [YamlMember]
-    // [YamlMember(Alias = "project_id")]
     public int ProjectId { get; set; } = 0;
 
     [YamlMember]

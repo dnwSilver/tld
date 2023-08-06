@@ -1,9 +1,11 @@
-using System.Drawing;
+using System.Diagnostics;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Pastel;
 using TUI.Controls;
 using TUI.Domain;
+using TUI.Settings;
 using TUI.UserInterface;
 
 
@@ -11,12 +13,10 @@ namespace TUI.Dashboards;
 
 public class DependencyDashboard : IControl<Project>
 {
-    private int _selectedRowNumber = 0;
-
-    private const int TitleWidth = 35;
+    private const int TitleWidth = 25;
     private const int ColumnWidth = 10;
 
-    private Table _table = new();
+    private readonly Table _table = new();
 
     public void Render(Project project, Position position)
     {
@@ -39,68 +39,87 @@ public class DependencyDashboard : IControl<Project>
             var actualDependencies = GetDependencies(project.Sources[rowId], project.Dependencies);
             _table.RenderRow(rowId + 1, rows[rowId] + actualDependencies);
         }
-
-        // Panel.RenderRows(project.Sources.ToArray(), _selectedRowNumber);
     }
 
-    private string GetDependencies(Source source, IEnumerable<Dependency> conventionDependencies)
+    private static string GetDependencies(SourceDto sourceDto, IEnumerable<DependencyDto> conventionDependencies)
     {
         try
         {
-            var package = DownloadPackage(source);
+            var package = DownloadPackage(sourceDto);
 
             return string.Join("",
                     conventionDependencies
                            .Select(package.Dependencies.GetVersion)
-                           .Select(GetCurrentVersion));
+                           .Select(RenderCurrentVersion));
         }
-        catch
+        catch (HttpRequestException exception)
         {
+            switch (exception.StatusCode)
+            {
+                case HttpStatusCode.BadRequest:
+                    return " Request have errors.".Pastel(Palette.ErrorColor);
+                case HttpStatusCode.Forbidden:
+                    return " Not enough rights.".Pastel(Palette.ErrorColor);
+                case HttpStatusCode.NotFound:
+                    return " Repository not found.".Pastel(Palette.ErrorColor);
+            }
+
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Debugger.Break();
             return "󰋔 We tried to send a request but couldn't. Check your configuration.".Pastel(Palette.ErrorColor);
         }
     }
 
     private readonly static Dictionary<string, Package> Packages = new();
 
-    private static Package DownloadPackage(Source source)
+    private static Package DownloadPackage(SourceDto sourceDto)
     {
-        if (Packages.TryGetValue(source.Repo, out var downloadPackage))
+        if (Packages.TryGetValue(sourceDto.Repo, out var downloadPackage))
         {
             return downloadPackage;
         }
 
         using HttpClient client = new();
-        var endpoint = source.Tags.Have("gitlab") ? GetGitlabEndpoint(source) : source.Repo;
+        var endpoint = sourceDto.Tags.Have("gitlab") ? GetGitlabEndpoint(sourceDto) : sourceDto.Repo;
         var json = client.GetStringAsync(endpoint).GetAwaiter().GetResult();
         var package = JsonSerializer.Deserialize<Package>(json);
-        Packages.Add(source.Repo, package);
+        Packages.Add(sourceDto.Repo, package);
         return package;
     }
 
-    private static string GetGitlabEndpoint(Source source)
+    private static string GetGitlabEndpoint(SourceDto sourceDto)
     {
         var token = Environment.GetEnvironmentVariable("TLD_GITLAB_PAT");
-        return $"{source.Repo}/api/v4/projects/{source.ProjectId}/repository/files/package.json/raw?" +
+        return $"{sourceDto.Repo}/api/v4/projects/{sourceDto.ProjectId}/repository/files/package.json/raw?" +
                $"private_token={token}&ref=master";
     }
-    
-    private static string GetConventionVersion(Dependency dependency)
+
+    private static string GetConventionVersion(DependencyDto dependencyDto)
     {
-        return dependency.Icon.Pastel(dependency.Color) + dependency.Version.Primary();
+        return dependencyDto.Icon.Pastel(dependencyDto.Color) + dependencyDto.Version.Primary();
     }
 
-    private static string GetCurrentVersion(string version)
+    private static string RenderCurrentVersion(string version)
     {
-        return ' '.Repeat(ColumnWidth - version.Width()) + version;
+        var versionWidth = version.Width();
+        if (versionWidth == 0)
+        {
+            return ' '.Repeat(ColumnWidth - 1) + "".Hint();
+        }
+
+        return ' '.Repeat(ColumnWidth - versionWidth) + version;
     }
 
-    private static string GetTitle(Source source)
+    private static string GetTitle(SourceDto sourceDto)
     {
         var rowText = new StringBuilder();
 
         RenderPadding(rowText);
-        RenderTags(rowText, source);
-        rowText.Append(source.Name);
+        RenderTags(rowText, sourceDto);
+        rowText.Append(sourceDto.Name);
         RenderPadding(rowText);
         var text = rowText.ToString();
         return $"{text}{' '.Repeat(TitleWidth - text.Width())}";
@@ -111,32 +130,32 @@ public class DependencyDashboard : IControl<Project>
         rowText.Append(new string(' ', Theme.Padding));
     }
 
-    private static void RenderTags(StringBuilder rowText, Source source)
+    private static void RenderTags(StringBuilder rowText, SourceDto sourceDto)
     {
-        rowText.Append(GetGitApplication(source));
-        rowText.Append(source.Tags.Have("public")
+        rowText.Append(GetGitApplication(sourceDto));
+        rowText.Append(sourceDto.Tags.Have("public")
                 ? GetIcon("󰞉", "00FFFF")
                 : GetIcon("󰕑", "AFE1AF"));
-        rowText.Append(GetIcon("󰚩", "4285F4", source.Tags.Have("seo")));
-        rowText.Append(GetIcon("",  "FFD700", source.Tags.Have("auth")));
-        rowText.Append(GetApplicationType(source));
+        rowText.Append(GetIcon("󰚩", "4285F4", sourceDto.Tags.Have("seo")));
+        rowText.Append(GetIcon("",  "FFD700", sourceDto.Tags.Have("auth")));
+        rowText.Append(GetApplicationType(sourceDto));
     }
 
-    private static string GetApplicationType(Source source)
+    private static string GetApplicationType(SourceDto sourceDto)
     {
-        if (source.Tags.Have("site"))
+        if (sourceDto.Tags.Have("site"))
             return GetIcon("", "BF40BF");
-        if (source.Tags.Have("api"))
+        if (sourceDto.Tags.Have("api"))
             return GetIcon("", "7F52FF");
-        if (source.Tags.Have("package"))
+        if (sourceDto.Tags.Have("package"))
             return GetIcon("", "CB0000");
-        if (source.Tags.Have("image"))
+        if (sourceDto.Tags.Have("image"))
             return GetIcon("󰡨", "086DD7");
 
         return GetIcon("", "CB0000");
     }
 
-    private static string GetGitApplication(Source source) => source.Repo switch
+    private static string GetGitApplication(SourceDto sourceDto) => sourceDto.Repo switch
     {
         { } url when url.Contains("gitlab") => GetIcon("", "E24329"),
         { } url when url.Contains("github") => GetIcon("", "ADBAC7"),
