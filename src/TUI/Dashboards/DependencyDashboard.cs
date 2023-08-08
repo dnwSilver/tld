@@ -49,7 +49,7 @@ public class DependencyDashboard : IControl<Project>
 
             return string.Join("",
                     conventionDependencies
-                           .Select(package.Dependencies.GetVersion)
+                           .Select(dependency => GetVersion(dependency, package))
                            .Select(RenderCurrentVersion));
         }
         catch (HttpRequestException exception)
@@ -61,7 +61,7 @@ public class DependencyDashboard : IControl<Project>
                 case HttpStatusCode.Forbidden:
                     return " Not enough rights.".Pastel(Palette.ErrorColor);
                 case HttpStatusCode.NotFound:
-                    return " Repository not found.".Pastel(Palette.ErrorColor);
+                    return " Repository or branch master not found.".Pastel(Palette.ErrorColor);
             }
 
             throw;
@@ -71,6 +71,37 @@ public class DependencyDashboard : IControl<Project>
             Debugger.Break();
             return "󰋔 We tried to send a request but couldn't. Check your configuration.".Pastel(Palette.ErrorColor);
         }
+    }
+
+
+    private static string GetVersion(DependencyDto dependency, Package package)
+    {
+        var currentVersion = package.ParseVersion(dependency.Name);
+
+        if (currentVersion == null)
+        {
+            return "".Hint();
+        }
+
+        var conventionVersion = dependency.Version?.ToVersion();
+        return PaintingVersion(currentVersion, conventionVersion);
+    }
+
+    private static string PaintingVersion(Version current, Version? convention)
+    {
+        var textVersion = current.ToString();
+
+        if (current > convention)
+        {
+            return textVersion.Info();
+        }
+
+        if (current < convention)
+        {
+            return current.Major == convention.Major ? textVersion.Warning() : textVersion.Error();
+        }
+
+        return textVersion.Primary();
     }
 
     private readonly static Dictionary<string, Package> Packages = new();
@@ -86,7 +117,7 @@ public class DependencyDashboard : IControl<Project>
         var endpoint = sourceDto.Tags.Have("gitlab") ? GetGitlabEndpoint(sourceDto) : sourceDto.Repo;
         var json = client.GetStringAsync(endpoint).GetAwaiter().GetResult();
         var package = JsonSerializer.Deserialize<Package>(json);
-        Packages.Add(sourceDto.Repo, package);
+        Packages.Add(endpoint, package);
         return package;
     }
 
@@ -115,30 +146,38 @@ public class DependencyDashboard : IControl<Project>
 
     private static string GetTitle(SourceDto sourceDto)
     {
-        var rowText = new StringBuilder();
+        var title = "";
 
-        RenderPadding(rowText);
-        RenderTags(rowText, sourceDto);
-        rowText.Append(sourceDto.Name);
-        RenderPadding(rowText);
-        var text = rowText.ToString();
-        return $"{text}{' '.Repeat(TitleWidth - text.Width())}";
+        title += RenderPadding();
+        title += RenderTags(sourceDto);
+        if (title.Width() + sourceDto.Name.Length + Theme.Padding <= TitleWidth)
+        {
+            title += sourceDto.Name;
+        }
+        else
+        {
+            var maxNameWidth = TitleWidth - title.Width() - Theme.Padding;
+            title += $"{sourceDto.Name[..(maxNameWidth - 1)]}{"#".Hint()}";
+        }
+
+        title += RenderPadding();
+        return $"{title}{' '.Repeat(TitleWidth - title.Width())}";
     }
 
-    private static void RenderPadding(StringBuilder rowText)
+    private static string RenderPadding()
     {
-        rowText.Append(new string(' ', Theme.Padding));
+        return new string(' ', Theme.Padding);
     }
 
-    private static void RenderTags(StringBuilder rowText, SourceDto sourceDto)
+    private static string RenderTags(SourceDto sourceDto)
     {
-        rowText.Append(GetGitApplication(sourceDto));
-        rowText.Append(sourceDto.Tags.Have("public")
-                ? GetIcon("󰞉", "00FFFF")
-                : GetIcon("󰕑", "AFE1AF"));
-        rowText.Append(GetIcon("󰚩", "4285F4", sourceDto.Tags.Have("seo")));
-        rowText.Append(GetIcon("",  "FFD700", sourceDto.Tags.Have("auth")));
-        rowText.Append(GetApplicationType(sourceDto));
+        var tags = "";
+        tags += GetGitApplication(sourceDto);
+        tags += sourceDto.Tags.Have("public") ? GetIcon("󰞉", "00FFFF") : GetIcon("󰕑", "AFE1AF");
+        tags += GetIcon("󰚩", "4285F4", sourceDto.Tags.Have("seo"));
+        tags += GetIcon("",  "FFD700", sourceDto.Tags.Have("auth"));
+        tags += GetApplicationType(sourceDto);
+        return tags;
     }
 
     private static string GetApplicationType(SourceDto sourceDto)

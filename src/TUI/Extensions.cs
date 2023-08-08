@@ -16,7 +16,7 @@ public static class Extensions
 
     public static string Repeat(this char symbol, int repeatCount)
     {
-        return new string(symbol, repeatCount);
+        return repeatCount < 0 ? "" : new string(symbol, repeatCount);
     }
 
     public static int Width(this string text)
@@ -31,36 +31,7 @@ public static class Extensions
         return stringInfo.LengthInTextElements;
     }
 
-    public static string GetVersion(this JsonObject dependencies, DependencyDto dependencyDto)
-    {
-        dependencies.TryGetPropertyValue(dependencyDto.Name.ToLower(), out var version);
-        var currentVersion = version?.GetValue<string>().ToVersion();
-        if (currentVersion == null)
-        {
-            return "".Hint();
-        }
-
-        var conventionVersion = dependencyDto.Version.ToVersion();
-
-        if (currentVersion > conventionVersion)
-        {
-            return currentVersion.ToString().Info();
-        }
-
-        if (currentVersion < conventionVersion)
-        {
-            if (currentVersion.Major == conventionVersion.Major)
-            {
-                return currentVersion.ToString().Warning();
-            }
-
-            return currentVersion.ToString().Error();
-        }
-
-        return currentVersion.ToString().Primary();
-    }
-
-    private static Version? ToVersion(this string textVersion)
+    public static Version? ToVersion(this string textVersion)
     {
         var version = textVersion.Replace("^", "").Replace("~", "").Split(".");
         if (version.Length != 3)
