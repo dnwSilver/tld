@@ -7,6 +7,32 @@ public class Header : IControl
 {
     public const int LogoWidth = 16;
     public const int Height = 6;
+    public const int MaxHeaderBlocksWidth = 16;
+
+
+    private readonly Dictionary<string, string> _hotKeys = new()
+    {
+        { "", "select prev" },
+        { "", "select next" },
+        { "󰬌", "toggle head" },
+        { "󰬘", "quit" },
+    };
+
+    private readonly Dictionary<string, string> _hints = new()
+    {
+        { "󰎔", "too new".Info() },
+        { "", "so good" },
+        { "", "be nice".Primary() },
+        { "󰬟", "too old".Warning() }
+    };
+
+    private readonly Dictionary<string, string> _tags = new()
+    {
+        { Icons.Auth, "Auth" },
+        { Icons.NetworkPublic, "WWW" },
+        { Icons.SEO, "SEO" },
+        { Icons.GitLab, "VCS" },
+    };
 
     public void Render(Position position)
     {
@@ -17,33 +43,27 @@ public class Header : IControl
             Console.WriteLine(new string(' ', Console.WindowWidth - LogoWidth));
         }
 
-        RenderHints();
-        RenderHotkeys();
+        RenderBlock(0, _hints);
+        RenderBlock(1, _tags);
+        RenderBlock(2, Icons.Applications);
+        RenderBlock(3, _hotKeys);
         RenderLogo();
     }
 
-    private void RenderHotkeys()
+    private static void RenderBlock(int blockNumber, Dictionary<string, string> items)
     {
-        Console.SetCursorPosition(30, Theme.Padding);
-        Console.Write("󰬌 toggle header".Hint());
-        Console.SetCursorPosition(30, Theme.Padding + 1);
-        Console.Write("󰬘 quit".Hint());
-        Console.SetCursorPosition(30, Theme.Padding + 2);
-        Console.Write(" select previous".Hint());
-        Console.SetCursorPosition(30, Theme.Padding + 3);
-        Console.Write(" select next".Hint());
+        var leftPadding = Theme.Padding + blockNumber * MaxHeaderBlocksWidth;
+
+        var hotKeyNumber = 0;
+        foreach (var item in items)
+        {
+            Console.SetCursorPosition(leftPadding, Theme.Padding + hotKeyNumber++);
+            Console.Write((item.Key + " " + item.Value).Hint());
+        }
     }
 
-    private void RenderHints()
-    {
-        Console.SetCursorPosition(0, Theme.Padding);
-        Console.WriteLine(' '.Repeat(Theme.Padding) + "󰎔  Too new: ".Hint() + "1.20.0".Info());
-        Console.WriteLine(' '.Repeat(Theme.Padding) + "  So good: ".Hint() + "1.20.0".Primary());
-        Console.WriteLine(' '.Repeat(Theme.Padding) + "  Be nice: ".Hint() + "1.20.0".Warning());
-        Console.WriteLine(' '.Repeat(Theme.Padding) + "󰬟  Too old: ".Hint() + "1.20.0".Error());
-    }
 
-    private void RenderLogo()
+    private static void RenderLogo()
     {
         Console.SetCursorPosition(Console.WindowWidth - LogoWidth - Theme.Padding, 0);
         Console.WriteLine("  ╭━━━━┳╮".Primary() + "╱╱".Hint() + "╭━━━╮ ".Primary());
@@ -52,8 +72,8 @@ public class Header : IControl
         Console.SetCursorPosition(Console.WindowWidth - LogoWidth - Theme.Padding, 2);
         Console.WriteLine("  ╰╯┃┃╰┫┃".Primary() + "╱╱╱".Hint() + "┃┃┃┃ ".Primary());
         Console.SetCursorPosition(Console.WindowWidth - LogoWidth - Theme.Padding, 3);
-        Console.WriteLine("  ╱╱".Hint() + "┃┃".Primary() + "╱".Hint() + "┃┃".Primary() +
-                          "╱".Hint() + "╭╮┃┃┃┃ ".Primary());
+        Console.WriteLine("  ╱╱".Hint() + "┃┃".Primary() + "╱".Hint() + "┃┃".Primary() + "╱".Hint() +
+                          "╭╮┃┃┃┃ ".Primary());
         Console.SetCursorPosition(Console.WindowWidth - LogoWidth - Theme.Padding, 4);
         Console.WriteLine(" ╱╱╱".Hint() + "┃┃".Primary() + "╱".Hint() + "┃╰━╯┣╯╰╯┃ ".Primary());
         Console.SetCursorPosition(Console.WindowWidth - LogoWidth - Theme.Padding, 5);

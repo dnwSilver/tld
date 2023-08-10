@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using Pastel;
 using TUI.Controls;
@@ -80,7 +79,7 @@ public class DependencyDashboard : IControl<Project>
 
         if (currentVersion == null)
         {
-            return "".Hint();
+            return Icons.NotFound;
         }
 
         var conventionVersion = dependency.Version?.ToVersion();
@@ -98,10 +97,10 @@ public class DependencyDashboard : IControl<Project>
 
         if (current < convention)
         {
-            return current.Major == convention.Major ? textVersion.Warning() : textVersion.Error();
+            return current.Major == convention.Major ? textVersion.Primary() : textVersion.Warning();
         }
 
-        return textVersion.Primary();
+        return textVersion.Hint();
     }
 
     private readonly static Dictionary<string, Package> Packages = new();
@@ -138,7 +137,7 @@ public class DependencyDashboard : IControl<Project>
         var versionWidth = version.Width();
         if (versionWidth == 0)
         {
-            return ' '.Repeat(ColumnWidth - 1) + "".Hint();
+            return ' '.Repeat(ColumnWidth - 1) + Icons.NotFound.Hint();
         }
 
         return ' '.Repeat(ColumnWidth - versionWidth) + version;
@@ -173,36 +172,36 @@ public class DependencyDashboard : IControl<Project>
     {
         var tags = "";
         tags += GetGitApplication(sourceDto);
-        tags += sourceDto.Tags.Have("public") ? GetIcon("󰞉", "00FFFF") : GetIcon("󰕑", "AFE1AF");
-        tags += GetIcon("󰚩", "4285F4", sourceDto.Tags.Have("seo"));
-        tags += GetIcon("",  "FFD700", sourceDto.Tags.Have("auth"));
+        tags += " ";
+        tags += sourceDto.Tags.Have("public") ? Icons.NetworkPublic : Icons.NetworkPrivate;
+        tags += " ";
+        tags += sourceDto.Tags.Have("seo") ? Icons.SEO : Icons.SEO.Disable();
+        tags += " ";
+        tags += sourceDto.Tags.Have("auth") ? Icons.Auth : Icons.Auth.Disable();
+        tags += " ";
         tags += GetApplicationType(sourceDto);
+        tags += " ";
+
         return tags;
     }
 
     private static string GetApplicationType(SourceDto sourceDto)
     {
-        if (sourceDto.Tags.Have("site"))
-            return GetIcon("", "BF40BF");
-        if (sourceDto.Tags.Have("api"))
-            return GetIcon("", "7F52FF");
-        if (sourceDto.Tags.Have("package"))
-            return GetIcon("", "CB0000");
-        if (sourceDto.Tags.Have("image"))
-            return GetIcon("󰡨", "086DD7");
+        foreach (var application in Icons.Applications)
+        {
+            if (sourceDto.Tags.Have(application.Value))
+                return application.Key;
+        }
 
-        return GetIcon("", "CB0000");
+        return Icons.Undefined;
     }
 
     private static string GetGitApplication(SourceDto sourceDto) => sourceDto.Repo switch
     {
-        { } url when url.Contains("gitlab") => GetIcon("", "E24329"),
-        { } url when url.Contains("github") => GetIcon("", "ADBAC7"),
-        _                                   => GetIcon("", "F14E32")
+        { } url when url.Contains("gitlab") => Icons.GitLab,
+        { } url when url.Contains("github") => Icons.GitHub,
+        _                                   => Icons.Git
     };
-
-    private static string GetIcon(string icon, string activeColor, bool enabled = true) =>
-            (icon.Pastel(enabled ? activeColor : "71797E") + " ").PadLeft(2);
 
     public void Next()
     {

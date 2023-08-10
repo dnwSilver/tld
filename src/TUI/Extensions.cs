@@ -1,8 +1,4 @@
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using TUI.Domain;
-using TUI.Settings;
-using TUI.UserInterface;
 
 
 namespace TUI;
@@ -19,6 +15,11 @@ public static class Extensions
         return repeatCount < 0 ? "" : new string(symbol, repeatCount);
     }
 
+    public static string RemoveColors(this string text)
+    {
+        return Regex.Replace(text, @"\S\[(\d{0,3}[;m][_]?){0,5}", "");
+    }
+    
     public static int Width(this string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -26,7 +27,7 @@ public static class Extensions
             return 0;
         }
 
-        var clearText = Regex.Replace(text, @"\S\[(\d{0,3}[;m][_]?){0,5}", "");
+        var clearText = text.RemoveColors();
         var stringInfo = new System.Globalization.StringInfo(clearText);
         return stringInfo.LengthInTextElements;
     }

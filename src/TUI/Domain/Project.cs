@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using TUI.Settings;
 using YamlDotNet.Serialization;
 
