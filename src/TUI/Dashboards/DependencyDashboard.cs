@@ -15,13 +15,20 @@ public class DependencyDashboard : IControl<Project>
     private const int TitleWidth = 25;
     private const int ColumnWidth = 10;
 
+    private readonly static Dictionary<string, Package> Packages = new();
+    private readonly Dashboard _dashboard = new();
+
     private readonly Table _table = new();
 
-    public void Render(Project project, Position position)
+    public bool IsFocused
     {
-        var dashboard = new Dashboard();
-        dashboard.Render(project.Icon, position);
+        get => _dashboard.IsFocused;
+        set => _dashboard.IsFocused = value;
+    }
 
+    public void Render(Project project, Position position, int? height = 0)
+    {
+        _dashboard.Render(project.Icon + " Dependencies", position);
         var header = project.Dependencies.Select(GetConventionVersion).ToArray();
         var rows = project.Sources.Select(GetTitle).ToArray();
 
@@ -77,10 +84,7 @@ public class DependencyDashboard : IControl<Project>
     {
         var currentVersion = package.ParseVersion(dependency.Name);
 
-        if (currentVersion == null)
-        {
-            return Icons.NotFound;
-        }
+        if (currentVersion == null) return Icons.NotFound;
 
         var conventionVersion = dependency.Version?.ToVersion();
         return PaintingVersion(currentVersion, conventionVersion);
@@ -90,30 +94,20 @@ public class DependencyDashboard : IControl<Project>
     {
         var textVersion = current.ToString();
 
-        if (current > convention)
-        {
-            return textVersion.Info();
-        }
+        if (current > convention) return textVersion.Info();
 
         if (current < convention)
-        {
             return current.Major == convention.Major ? textVersion.Primary() : textVersion.Warning();
-        }
 
         return textVersion.Hint();
     }
 
-    private readonly static Dictionary<string, Package> Packages = new();
-
     private static Package DownloadPackage(SourceDto sourceDto)
     {
-        if (Packages.TryGetValue(sourceDto.Repo, out var downloadPackage))
-        {
-            return downloadPackage;
-        }
+        var endpoint = sourceDto.Tags.Have("gitlab") ? GetGitlabEndpoint(sourceDto) : sourceDto.Repo;
+        if (Packages.TryGetValue(endpoint, out var downloadPackage)) return downloadPackage;
 
         using HttpClient client = new();
-        var endpoint = sourceDto.Tags.Have("gitlab") ? GetGitlabEndpoint(sourceDto) : sourceDto.Repo;
         var json = client.GetStringAsync(endpoint).GetAwaiter().GetResult();
         var package = JsonSerializer.Deserialize<Package>(json);
         Packages.Add(endpoint, package);
@@ -135,10 +129,7 @@ public class DependencyDashboard : IControl<Project>
     private static string RenderCurrentVersion(string version)
     {
         var versionWidth = version.Width();
-        if (versionWidth == 0)
-        {
-            return ' '.Repeat(ColumnWidth - 1) + Icons.NotFound.Hint();
-        }
+        if (versionWidth == 0) return ' '.Repeat(ColumnWidth - 1) + Icons.NotFound.Hint();
 
         return ' '.Repeat(ColumnWidth - versionWidth) + version;
     }
@@ -188,20 +179,21 @@ public class DependencyDashboard : IControl<Project>
     private static string GetApplicationType(SourceDto sourceDto)
     {
         foreach (var application in Icons.Applications)
-        {
             if (sourceDto.Tags.Have(application.Value))
                 return application.Key;
-        }
 
         return Icons.Undefined;
     }
 
-    private static string GetGitApplication(SourceDto sourceDto) => sourceDto.Repo switch
+    private static string GetGitApplication(SourceDto sourceDto)
     {
-        { } url when url.Contains("gitlab") => Icons.GitLab,
-        { } url when url.Contains("github") => Icons.GitHub,
-        _                                   => Icons.Git
-    };
+        return sourceDto.Repo switch
+        {
+            { } url when url.Contains("gitlab") => Icons.GitLab,
+            { } url when url.Contains("github") => Icons.GitHub,
+            _                                   => Icons.Git
+        };
+    }
 
     public void Next()
     {

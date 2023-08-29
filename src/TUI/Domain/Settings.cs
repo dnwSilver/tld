@@ -7,6 +7,9 @@ namespace TUI.Domain;
 [YamlSerializable]
 public class Settings
 {
+    [YamlMember]
+    public Project[] Projects { get; set; }
+
     public static Settings Init()
     {
         var deserializer = new DeserializerBuilder()
@@ -16,7 +19,4 @@ public class Settings
         using var sr = new StreamReader("settings.yaml");
         return deserializer.Deserialize<Settings>(sr.ReadToEnd());
     }
-
-    [YamlMember]
-    public Project[] Projects { get; set; }
 }

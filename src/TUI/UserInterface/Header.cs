@@ -9,15 +9,6 @@ public class Header : IControl
     public const int Height = 6;
     public const int MaxHeaderBlocksWidth = 16;
 
-
-    private readonly Dictionary<string, string> _hotKeys = new()
-    {
-        { "", "select prev" },
-        { "", "select next" },
-        { "󰬌", "toggle head" },
-        { "󰬘", "quit" },
-    };
-
     private readonly Dictionary<string, string> _hints = new()
     {
         { "󰎔", "too new".Info() },
@@ -26,22 +17,28 @@ public class Header : IControl
         { "󰬟", "too old".Warning() }
     };
 
+
+    private readonly Dictionary<string, string> _hotKeys = new()
+    {
+        { "", "select prev" },
+        { "", "select next" },
+        { "󰬌", "toggle head" },
+        { "󰬘", "quit" }
+    };
+
     private readonly Dictionary<string, string> _tags = new()
     {
         { Icons.Auth, "Auth" },
         { Icons.NetworkPublic, "WWW" },
         { Icons.SEO, "SEO" },
-        { Icons.GitLab, "VCS" },
+        { Icons.GitLab, "VCS" }
     };
 
     public void Render(Position position)
     {
         Console.SetCursorPosition(position.Left, position.Top);
 
-        for (var i = 1; i <= Height; i++)
-        {
-            Console.WriteLine(new string(' ', Console.WindowWidth - LogoWidth));
-        }
+        for (var i = 1; i <= Height; i++) Console.WriteLine(new string(' ', Console.WindowWidth - LogoWidth));
 
         RenderBlock(0, _hints);
         RenderBlock(1, _tags);

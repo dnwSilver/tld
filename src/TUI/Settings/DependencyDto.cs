@@ -13,7 +13,7 @@ public class DependencyDto
     [DataMember]
     [YamlMember]
     public string? Name { get; set; }
-    
+
     [DataMember]
     [YamlMember]
     public string? Icon

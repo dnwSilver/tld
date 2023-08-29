@@ -11,6 +11,9 @@ public static class Panel
     private const int TagCount = 5;
     private const int TagWidth = 2;
 
+
+    private static int _marginTop;
+
     public static void RenderRows(SourceDto[] sources, int selectedRowNumber)
     {
         for (var index = 0; index < sources.Length; index++)
@@ -28,20 +31,18 @@ public static class Panel
         }
 
         for (var index = 0; index < sources.Length; index++)
-        {
             Console.SetCursorPosition(TitleWidth,
                     6 + index + _marginTop + BorderWidth + Theme.Padding);
-            // var source = sources[index];
-            // var package = DownloadPackage(source);
-            // var resultText = package.Dependencies.React;
-            // resultText = new string(' ', ColumnWidth - resultText.Width()) + resultText;
-            // if (selectedRowNumber == index + 1)
-            // {
-            //     resultText = resultText.PastelBg("292928");
-            // }
-            //
-            // Console.Write(resultText);
-        }
+        // var source = sources[index];
+        // var package = DownloadPackage(source);
+        // var resultText = package.Dependencies.React;
+        // resultText = new string(' ', ColumnWidth - resultText.Width()) + resultText;
+        // if (selectedRowNumber == index + 1)
+        // {
+        //     resultText = resultText.PastelBg("292928");
+        // }
+        //
+        // Console.Write(resultText);
         // for (var index = 0; index < sources.Length; index++)
         // {
         //     var loading = true;
@@ -73,9 +74,6 @@ public static class Panel
         //     Console.Write(braille[0]);
         // }
     }
-
-
-    private static int _marginTop;
 
     // private static Package DownloadPackage(Source source)
     // {

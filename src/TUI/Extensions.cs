@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 
@@ -17,18 +18,15 @@ public static class Extensions
 
     public static string RemoveColors(this string text)
     {
-        return Regex.Replace(text, @"\S\[(\d{0,3}[;m][_]?){0,5}", "");
+        return Regex.Replace(text, @"\S\[(\d{0,3}[;m]_?){0,5}", "");
     }
-    
+
     public static int Width(this string text)
     {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
+        if (string.IsNullOrEmpty(text)) return 0;
 
         var clearText = text.RemoveColors();
-        var stringInfo = new System.Globalization.StringInfo(clearText);
+        var stringInfo = new StringInfo(clearText);
         return stringInfo.LengthInTextElements;
     }
 

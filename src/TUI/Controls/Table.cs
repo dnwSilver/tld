@@ -11,22 +11,19 @@ public record TableProps(IEnumerable<string> HeaderCells,
 
 public class Table : IControl<TableProps>
 {
+    private readonly Dictionary<int, string> _rows = new();
     private Position _position;
     private int _selectedRowId;
 
-    public void Render(TableProps props, Position position)
+    public void Render(TableProps props, Position position, int? height = 0)
     {
         _position = position;
         Console.SetCursorPosition(_position.Left, _position.Top);
 
         Console.Write(' '.Repeat(props.TitleWidth));
         foreach (var headerCell in props.HeaderCells)
-        {
             Console.Write(' '.Repeat(props.ColumnWidth - headerCell.Width()) + headerCell);
-        }
     }
-
-    private readonly Dictionary<int, string> _rows = new();
 
     public void RenderRow(int rowId, string rowText, string? bgColor = default)
     {
@@ -39,10 +36,7 @@ public class Table : IControl<TableProps>
 
     public void Next()
     {
-        if (_selectedRowId >= _rows.Count)
-        {
-            return;
-        }
+        if (_selectedRowId >= _rows.Count) return;
 
         RemoveHoverFromCurrentRow();
         RenderRow(++_selectedRowId, _rows[_selectedRowId], Palette.HoverColor);
@@ -50,23 +44,14 @@ public class Table : IControl<TableProps>
 
     private void RemoveHoverFromCurrentRow()
     {
-        if (_rows.TryGetValue(_selectedRowId, out var row))
-        {
-            RenderRow(_selectedRowId, row);
-        }
+        if (_rows.TryGetValue(_selectedRowId, out var row)) RenderRow(_selectedRowId, row);
     }
 
     public void Previous()
     {
-        if (_selectedRowId == 0)
-        {
-            Next();
-        }
+        if (_selectedRowId == 0) Next();
 
-        if (_selectedRowId == 1)
-        {
-            return;
-        }
+        if (_selectedRowId == 1) return;
 
         RemoveHoverFromCurrentRow();
         RenderRow(--_selectedRowId, _rows[_selectedRowId], Palette.HoverColor);

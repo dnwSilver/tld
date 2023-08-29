@@ -1,0 +1,53 @@
+ 
+ 󰘳 1 󱓟 releases        select prev
+ 󰘳 2 󰧑 competencies    select next
+ 󰘳 3  dependencies   󰬌 toggle head
+ 󰘳 4     󰬘 quit
+
+ 󰎔 too new        Auth           package
+  so good       󰞉 WWW           󰡨 image
+  be nice       󰚩 SEO            site
+ 󰬟 too old        VCS            api
+
+ 󰦖 wait          󰲽 build         󱓞 release
+ 󱔢 reopen        󱞈 testing       󰶯 hotfix
+ 󱞇 in progress   󰦕 done           publish
+ 󱞇 review        󱄊 cancel
+ 
+   releases 󱓟   Fact  2023
+   releases 󱓟   Fact
+   releases 󱓟   Planned
+   releases 󱓟   Planned  2024-12-31 xfirm
+   competencies 󰧑
+   growth zone 󰶼
+   dependencies  
+
+┌──────────────────────────────────────────────────────────────────────── Planned release ─────────────────────────────────────────────────────────────────┐
+│ 2024-12-31    4/11 xfirm        [#############     ] //green - done, blue - test, pink review/build, orange WIP    
+│ 2024-12-31 xfirm 4/11 [###############.......] //green - done, blue - test, pink review/build          
+│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
+│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
+│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
+│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
+│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────── checkperson-site ────────────────────────────────────────────────────────────────┐
+│ 󰨑 󰦖  ELK-3628 Create new menu.                                   󰵮 Petrov A. 󰙨 Ivanov I.
+│ 󰨑 󰦕  XF-12    Change input hover.                                󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
+│ 󰨑 󱞇  ELK-3628 Crete new project with menu, profile, issues and # 󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────── Actual releases 2023 ─────────────────────────────────────────────────────────┐
+│   Jan       Feb       Mar       Apl       May       Jun       Jul       Aug       Sep       Oct       Nov       Dec
+│    ├─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+│ LK    󱓞   󱓞    󱓞   󱓞    󱓞   󱓞    󱓞   󱓞    󱓞   󱓞    󱓞   󱓞    󱓞     󱓞     󱓞    󱓞   󱓞    󱓞   󱓞    󱓞   󱓞    󱓞   󱓞  
+│ CP      󱓞        󱓞        󱓞        󱓞                󱓞        󱓞        󱓞        󱓞        󱓞        󱓞        󱓞    
+│ RR   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯  
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+
+

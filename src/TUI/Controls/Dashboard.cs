@@ -6,39 +6,42 @@ namespace TUI.Controls;
 
 public class Dashboard : IControl<string>
 {
-    public void Render(string title, Position position)
+    public bool IsFocused { get; set; }
+
+    public void Render(string title, Position position, int? height = 0)
     {
         Console.SetCursorPosition(position.Left, position.Top);
 
-        RenderTopLine(title);
+        RenderTopLine(title, IsFocused);
 
-        var marginTop = Theme.BorderWidth + Theme.Padding + position.Top;
-        var dashboardHeight = Console.WindowHeight - Theme.BorderWidth;
+        var marginTop = position.Top;
 
-        for (var top = marginTop; top < dashboardHeight; top++)
-        {
-            RenderMiddleLine();
-        }
+        var dashboardHeight = height == 0 ? Console.WindowHeight - marginTop : height + Theme.Padding * 2;
 
-        RenderBottomLine();
+        for (var top = marginTop;
+             top < dashboardHeight + marginTop - Theme.BorderWidth * 2 - Theme.Padding * 2;
+             top++)
+            RenderMiddleLine(IsFocused);
+
+        RenderBottomLine(IsFocused);
     }
 
-    private static void RenderMiddleLine()
+    private static void RenderMiddleLine(bool isFocused)
     {
-        Console.Write("│".Primary());
+        Console.Write("│".Primary(isFocused));
         Console.Write(new string(' ', Console.WindowWidth - Theme.BorderWidth * 2));
-        Console.WriteLine("│".Primary());
+        Console.WriteLine("│".Primary(isFocused));
     }
 
-    private static void RenderBottomLine()
+    private static void RenderBottomLine(bool isFocused)
     {
         var lineWidth = Console.WindowWidth - Theme.BorderWidth * 2;
-        Console.Write("└".Primary());
-        Console.Write('─'.Repeat(lineWidth).Primary());
-        Console.WriteLine("┘".Primary());
+        Console.Write("└".Primary(isFocused));
+        Console.Write('─'.Repeat(lineWidth).Primary(isFocused));
+        Console.WriteLine("┘".Primary(isFocused));
     }
 
-    private static void RenderTopLine(string title)
+    private static void RenderTopLine(string title, bool isFocused)
     {
         var lineWidth =
                 (Console.WindowWidth - title.Width() - Theme.BorderWidth * 2 - Theme.Padding * 2) /
@@ -48,13 +51,10 @@ public class Dashboard : IControl<string>
         topLine.Append("┌");
         topLine.Append('─'.Repeat(lineWidth));
         topLine.AppendFormat("{0}{1}{0}", ' '.Repeat(Theme.Padding), title);
-        if (title.Width() % 2 == 1)
-        {
-            topLine.Append('─');
-        }
+        if (title.Width() % 2 == 1) topLine.Append('─');
 
         topLine.Append('─'.Repeat(lineWidth));
         topLine.Append("┐");
-        Console.WriteLine(topLine.ToString().Primary());
+        Console.WriteLine(topLine.ToString().Primary(isFocused));
     }
 }

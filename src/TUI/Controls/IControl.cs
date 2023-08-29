@@ -7,5 +7,7 @@ public interface IControl
 
 public interface IControl<in TProps>
 {
-    void Render(TProps props, Position position);
+    // bool IsFocused { get; }
+
+    void Render(TProps props, Position position, int? height);
 }
