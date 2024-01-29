@@ -33,8 +33,6 @@ public static class Extensions
     public static Version? ToVersion(this string textVersion)
     {
         var version = textVersion.Replace("^", "").Replace("~", "").Split(".");
-        if (version.Length != 3)
-            return null;
         var major = Convert.ToInt32(version[0]);
         var minor = Convert.ToInt32(version[1]);
         var patch = Convert.ToInt32(version[2].Split('-')[0]);

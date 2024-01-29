@@ -23,8 +23,9 @@
    dependencies  
 
 ┌──────────────────────────────────────────────────────────────────────── Planned release ─────────────────────────────────────────────────────────────────┐
-│ 2024-12-31    4/11 xfirm        [#############     ] //green - done, blue - test, pink review/build, orange WIP    
-│ 2024-12-31 xfirm 4/11 [###############.......] //green - done, blue - test, pink review/build          
+│ 2024-12-31     4/11 xfirm       [#############     ] //green - done, blue - test, pink review/build, orange WIP    
+│                4/11 xfirm       [###############.......] //green - done, blue - test, pink review/build          
+│ 2024-12-31     4/11 xfirm       [###############.......] //green - done, blue - test, pink review/build          
 │ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
 │ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
 │ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
@@ -32,9 +33,9 @@
 │ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────────────── checkperson-site ────────────────────────────────────────────────────────────────┐
-│ 󰨑 󰦖  ELK-3628 Create new menu.                                   󰵮 Petrov A. 󰙨 Ivanov I.
-│ 󰨑 󰦕  XF-12    Change input hover.                                󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
-│ 󰨑 󱞇  ELK-3628 Crete new project with menu, profile, issues and # 󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
+│ 󰨑 󰦖  ELK-3628 Create new menu.                                    Anna P. 󰵮 Petrov A. 󰙨 Ivanov I.
+│ 󰨑 󰦕  XF-12    Change input hover.                                 Alex K. 󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
+│ 󰨑 󱞇  ELK-3628 Crete new project with menu, profile, issues and #  Anna P. 󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────── Actual releases 2023 ─────────────────────────────────────────────────────────┐
@@ -44,8 +45,6 @@
 │ CP      󱓞        󱓞        󱓞        󱓞                󱓞        󱓞        󱓞        󱓞        󱓞        󱓞        󱓞    
 │ RR   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯   󰶯    󰶯  
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
-
 
 
 

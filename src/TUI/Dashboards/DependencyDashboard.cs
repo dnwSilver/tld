@@ -118,7 +118,7 @@ public class DependencyDashboard : IControl<Project>
     {
         var token = Environment.GetEnvironmentVariable("TLD_GITLAB_PAT");
         return $"{sourceDto.Repo}/api/v4/projects/{sourceDto.ProjectId}/repository/files/package.json/raw?" +
-               $"private_token={token}&ref=master";
+               $"private_token={token}&ref=dev";
     }
 
     private static string GetConventionVersion(DependencyDto dependencyDto)
