@@ -1,21 +1,21 @@
-# [Unreleased]
+# Unreleased
 
-# 🆕 Added
+## 🆕 Added
 
-# 💥 Breaking Changed
+## 💥 Breaking Changed
 
-# 🛠 Changed
+## 🛠 Changed
 
-# 📜 Deprecated
+## 📜 Deprecated
 
-# 🗑 Removed
+## 🗑 Removed
 
-# 🪲 Fixed
+## 🪲 Fixed
 
-# 🔐 Security
+## 🔐 Security
 
-# 📦 Support
+## 📦 Support
 
-# 🔗 Dependencies
+## 🔗 Dependencies
 
 - Added `github.com/stretchr/testify` `1.8.4` 
