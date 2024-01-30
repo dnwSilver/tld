@@ -15,3 +15,7 @@
 # 🔐 Security
 
 # 📦 Support
+
+# 🔗 Dependencies
+
+- Added `github.com/stretchr/testify` `1.8.4` 

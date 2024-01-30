@@ -1,12 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog][keep],
+and this project adheres to [Semantic Versioning][semver].
 
 ## Next release:
 
-[CHANGELOG-unreleased][1]
+[Unreleased][unreleased]
 
 ## Current release:
 
@@ -16,4 +16,6 @@ _coming soon_
 
 _coming soon_
 
-[1]: https://github.com/dnwSilver/tld/blob/main/CHANGELOG-unreleased.md
+[unreleased]: https://github.com/dnwSilver/tld/blob/main/changelogs/UNRELEASED.md
+[keep]: https://keepachangelog.com/en/1.0.0/
+[semver]: https://semver.org/spec/v2.0.0.html
