@@ -2,6 +2,8 @@
 
 ## 🆕 Added
 
+- Created widget _ApplicationSign_
+
 ## 💥 Breaking Changed
 
 ## 🛠 Changed
