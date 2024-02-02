@@ -1,6 +1,7 @@
 package test
 
 import (
+	"github.com/dnwsilver/tld/internal/pkg/widgets"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,4 +33,10 @@ func (suite *ExampleTestSuite) TestExample() {
 // a normal test function and pass our suite to suite.Run
 func TestExampleTestSuite(t *testing.T) {
 	suite.Run(t, new(ExampleTestSuite))
+}
+
+func TestApplicationSign(t *testing.T) {
+	widget := widgets.ApplicationSign("John Travolta", 1994)
+	result := widget.Render()
+	assert.Equal(t, `󰗦 John Travolta, 1994`, result)
 }
