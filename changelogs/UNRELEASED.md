@@ -2,7 +2,7 @@
 
 ## 🆕 Added
 
-- Created widget _ApplicationSign_
+- Created widget _ApplicationSign_.
 
 ## 💥 Breaking Changed
 
@@ -20,4 +20,4 @@
 
 ## 🔗 Dependencies
 
-- Added `github.com/stretchr/testify` `1.8.4` 
+- Added `github.com/stretchr/testify` `1.8.4`.
