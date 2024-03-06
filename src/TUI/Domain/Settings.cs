@@ -8,7 +8,7 @@ namespace TUI.Domain;
 public class Settings
 {
     [YamlMember]
-    public Project[] Projects { get; set; }
+    public ProjectDto[] Projects { get; set; }
 
     public static Settings Init()
     {

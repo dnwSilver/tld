@@ -1,3 +1,4 @@
+using TUI.Engine.Theme;
 using TUI.Settings;
 
 
@@ -18,9 +19,9 @@ public static class Panel
     {
         for (var index = 0; index < sources.Length; index++)
         {
-            Console.SetCursorPosition(Theme.Padding,
-                    6 + index + _marginTop + BorderWidth +
-                    Theme.Padding);
+            Console.SetCursorPosition(Convert.ToInt32(Indentation.Default),
+                6 + index + _marginTop + BorderWidth +
+                Convert.ToInt32(Indentation.Default));
 
             if (selectedRowNumber == index + 1)
             {
@@ -32,7 +33,7 @@ public static class Panel
 
         for (var index = 0; index < sources.Length; index++)
             Console.SetCursorPosition(TitleWidth,
-                    6 + index + _marginTop + BorderWidth + Theme.Padding);
+                6 + index + _marginTop + BorderWidth + Convert.ToInt32(Indentation.Default));
         // var source = sources[index];
         // var package = DownloadPackage(source);
         // var resultText = package.Dependencies.React;

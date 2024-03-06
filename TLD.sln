@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TUI", "src\TUI\TUI.csproj", "{F92C03F7-2A65-4D0A-9736-13E749AF6903}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TUI.Tests", "tests\WIdgets\TUI.Tests\TUI.Tests.csproj", "{2F0611D2-073F-4E26-BD1B-ACC433FC6F4E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -16,5 +18,9 @@ Global
 		{F92C03F7-2A65-4D0A-9736-13E749AF6903}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F92C03F7-2A65-4D0A-9736-13E749AF6903}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F92C03F7-2A65-4D0A-9736-13E749AF6903}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F0611D2-073F-4E26-BD1B-ACC433FC6F4E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F0611D2-073F-4E26-BD1B-ACC433FC6F4E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F0611D2-073F-4E26-BD1B-ACC433FC6F4E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F0611D2-073F-4E26-BD1B-ACC433FC6F4E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

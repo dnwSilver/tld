@@ -13,7 +13,7 @@ public static class Extensions
 
     public static string Repeat(this char symbol, int repeatCount)
     {
-        return repeatCount < 0 ? "" : new string(symbol, repeatCount);
+        return repeatCount < 0 ? string.Empty : new string(symbol, repeatCount);
     }
 
     public static string RemoveColors(this string text)
@@ -30,7 +30,7 @@ public static class Extensions
         return stringInfo.LengthInTextElements;
     }
 
-    public static Version? ToVersion(this string textVersion)
+    public static Version ToVersion(this string textVersion)
     {
         var version = textVersion.Replace("^", "").Replace("~", "").Split(".");
         var major = Convert.ToInt32(version[0]);
