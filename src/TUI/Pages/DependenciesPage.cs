@@ -13,17 +13,21 @@ public class DependenciesPage
     {
         Debugger.Log(0, "Event", "Open page dependencies\n");
 
-        var window = new ConsoleWindow();
-        var renderEngine = new ConsoleRenderingEngine(window);
+        var canvas = new ConsoleCanvas();
+
+        var componentCraftsman = new ComponentCraftsman(canvas);
+        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
+        var nodeCraftsman = new NodeCraftsman(canvas, componentCraftsman, containerCraftsman);
+
         var header = new HeaderContainer();
         var copyright = new Copyright()
             .Set(right: Level.Normal)
-            .Set(Horizontal.Right, Vertical.Bottom);
+            .Set(AlignmentHorizontal.Right, Vertical.Bottom);
 
         var layout = new DashboardLayout().AddHeader(header).AddFooter(copyright);
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
-        renderEngine.Render(layout);
+        nodeCraftsman.Draw(layout);
     }
 
     // private bool _commandLineInDisplay;

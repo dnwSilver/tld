@@ -1,8 +1,11 @@
+using TUI.Engine.Nodes.Attributes.Orientations;
+using TUI.Engine.Nodes.Attributes.Resizings;
+
 namespace TUI.Engine.Nodes.Containers;
 
-public interface IContainer : INode
+public interface IContainer : INode,
+    IWithOrientation,
+    IWithResizing
 {
-    public Orientation Orientation { get; }
-
-    public Nodes Nodes { get; }
+    public Nodes GetNodes();
 }

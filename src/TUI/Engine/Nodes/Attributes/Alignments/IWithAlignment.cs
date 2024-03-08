@@ -4,5 +4,5 @@ public interface IWithAlignment<out TNode> where TNode : INode
 {
     public Alignment Alignment { get; }
 
-    public TNode Set(Horizontal horizontal = Horizontal.Left, Vertical vertical = Vertical.Top);
+    public TNode Set(AlignmentHorizontal alignmentHorizontal = AlignmentHorizontal.Left, Vertical vertical = Vertical.Top);
 }

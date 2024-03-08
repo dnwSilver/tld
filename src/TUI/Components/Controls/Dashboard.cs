@@ -16,7 +16,7 @@ public class Dashboard : ComponentBase, IComponent
         _title = title;
     }
 
-    public void Render(Horizontal horizontal, Size size)
+    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
     {
         var dashboardBuilder = new StringBuilder();
 
@@ -61,7 +61,7 @@ public class Dashboard : ComponentBase, IComponent
         dashboardBuilder.Append(Symbols.Angles.RightBottom);
     }
 
-    public override Content Render()
+    public override Sketch Draw()
     {
         throw new NotImplementedException();
     }

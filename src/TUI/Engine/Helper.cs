@@ -20,10 +20,11 @@ public static class Helper
         Colors.Enqueue(ConsoleColor.Yellow);
     }
 
-    public static void ShowBackground(NodePosition position, Size size)
+    public static void ShowBackground(Position position, Size size)
     {
         return;
         var color = Colors.Dequeue();
+        
         var top = position.Top;
         var height = 0;
 

@@ -7,5 +7,5 @@ public interface IComponent : INode,
     IWithAlignment<IComponent>, 
     IWithPadding<IComponent>
 {
-    Content Render();
+    Sketch Draw();
 }

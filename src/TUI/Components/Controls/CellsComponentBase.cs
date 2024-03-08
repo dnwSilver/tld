@@ -18,7 +18,7 @@ public class CellsComponentBase : ComponentBase, IComponent
         _cells = cells;
     }
 
-    public void Render(Horizontal horizontal, Size size)
+    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
     {
         var content = new StringBuilder();
         foreach (var cell in _cells)
@@ -30,7 +30,7 @@ public class CellsComponentBase : ComponentBase, IComponent
         // base.Render(content, position, size);
     }
 
-    public override Content Render()
+    public override Sketch Draw()
     {
         throw new NotImplementedException();
     }

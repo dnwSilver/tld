@@ -12,13 +12,13 @@ public class ComponentBaseTests
     {
         var component = new Logo()
             .Set(Level.Normal)
-            .Set(vertical: Vertical.Center, horizontal: Horizontal.Center);
+            .Set(vertical: Vertical.Center, alignmentHorizontal: AlignmentHorizontal.Center);
 
         component.Padding.Top.Should().Be(Level.Normal);
         component.Padding.Left.Should().Be(Level.Normal);
         component.Padding.Bottom.Should().Be(Level.Normal);
         component.Padding.Right.Should().Be(Level.Normal);
-        component.Alignment.Horizontal.Should().Be(Horizontal.Center);
+        component.Alignment.AlignmentHorizontal.Should().Be(AlignmentHorizontal.Center);
         component.Alignment.Vertical.Should().Be(Vertical.Center);
     }
 
@@ -49,15 +49,16 @@ public class ComponentBaseTests
     }
 
     [Theory]
-    [InlineData(Horizontal.Left)]
-    [InlineData(Horizontal.Center)]
-    [InlineData(Horizontal.Right)]
-    public void WhenSetHorizontalAlignSaveAllChange(Horizontal alignment)
+    [InlineData(AlignmentHorizontal.Left)]
+    [InlineData(AlignmentHorizontal.Center)]
+    [InlineData(AlignmentHorizontal.Right)]
+    public void WhenSetHorizontalAlignSaveAllChange(AlignmentHorizontal alignment)
     {
         var component = new Logo();
 
-        component.Set(horizontal: alignment);
+        component.Set(alignmentHorizontal: alignment);
 
-        component.Alignment.Horizontal.Should().Be(alignment);
+        component.Alignment.AlignmentHorizontal.Should().Be(alignment);
     }
+    
 }

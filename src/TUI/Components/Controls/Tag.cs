@@ -14,7 +14,7 @@ public class Tag : ComponentBase
     private IEnumerable<string> _tags;
     private string _gitType;
 
-    public Tag(IRenderingEngine renderingEngine)
+    public Tag(NodeCraftsman drawEngine)
     {
     }
 
@@ -24,7 +24,7 @@ public class Tag : ComponentBase
         _gitType = gitType;
     }
 
-    public void Render(Horizontal horizontal, Size size)
+    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
     {
         var tagBuilder = new StringBuilder();
 
@@ -59,7 +59,7 @@ public class Tag : ComponentBase
             _ => Symbols.Git
         };
 
-    public override Content Render()
+    public override Sketch Draw()
     {
         throw new NotImplementedException();
     }

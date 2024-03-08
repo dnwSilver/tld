@@ -6,15 +6,15 @@ namespace TUI.Engine.Nodes.Components;
 
 public abstract class ComponentBase : List<IComponent>, IComponent
 {
-    public abstract Content Render();
+    public abstract Sketch Draw();
 
     #region Alignments
 
-    public Alignment Alignment { get; private set; } = new(Horizontal.Center, Vertical.Top);
+    public Alignment Alignment { get; private set; } = new(AlignmentHorizontal.Center, Vertical.Top);
 
-    public IComponent Set(Horizontal horizontal = Horizontal.Left, Vertical vertical = Vertical.Top)
+    public IComponent Set(AlignmentHorizontal alignmentHorizontal = AlignmentHorizontal.Left, Vertical vertical = Vertical.Top)
     {
-        Alignment = new Alignment(horizontal, vertical);
+        Alignment = new Alignment(alignmentHorizontal, vertical);
         return this;
     }
 

@@ -18,7 +18,7 @@ public class DependenciesView : ComponentBase, IComponent
         _developmentStack = developmentStack;
     }
 
-    public void Render(Horizontal horizontal, Size size)
+    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
     {
         var dashboardTitle = _developmentStack.Icon + Symbols.Space + ViewName;
         var dashboard = new Dashboard(dashboardTitle);
@@ -153,7 +153,7 @@ public class DependenciesView : ComponentBase, IComponent
     // {
     //     _table.Previous();
     // }
-    public override Content Render()
+    public override Sketch Draw()
     {
         throw new NotImplementedException();
     }

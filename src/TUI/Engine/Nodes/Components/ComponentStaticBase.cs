@@ -4,11 +4,11 @@ namespace TUI.Engine.Nodes.Components;
 
 public abstract class ComponentStaticBase : ComponentBase
 {
-    private Content? _cache;
+    private Sketch? _cache;
 
     protected abstract void RenderWithCache(StringBuilder builder);
 
-    public override Content Render()
+    public override Sketch Draw()
     {
         if (_cache is not null)
         {
@@ -17,7 +17,7 @@ public abstract class ComponentStaticBase : ComponentBase
 
         var builder = new StringBuilder();
         RenderWithCache(builder);
-        _cache = new Content(builder.ToString());
+        _cache = new Sketch(builder.ToString());
 
         return _cache;
     }

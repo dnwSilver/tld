@@ -1,4 +1,4 @@
-namespace TUI.Engine.Nodes.Containers;
+namespace TUI.Engine.Nodes.Attributes.Orientations;
 
 public enum Orientation
 {

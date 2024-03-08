@@ -1,3 +1,3 @@
 namespace TUI.Engine.Nodes.Attributes.Alignments;
 
-public record Alignment(Horizontal Horizontal, Vertical Vertical);
+public record Alignment(AlignmentHorizontal AlignmentHorizontal, Vertical Vertical);

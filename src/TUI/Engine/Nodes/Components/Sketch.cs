@@ -2,11 +2,11 @@ using TUI.Engine.Nodes.Attributes;
 
 namespace TUI.Engine.Nodes.Components;
 
-public sealed class Content : IEnumerable<string>
+public sealed class Sketch : IEnumerable<string>
 {
     private IEnumerable<string> ContentRows { get; }
 
-    public Content(string content) => ContentRows = content.Split(Symbols.LineBreak);
+    public Sketch(string content) => ContentRows = content.Split(Symbols.LineBreak);
 
     public IEnumerator<string> GetEnumerator() => ContentRows.GetEnumerator();
 

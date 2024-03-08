@@ -1,6 +1,6 @@
 namespace TUI.Engine.Nodes.Attributes.Alignments;
 
-public enum Horizontal
+public enum AlignmentHorizontal
 {
     Left = 0,
     Center = 1,
