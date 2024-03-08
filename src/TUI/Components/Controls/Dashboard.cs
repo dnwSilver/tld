@@ -29,7 +29,7 @@ public class Dashboard : ComponentBase, IComponent
 
     private static void RenderTopLine(StringBuilder dashboardBuilder, Size size, string title)
     {
-        var halfWidth = (size.Width - title.Width() - (int)Indentation.BorderWidth * 2 -
+        var halfWidth = (size.Width - title.GetWidth() - (int)Indentation.BorderWidth * 2 -
                          (int)Indentation.Default * 2) / 2;
         dashboardBuilder.Append(Symbols.Angles.LeftTop);
         dashboardBuilder.Append(Symbols.Lines.Horizontal.Repeat(halfWidth));

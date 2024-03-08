@@ -10,12 +10,12 @@ public sealed class Sketch : IEnumerable<string>
 
     public IEnumerator<string> GetEnumerator() => ContentRows.GetEnumerator();
 
-    public IEnumerable<string> Rows(int maxWidth, int maxHeight) =>
-        ContentRows.Where(row => maxWidth >= row.Width()).Take(maxHeight).ToArray();
+    public IEnumerable<string> Rows(Size maxSize) =>
+        ContentRows.Where(row => maxSize.Width >= row.GetWidth()).Take(maxSize.Height).ToArray();
 
     public Size GetSize()
     {
-        var width = ContentRows.Select(row => row.Width()).DefaultIfEmpty(0).Max();
+        var width = ContentRows.Select(row => row.GetWidth()).DefaultIfEmpty(0).Max();
         var height = ContentRows.Count();
         return new Size(width, height);
     }

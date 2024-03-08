@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using TUI.Engine.Nodes;
 using TUI.Engine.Nodes.Attributes;
 using TUI.Engine.Nodes.Components;
@@ -6,7 +5,7 @@ using TUI.Engine.Nodes.Containers;
 
 namespace TUI.Engine.Rendering;
 
-public sealed class ComponentCraftsman : IDrawable<IComponent>
+public sealed class ComponentCraftsman : CraftsmanBase, IDrawable<IComponent>
 {
     private readonly ICanvas _canvas;
 
@@ -19,22 +18,18 @@ public sealed class ComponentCraftsman : IDrawable<IComponent>
     {
         var sketch = component.Draw();
         var actualSize = sketch.GetSize();
-
-        var maxWidth = _canvas.Width - sketchPosition.Left;
-        var maxHeight = _canvas.Height - sketchPosition.Top;
-
+        var maxSize = _canvas.GetSize() - sketchPosition;
         var pencilPosition = component.GetPosition(sketchPosition, allowableSize, actualSize);
 
-        Debugger.Log(0, "Render", $"{pencilPosition}{component.GetType().Name}.\n");
-        Helper.ShowBackground(sketchPosition, allowableSize);
-
-        foreach (var row in sketch.Rows(maxWidth, maxHeight))
+        foreach (var row in sketch.Rows(maxSize))
         {
             _canvas.SetPencil(pencilPosition.Left, pencilPosition.Top);
             _canvas.Paint(row);
 
             pencilPosition = pencilPosition with { Top = pencilPosition.Top + 1 };
         }
+
+        Debug(pencilPosition, sketchPosition, allowableSize);
 
         return actualSize;
     }

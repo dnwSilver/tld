@@ -21,7 +21,7 @@ public static class Extensions
         return Regex.Replace(text, @"\S\[(\d{0,3}[;m]_?){0,5}", "");
     }
 
-    public static int Width(this string text)
+    public static int GetWidth(this string text)
     {
         if (string.IsNullOrEmpty(text)) return 0;
 

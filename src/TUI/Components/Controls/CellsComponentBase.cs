@@ -23,7 +23,7 @@ public class CellsComponentBase : ComponentBase, IComponent
         var content = new StringBuilder();
         foreach (var cell in _cells)
         {
-            content.Append(Symbols.Space.Repeat(MaxCellWidth - cell.Width()));
+            content.Append(Symbols.Space.Repeat(MaxCellWidth - cell.GetWidth()));
             content.Append(cell);
         }
 

@@ -28,8 +28,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Once());
         Mock.Get(canvas).Verify(w => w.Paint("Lorem"), Times.Once());
@@ -53,8 +53,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.Paint(content), Times.Once());
         Mock.Get(canvas).Verify(w => w.SetPencil(expectedPosition, 0), Times.Once());
@@ -84,8 +84,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         foreach (var expectedCursorPosition in expectedPositions)
         {
@@ -113,8 +113,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(expectedLeft, expectedTop), Times.Once());
     }
@@ -129,8 +129,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes && r.Orientation == orientation);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Once());
         Mock.Get(canvas).Verify(w => w.Paint("Lorem"), Times.Once());
@@ -144,8 +144,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes && r.Orientation == Orientation.Vertical);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Once());
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 1), Times.Once());
@@ -160,8 +160,8 @@ public class NodeCraftsmanTests
         var container = Mock.Of<IContainer>(g => g.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(container);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(container, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Exactly(1));
         Mock.Get(canvas).Verify(w => w.SetPencil(5, 0), Times.Exactly(1));
@@ -176,8 +176,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Exactly(1));
         Mock.Get(canvas).Verify(w => w.SetPencil(6, 0), Times.Exactly(1));
@@ -195,8 +195,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes && r.Orientation == Orientation.Vertical);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Exactly(1));
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 1), Times.Exactly(1));
@@ -216,8 +216,8 @@ public class NodeCraftsmanTests
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes && r.Orientation == Orientation.Horizontal);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        new NodeCraftsman(canvas, componentCraftsman, containerCraftsman).Draw(root);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        new NodeCraftsman(componentCraftsman, containerCraftsman).Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Exactly(1));
         Mock.Get(canvas).Verify(w => w.SetPencil(expectedCursorPosition, 0), Times.Exactly(1));

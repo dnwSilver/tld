@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using TUI.Components.Controls;
 using TUI.Components.Layouts;
+using TUI.Engine.Nodes;
 using TUI.Engine.Nodes.Attributes.Alignments;
 using TUI.Engine.Rendering;
 using TUI.Engine.Theme;
@@ -16,8 +17,8 @@ public class DependenciesPage
         var canvas = new ConsoleCanvas();
 
         var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(canvas, componentCraftsman);
-        var nodeCraftsman = new NodeCraftsman(canvas, componentCraftsman, containerCraftsman);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        var nodeCraftsman = new NodeCraftsman(componentCraftsman, containerCraftsman);
 
         var header = new HeaderContainer();
         var copyright = new Copyright()
@@ -27,7 +28,8 @@ public class DependenciesPage
         var layout = new DashboardLayout().AddHeader(header).AddFooter(copyright);
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
-        nodeCraftsman.Draw(layout);
+
+        nodeCraftsman.Draw(layout, Position.Default, canvas.GetSize());
     }
 
     // private bool _commandLineInDisplay;

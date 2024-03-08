@@ -7,16 +7,12 @@ using TUI.Engine.Nodes.Containers;
 
 namespace TUI.Engine.Rendering;
 
-public sealed class ContainerCraftsman : IDrawable<IContainer>
+public sealed class ContainerCraftsman : CraftsmanBase, IDrawable<IContainer>
 {
-    private readonly ICanvas _canvas;
     private readonly IDrawable<IComponent> _componentCraftsman;
 
-    public ContainerCraftsman(
-        ICanvas canvas,
-        IDrawable<IComponent> componentCraftsman)
+    public ContainerCraftsman(IDrawable<IComponent> componentCraftsman)
     {
-        _canvas = canvas;
         _componentCraftsman = componentCraftsman;
     }
 
@@ -24,9 +20,6 @@ public sealed class ContainerCraftsman : IDrawable<IContainer>
     public Size Draw(IContainer container, Position sketchPosition, Size allowableSize)
     {
         var sketchSize = container.GetSize(allowableSize);
-
-        Debugger.Log(0, "Render", $"{sketchPosition} {allowableSize} {container.GetType().Name}\n");
-        Helper.ShowBackground(sketchPosition, allowableSize);
 
         var controlNumber = 0;
 
@@ -38,6 +31,7 @@ public sealed class ContainerCraftsman : IDrawable<IContainer>
             controlNumber++;
         }
 
+        Debug(sketchPosition, sketchPosition, allowableSize);
         return sketchSize;
     }
 

@@ -5,35 +5,24 @@ using TUI.Engine.Nodes.Containers;
 
 namespace TUI.Engine.Rendering;
 
-public sealed class NodeCraftsman
+public sealed class NodeCraftsman : IDrawable<INode>
 {
-    private readonly ICanvas _canvas;
     private readonly IDrawable<IComponent> _componentCraftsman;
     private readonly IDrawable<IContainer> _containerCraftsman;
 
     public NodeCraftsman(
-        ICanvas canvas,
         IDrawable<IComponent> componentCraftsman,
         IDrawable<IContainer> containerCraftsman)
     {
-        _canvas = canvas;
         _componentCraftsman = componentCraftsman;
         _containerCraftsman = containerCraftsman;
     }
 
-    public void Draw(INode node)
-    {
-        var windowSize = new Size(_canvas.Width, _canvas.Height);
-        var defaultPosition = new Position(0, 0);
-
-        switch (node)
+    public Size Draw(INode node, Position sketchPosition, Size allowableSize) =>
+        node switch
         {
-            case IContainer container:
-                _containerCraftsman.Draw(container, defaultPosition, windowSize);
-                break;
-            case IComponent component:
-                _componentCraftsman.Draw(component, defaultPosition, windowSize);
-                break;
-        }
-    }
+            IContainer container => _containerCraftsman.Draw(container, sketchPosition, allowableSize),
+            IComponent component => _componentCraftsman.Draw(component, sketchPosition, allowableSize),
+            _ => throw new InvalidCastException("Unknown node type.")
+        };
 }
