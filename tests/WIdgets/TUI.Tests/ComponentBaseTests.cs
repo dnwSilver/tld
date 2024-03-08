@@ -10,16 +10,17 @@ public class ComponentBaseTests
     [Fact]
     public void WhenUseChainingSaveAllChange()
     {
-        var component = new Logo()
-            .Set(Level.Normal)
-            .Set(vertical: Vertical.Center, alignmentHorizontal: AlignmentHorizontal.Center);
+        var logo = new Logo();
+        logo.SetPadding(Level.Normal);
+        logo.SetAlignment(Vertical.Center);
+        logo.SetAlignment(Horizontal.Center);
 
-        component.Padding.Top.Should().Be(Level.Normal);
-        component.Padding.Left.Should().Be(Level.Normal);
-        component.Padding.Bottom.Should().Be(Level.Normal);
-        component.Padding.Right.Should().Be(Level.Normal);
-        component.Alignment.AlignmentHorizontal.Should().Be(AlignmentHorizontal.Center);
-        component.Alignment.Vertical.Should().Be(Vertical.Center);
+        logo.Padding.Top.Should().Be(Level.Normal);
+        logo.Padding.Left.Should().Be(Level.Normal);
+        logo.Padding.Bottom.Should().Be(Level.Normal);
+        logo.Padding.Right.Should().Be(Level.Normal);
+        logo.Alignment.Horizontal.Should().Be(Horizontal.Center);
+        logo.Alignment.Vertical.Should().Be(Vertical.Center);
     }
 
     [Fact]
@@ -27,7 +28,7 @@ public class ComponentBaseTests
     {
         var component = new Logo();
 
-        component.Set(Level.Normal);
+        component.SetPadding(Level.Normal);
 
         component.Padding.Top.Should().Be(Level.Normal);
         component.Padding.Left.Should().Be(Level.Normal);
@@ -43,22 +44,21 @@ public class ComponentBaseTests
     {
         var component = new Logo();
 
-        component.Set(vertical: alignment);
+        component.SetAlignment(alignment);
 
         component.Alignment.Vertical.Should().Be(alignment);
     }
 
     [Theory]
-    [InlineData(AlignmentHorizontal.Left)]
-    [InlineData(AlignmentHorizontal.Center)]
-    [InlineData(AlignmentHorizontal.Right)]
-    public void WhenSetHorizontalAlignSaveAllChange(AlignmentHorizontal alignment)
+    [InlineData(Horizontal.Left)]
+    [InlineData(Horizontal.Center)]
+    [InlineData(Horizontal.Right)]
+    public void WhenSetHorizontalAlignSaveAllChange(Horizontal alignment)
     {
         var component = new Logo();
 
-        component.Set(alignmentHorizontal: alignment);
+        component.SetAlignment(alignment);
 
-        component.Alignment.AlignmentHorizontal.Should().Be(alignment);
+        component.Alignment.Horizontal.Should().Be(alignment);
     }
-    
 }

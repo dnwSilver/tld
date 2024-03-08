@@ -24,7 +24,7 @@ public class Tag : ComponentBase
         _gitType = gitType;
     }
 
-    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
+    public void Render(Horizontal horizontal, Size size)
     {
         var tagBuilder = new StringBuilder();
 
@@ -59,7 +59,7 @@ public class Tag : ComponentBase
             _ => Symbols.Git
         };
 
-    public override Sketch Draw()
+    public override Sketch DrawComponent()
     {
         throw new NotImplementedException();
     }

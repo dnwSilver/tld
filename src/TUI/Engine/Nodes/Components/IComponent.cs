@@ -3,9 +3,7 @@ using TUI.Engine.Nodes.Attributes.Paddings;
 
 namespace TUI.Engine.Nodes.Components;
 
-public interface IComponent : INode, 
-    IWithAlignment<IComponent>, 
-    IWithPadding<IComponent>
+public interface IComponent : INode, IAlignable, IPaddingable
 {
     Sketch Draw();
 }

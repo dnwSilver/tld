@@ -21,9 +21,10 @@ public class DependenciesPage
         var nodeCraftsman = new NodeCraftsman(componentCraftsman, containerCraftsman);
 
         var header = new HeaderContainer();
-        var copyright = new Copyright()
-            .Set(right: Level.Normal)
-            .Set(AlignmentHorizontal.Right, Vertical.Bottom);
+        var copyright = new Copyright();
+        copyright.SetPaddingRight(Level.Normal);
+        copyright.SetAlignment(Horizontal.Right);
+        copyright.SetAlignment(Vertical.Bottom);
 
         var layout = new DashboardLayout().AddHeader(header).AddFooter(copyright);
         // CommandLine = new CommandLine();

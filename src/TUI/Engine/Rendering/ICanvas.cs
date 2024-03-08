@@ -1,5 +1,3 @@
-using TUI.Engine.Nodes.Attributes;
-
 namespace TUI.Engine.Rendering;
 
 public interface ICanvas

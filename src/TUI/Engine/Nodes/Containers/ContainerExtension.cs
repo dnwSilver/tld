@@ -7,6 +7,27 @@ namespace TUI.Engine.Nodes.Containers;
 
 public static class ContainerExtension
 {
+    // public static Position GetNextNodePosition(this INode node,
+    //     Orientation orientation,
+    //     Size allowableSize,
+    //     Position currentChildrenPosition)
+    // {
+    //     var nodeSize = node.GetSize(allowableSize);
+    //
+    //     return orientation switch
+    //     {
+    //         Orientation.Horizontal => currentChildrenPosition with
+    //         {
+    //             Left = currentChildrenPosition.Left + nodeSize.Width
+    //         },
+    //         Orientation.Vertical => currentChildrenPosition with
+    //         {
+    //             Top = currentChildrenPosition.Top + nodeSize.Height
+    //         },
+    //         _ => throw new ArgumentOutOfRangeException()
+    //     };
+    // }
+
     public static Size GetSize(this IContainer container, Size allowableSize)
     {
         var nodeCount = container.GetNodes().Count;
@@ -27,19 +48,19 @@ public static class ComponentExtensions
         Size actualSize)
     {
         var left = sketchPosition.Left + (int)(component.Padding?.Left ?? 0) +
-                   CompensationLeft(component.Alignment.AlignmentHorizontal, allowableSize, actualSize);
+                   CompensationLeft(component.Alignment.Horizontal, allowableSize, actualSize);
         var top = sketchPosition.Top + (int)(component.Padding?.Top ?? 0) +
                   CompensationTop(component.Alignment.Vertical, allowableSize, actualSize);
         return new Position(left, top);
     }
 
-    private static int CompensationLeft(AlignmentHorizontal componentAlignmentHorizontal, Size defaultSize,
+    private static int CompensationLeft(Horizontal componentHorizontal, Size defaultSize,
         Size realSize) =>
-        componentAlignmentHorizontal switch
+        componentHorizontal switch
         {
-            AlignmentHorizontal.Left => 0,
-            AlignmentHorizontal.Center => (defaultSize.Width - realSize.Width) / 2,
-            AlignmentHorizontal.Right => defaultSize.Width - realSize.Width,
+            Horizontal.Left => 0,
+            Horizontal.Center => (defaultSize.Width - realSize.Width) / 2,
+            Horizontal.Right => defaultSize.Width - realSize.Width,
             _ => 0
         };
 

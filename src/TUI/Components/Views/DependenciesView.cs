@@ -18,12 +18,12 @@ public class DependenciesView : ComponentBase, IComponent
         _developmentStack = developmentStack;
     }
 
-    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
+    public void Render(Horizontal horizontal, Size size)
     {
         var dashboardTitle = _developmentStack.Icon + Symbols.Space + ViewName;
         var dashboard = new Dashboard(dashboardTitle);
 
-        Add(dashboard);
+        // Add(dashboard);
     }
 
     // private const int TitleWidth = 25;
@@ -153,7 +153,7 @@ public class DependenciesView : ComponentBase, IComponent
     // {
     //     _table.Previous();
     // }
-    public override Sketch Draw()
+    public override Sketch DrawComponent()
     {
         throw new NotImplementedException();
     }

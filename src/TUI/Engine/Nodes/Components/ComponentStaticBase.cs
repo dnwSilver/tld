@@ -8,7 +8,7 @@ public abstract class ComponentStaticBase : ComponentBase
 
     protected abstract void RenderWithCache(StringBuilder builder);
 
-    public override Sketch Draw()
+    public override Sketch DrawComponent()
     {
         if (_cache is not null)
         {

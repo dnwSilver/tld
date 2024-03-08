@@ -1,4 +1,4 @@
-namespace TUI.Engine.Nodes.Attributes.Resizings;
+namespace TUI.Engine.Nodes.Attributes.Resizing;
 
 public enum Resizing
 {

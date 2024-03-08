@@ -2,7 +2,7 @@ using Moq;
 using TUI.Engine.Nodes;
 using TUI.Engine.Nodes.Attributes.Alignments;
 using TUI.Engine.Nodes.Attributes.Orientations;
-using TUI.Engine.Nodes.Attributes.Resizings;
+using TUI.Engine.Nodes.Attributes.Resizing;
 using TUI.Engine.Nodes.Components;
 using TUI.Engine.Nodes.Containers;
 using TUI.Engine.Rendering;
@@ -17,7 +17,7 @@ public class NodeCraftsmanTests
     {
         _component = Mock.Of<IComponent>(c =>
             c.Draw() == new Sketch("Lorem") &&
-            c.Alignment == new Alignment(AlignmentHorizontal.Left, Vertical.Top));
+            c.Alignment == new Alignment(Horizontal.Left, Vertical.Top));
     }
 
     [Fact]
@@ -36,14 +36,14 @@ public class NodeCraftsmanTests
     }
 
     [Theory]
-    [InlineData(AlignmentHorizontal.Left, "Lorem", 10, 0)]
-    [InlineData(AlignmentHorizontal.Center, "Lorem", 10, 2)]
-    [InlineData(AlignmentHorizontal.Center, "Lo", 10, 4)]
-    [InlineData(AlignmentHorizontal.Center, "Lorem", 9, 2)]
-    [InlineData(AlignmentHorizontal.Center, "Lorem", 11, 3)]
-    [InlineData(AlignmentHorizontal.Right, "Lorem", 10, 5)]
-    [InlineData(AlignmentHorizontal.Right, "Lo", 10, 8)]
-    public void DrawWithHorizontalAlignment(AlignmentHorizontal alignment, string content, int canvasSize,
+    [InlineData(Horizontal.Left, "Lorem", 10, 0)]
+    [InlineData(Horizontal.Center, "Lorem", 10, 2)]
+    [InlineData(Horizontal.Center, "Lo", 10, 4)]
+    [InlineData(Horizontal.Center, "Lorem", 9, 2)]
+    [InlineData(Horizontal.Center, "Lorem", 11, 3)]
+    [InlineData(Horizontal.Right, "Lorem", 10, 5)]
+    [InlineData(Horizontal.Right, "Lo", 10, 8)]
+    public void DrawWithHorizontalAlignment(Horizontal alignment, string content, int canvasSize,
         int expectedPosition)
     {
         var canvas = Mock.Of<ICanvas>(w => w.Width == canvasSize && w.Height == canvasSize);
@@ -79,7 +79,7 @@ public class NodeCraftsmanTests
     {
         var canvas = Mock.Of<ICanvas>(w => w.Width == canvasSize && w.Height == canvasSize);
         var component = Mock.Of<IComponent>(c => c.Draw() == new Sketch(content) &&
-                                                 c.Alignment == new Alignment(AlignmentHorizontal.Left, alignment));
+                                                 c.Alignment == new Alignment(Horizontal.Left, alignment));
         var nodes = new Nodes { component };
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
@@ -94,21 +94,21 @@ public class NodeCraftsmanTests
     }
 
     [Theory]
-    [InlineData(AlignmentHorizontal.Left, Vertical.Top, 0, 0)]
-    [InlineData(AlignmentHorizontal.Left, Vertical.Center, 0, 2)]
-    [InlineData(AlignmentHorizontal.Left, Vertical.Bottom, 0, 4)]
-    [InlineData(AlignmentHorizontal.Center, Vertical.Top, 2, 0)]
-    [InlineData(AlignmentHorizontal.Center, Vertical.Center, 2, 2)]
-    [InlineData(AlignmentHorizontal.Center, Vertical.Bottom, 2, 4)]
-    [InlineData(AlignmentHorizontal.Right, Vertical.Top, 4, 0)]
-    [InlineData(AlignmentHorizontal.Right, Vertical.Center, 4, 2)]
-    [InlineData(AlignmentHorizontal.Right, Vertical.Bottom, 4, 4)]
-    public void DrawWithAlignment(AlignmentHorizontal alignmentHorizontal, Vertical vertical, int expectedLeft,
+    [InlineData(Horizontal.Left, Vertical.Top, 0, 0)]
+    [InlineData(Horizontal.Left, Vertical.Center, 0, 2)]
+    [InlineData(Horizontal.Left, Vertical.Bottom, 0, 4)]
+    [InlineData(Horizontal.Center, Vertical.Top, 2, 0)]
+    [InlineData(Horizontal.Center, Vertical.Center, 2, 2)]
+    [InlineData(Horizontal.Center, Vertical.Bottom, 2, 4)]
+    [InlineData(Horizontal.Right, Vertical.Top, 4, 0)]
+    [InlineData(Horizontal.Right, Vertical.Center, 4, 2)]
+    [InlineData(Horizontal.Right, Vertical.Bottom, 4, 4)]
+    public void DrawWithAlignment(Horizontal horizontal, Vertical vertical, int expectedLeft,
         int expectedTop)
     {
         var canvas = Mock.Of<ICanvas>(w => w.Width == 6 && w.Height == 5);
         var component = Mock.Of<IComponent>(c => c.Draw() == new Sketch("VV") &&
-                                                 c.Alignment == new Alignment(alignmentHorizontal, vertical));
+                                                 c.Alignment == new Alignment(horizontal, vertical));
         var nodes = new Nodes { component };
         var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes);
 
@@ -157,7 +157,7 @@ public class NodeCraftsmanTests
     {
         var canvas = Mock.Of<ICanvas>(w => w.Width == 10 && w.Height == 1);
         var nodes = new Nodes { _component, _component };
-        var container = Mock.Of<IContainer>(g => g.GetNodes() == nodes);
+        var container = Mock.Of<ContainerBase>(g => g.GetNodes() == nodes);
 
         var componentCraftsman = new ComponentCraftsman(canvas);
         var containerCraftsman = new ContainerCraftsman(componentCraftsman);

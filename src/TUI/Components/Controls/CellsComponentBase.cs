@@ -12,13 +12,12 @@ public class CellsComponentBase : ComponentBase, IComponent
 
     private readonly IEnumerable<string> _cells;
 
-
     public CellsComponentBase(IEnumerable<string> cells)
     {
         _cells = cells;
     }
 
-    public void Render(AlignmentHorizontal alignmentHorizontal, Size size)
+    public void Render(Horizontal horizontal, Size size)
     {
         var content = new StringBuilder();
         foreach (var cell in _cells)
@@ -30,7 +29,7 @@ public class CellsComponentBase : ComponentBase, IComponent
         // base.Render(content, position, size);
     }
 
-    public override Sketch Draw()
+    public override Sketch DrawComponent()
     {
         throw new NotImplementedException();
     }

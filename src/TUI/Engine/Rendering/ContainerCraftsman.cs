@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using TUI.Engine.Nodes;
 using TUI.Engine.Nodes.Attributes;
 using TUI.Engine.Nodes.Attributes.Orientations;
@@ -68,3 +67,22 @@ public sealed class ContainerCraftsman : CraftsmanBase, IDrawable<IContainer>
         }
     }
 }
+
+
+// private int GetWidth() =>
+//     ResizingHorizontal switch
+//     {
+//         Resizing.Fixed => _fixedWidth,
+//         Resizing.Hug => GetAllowableSize().Width,
+//         Resizing.Adaptive => GetAllowableSize().Width,
+//         _ => 0
+//     };
+//
+// private int GetHeight() =>
+//     ResizingVertical switch
+//     {
+//         Resizing.Fixed => _fixedHeight,
+//         Resizing.Hug => GetAllowableSize().Height,
+//         Resizing.Adaptive => GetAllowableSize().Height,
+//         _ => 0
+//     };

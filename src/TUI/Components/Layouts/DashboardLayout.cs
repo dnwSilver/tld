@@ -1,7 +1,6 @@
-using TUI.Components.Controls;
 using TUI.Engine.Nodes;
 using TUI.Engine.Nodes.Attributes.Orientations;
-using TUI.Engine.Nodes.Attributes.Resizings;
+using TUI.Engine.Nodes.Attributes.Resizing;
 using TUI.Engine.Nodes.Components;
 using TUI.Engine.Nodes.Containers;
 
