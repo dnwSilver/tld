@@ -1,32 +1,55 @@
 using TUI.Engine.Nodes.Attributes;
 using TUI.Engine.Nodes.Attributes.Alignments;
 using TUI.Engine.Nodes.Attributes.Orientations;
+using TUI.Engine.Nodes.Attributes.Resizing;
 using TUI.Engine.Nodes.Components;
 
 namespace TUI.Engine.Nodes.Containers;
 
 public static class ContainerExtension
 {
-    // public static Position GetNextNodePosition(this INode node,
-    //     Orientation orientation,
-    //     Size allowableSize,
-    //     Position currentChildrenPosition)
-    // {
-    //     var nodeSize = node.GetSize(allowableSize);
-    //
-    //     return orientation switch
-    //     {
-    //         Orientation.Horizontal => currentChildrenPosition with
-    //         {
-    //             Left = currentChildrenPosition.Left + nodeSize.Width
-    //         },
-    //         Orientation.Vertical => currentChildrenPosition with
-    //         {
-    //             Top = currentChildrenPosition.Top + nodeSize.Height
-    //         },
-    //         _ => throw new ArgumentOutOfRangeException()
-    //     };
-    // }
+    public static Size GetSize(this IContainer container, Resizing resizing)
+    {
+        int width = resizing switch
+        {
+            // Resizing.Fixed => _fixedWeight,
+            // Resizing.Hug => GetAllowableSize().Width,
+            // Resizing.Adaptive => GetAllowableSize().Width,
+            _ => 0
+        };
+
+        int height = resizing switch
+        {
+            // Resizing.Fixed => _fixedHeight,
+            // Resizing.Hug => GetAllowableSize().Height,
+            // Resizing.Adaptive => GetAllowableSize().Height,
+            _ => 0
+        };
+
+        return new Size(width, height);
+    }
+
+    public static Position GetNextNodePosition(this IContainer container, Orientation orientation, Size allowableSize,
+        Position containerPosition)
+    {
+        var nodeSize = container.GetSize(allowableSize);
+
+        return GetNextNodePosition(orientation, nodeSize, containerPosition);
+    }
+
+    private static Position GetNextNodePosition(Orientation orientation, Size nodeSize, Position nodePosition) =>
+        orientation switch
+        {
+            Orientation.Horizontal => nodePosition with
+            {
+                Left = nodePosition.Left + nodeSize.Width
+            },
+            Orientation.Vertical => nodePosition with
+            {
+                Top = nodePosition.Top + nodeSize.Height
+            },
+            _ => throw new ArgumentOutOfRangeException()
+        };
 
     public static Size GetSize(this IContainer container, Size allowableSize)
     {
