@@ -5,5 +5,5 @@ namespace TUI.Engine.Rendering;
 
 public interface IDrawable<in TItem> where TItem : INode
 {
-    Size Draw(TItem item, Position sketchPosition, Size allowableSize);
+    Size Draw(TItem item, Position pencil, Size maxSize);
 }

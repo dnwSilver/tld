@@ -5,5 +5,5 @@ namespace TUI.Engine.Nodes.Components;
 
 public interface IComponent : INode, IAlignable, IPaddingable
 {
-    Sketch Draw();
+    Sketch MakeSketch();
 }

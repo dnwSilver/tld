@@ -8,55 +8,17 @@ namespace TUI.Engine.Nodes.Containers;
 
 public static class ContainerExtension
 {
-    public static Size GetSize(this IContainer container, Resizing resizing)
-    {
-        int width = resizing switch
-        {
-            // Resizing.Fixed => _fixedWeight,
-            // Resizing.Hug => GetAllowableSize().Width,
-            // Resizing.Adaptive => GetAllowableSize().Width,
-            _ => 0
-        };
-
-        int height = resizing switch
-        {
-            // Resizing.Fixed => _fixedHeight,
-            // Resizing.Hug => GetAllowableSize().Height,
-            // Resizing.Adaptive => GetAllowableSize().Height,
-            _ => 0
-        };
-
-        return new Size(width, height);
-    }
-
-    public static Position GetNextNodePosition(this IContainer container, Orientation orientation, Size allowableSize,
-        Position containerPosition)
-    {
-        var nodeSize = container.GetSize(allowableSize);
-
-        return GetNextNodePosition(orientation, nodeSize, containerPosition);
-    }
-
-    private static Position GetNextNodePosition(Orientation orientation, Size nodeSize, Position nodePosition) =>
-        orientation switch
-        {
-            Orientation.Horizontal => nodePosition with
-            {
-                Left = nodePosition.Left + nodeSize.Width
-            },
-            Orientation.Vertical => nodePosition with
-            {
-                Top = nodePosition.Top + nodeSize.Height
-            },
-            _ => throw new ArgumentOutOfRangeException()
-        };
-
     public static Size GetSize(this IContainer container, Size allowableSize)
     {
         var nodeCount = container.GetNodes().Count;
-        var width = container.Orientation == Orientation.Horizontal
-            ? allowableSize.Width / nodeCount
-            : allowableSize.Width;
+        var width = container.ResizingHorizontal switch
+        {
+            Resizing.Adaptive => container.Orientation == Orientation.Horizontal
+                ? allowableSize.Width / nodeCount
+                : allowableSize.Width,
+            Resizing.Fixed => container.GetFixedSize().Width,
+            _ => throw new ArgumentOutOfRangeException()
+        };
         var height = container.Orientation == Orientation.Vertical
             ? allowableSize.Height / nodeCount
             : allowableSize.Height;
@@ -67,33 +29,32 @@ public static class ContainerExtension
 
 public static class ComponentExtensions
 {
-    public static Position GetPosition(this IComponent component, Position sketchPosition, Size allowableSize,
-        Size actualSize)
+    public static Position CorrectPosition(this IComponent component, Position pencil, Size maxSize, Size sketchSize)
     {
-        var left = sketchPosition.Left + (int)(component.Padding?.Left ?? 0) +
-                   CompensationLeft(component.Alignment.Horizontal, allowableSize, actualSize);
-        var top = sketchPosition.Top + (int)(component.Padding?.Top ?? 0) +
-                  CompensationTop(component.Alignment.Vertical, allowableSize, actualSize);
+        var padding = component.Padding;
+        var alignment = component.Alignment;
+        var alignmentCompensationLeft = GetAlignmentCompensationLeft(alignment.Horizontal, maxSize, sketchSize);
+        var alignmentCompensationTop = GetAlignmentCompensationTop(alignment.Vertical, maxSize, sketchSize);
+        var left = pencil.Left + (int)padding.Left + alignmentCompensationLeft;
+        var top = pencil.Top + (int)padding.Top + alignmentCompensationTop;
         return new Position(left, top);
     }
 
-    private static int CompensationLeft(Horizontal componentHorizontal, Size defaultSize,
-        Size realSize) =>
-        componentHorizontal switch
+    private static int GetAlignmentCompensationLeft(Horizontal alignment, Size maxSize, Size sketchSize) =>
+        alignment switch
         {
             Horizontal.Left => 0,
-            Horizontal.Center => (defaultSize.Width - realSize.Width) / 2,
-            Horizontal.Right => defaultSize.Width - realSize.Width,
+            Horizontal.Center => (maxSize.Width - sketchSize.Width) / 2,
+            Horizontal.Right => maxSize.Width - sketchSize.Width,
             _ => 0
         };
 
-    private static int CompensationTop(Vertical componentVertical, Size defaultSize, Size realSize)
-        =>
-            componentVertical switch
-            {
-                Vertical.Top => 0,
-                Vertical.Center => (defaultSize.Height - realSize.Height) / 2,
-                Vertical.Bottom => defaultSize.Height - realSize.Height,
-                _ => 0
-            };
+    private static int GetAlignmentCompensationTop(Vertical alignment, Size maxSize, Size sketchSize) =>
+        alignment switch
+        {
+            Vertical.Top => 0,
+            Vertical.Center => (maxSize.Height - sketchSize.Height) / 2,
+            Vertical.Bottom => maxSize.Height - sketchSize.Height,
+            _ => 0
+        };
 }

@@ -14,7 +14,7 @@ public abstract class ComponentBase : NodeBase, IComponent
 
     public abstract Sketch DrawComponent();
 
-    public Sketch Draw()
+    public Sketch MakeSketch()
     {
         var sketch = DrawComponent();
         _sketchSize = sketch.GetSize();

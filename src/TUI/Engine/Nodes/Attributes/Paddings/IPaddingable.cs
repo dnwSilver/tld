@@ -4,7 +4,7 @@ namespace TUI.Engine.Nodes.Attributes.Paddings;
 
 public interface IPaddingable
 {
-    Padding? Padding { get; }
+    Padding Padding { get; }
 
     void SetPadding(Level level);
     void SetPaddingLeft(Level level);

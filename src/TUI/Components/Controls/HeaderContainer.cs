@@ -13,15 +13,19 @@ public class HeaderContainer : ContainerBase, IContainer
     {
         var versionHints = new VersionHints();
         versionHints.SetPadding(Indentation.Default);
+        versionHints.SetAlignment(Horizontal.Left);
 
         var tagsHints = new TagHints();
         tagsHints.SetPadding(Indentation.Default);
+        tagsHints.SetAlignment(Horizontal.Left);
 
         var appTypeHints = new AppTypeHints();
         appTypeHints.SetPadding(Indentation.Default);
+        appTypeHints.SetAlignment(Horizontal.Left);
 
         var hotkeysHints = new HotkeysHint();
         hotkeysHints.SetPadding(Indentation.Default);
+        hotkeysHints.SetAlignment(Horizontal.Left);
 
         var logo = new Logo();
         logo.SetAlignment(Horizontal.Right);

@@ -5,6 +5,9 @@ using TUI.Engine.Nodes.Containers;
 
 namespace TUI.Engine.Rendering;
 
+/// <summary>
+/// 🍀
+/// </summary>
 public sealed class NodeCraftsman : IDrawable<INode>
 {
     private readonly IDrawable<IComponent> _componentCraftsman;
@@ -18,11 +21,11 @@ public sealed class NodeCraftsman : IDrawable<INode>
         _containerCraftsman = containerCraftsman;
     }
 
-    public Size Draw(INode node, Position sketchPosition, Size allowableSize) =>
+    public Size Draw(INode node, Position pencil, Size maxSize) =>
         node switch
         {
-            IContainer container => _containerCraftsman.Draw(container, sketchPosition, allowableSize),
-            IComponent component => _componentCraftsman.Draw(component, sketchPosition, allowableSize),
+            IContainer container => _containerCraftsman.Draw(container, pencil, maxSize),
+            IComponent component => _componentCraftsman.Draw(component, pencil, maxSize),
             _ => throw new InvalidCastException("Unknown node type.")
         };
 }

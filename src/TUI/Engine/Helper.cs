@@ -22,7 +22,7 @@ public static class Helper
 
     public static void ShowBackground(Position position, Size size)
     {
-        return;
+        return; 
         var color = Colors.Dequeue();
         
         var top = position.Top;

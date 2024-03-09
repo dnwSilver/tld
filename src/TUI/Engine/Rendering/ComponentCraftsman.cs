@@ -14,23 +14,23 @@ public sealed class ComponentCraftsman : CraftsmanBase, IDrawable<IComponent>
         _canvas = canvas;
     }
 
-    public Size Draw(IComponent component, Position sketchPosition, Size allowableSize)
+    public Size Draw(IComponent component, Position pencil, Size maxSize)
     {
-        var sketch = component.Draw();
-        var actualSize = sketch.GetSize();
-        var maxSize = _canvas.GetSize() - sketchPosition;
-        var pencilPosition = component.GetPosition(sketchPosition, allowableSize, actualSize);
+        var sketch = component.MakeSketch();
+        var sketchSize = sketch.GetSize();
 
-        foreach (var row in sketch.Rows(maxSize))
+        var correctedPencil = component.CorrectPosition(pencil, maxSize, sketchSize);
+
+        Debug(correctedPencil, pencil, maxSize);
+
+        foreach (var line in sketch.Crop(maxSize))
         {
-            _canvas.SetPencil(pencilPosition.Left, pencilPosition.Top);
-            _canvas.Paint(row);
+            _canvas.SetPencil(correctedPencil.Left, correctedPencil.Top);
+            _canvas.Paint(line);
 
-            pencilPosition = pencilPosition with { Top = pencilPosition.Top + 1 };
+            correctedPencil = correctedPencil with { Top = correctedPencil.Top + 1 };
         }
 
-        Debug(pencilPosition, sketchPosition, allowableSize);
-
-        return actualSize;
+        return sketchSize;
     }
 }
