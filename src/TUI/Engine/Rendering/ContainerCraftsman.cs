@@ -18,20 +18,22 @@ public sealed class ContainerCraftsman : CraftsmanBase, IDrawable<IContainer>
 
     public Size Draw(IContainer container, Position pencil, Size maxSize)
     {
-        var controlNumber = 0;
+        var nodeNumber = 0;
         var nextNodePosition = pencil;
         var nodes = container.GetNodes();
-        var sketchSize = container.GetSize(maxSize);
-        Debug(nextNodePosition, nextNodePosition, maxSize);
 
-        while (controlNumber < nodes.Count)
+        Debug(nextNodePosition, maxSize);
+
+        while (nodeNumber < nodes.Count)
         {
-            var node = nodes[controlNumber];
-            nextNodePosition = DrawNode(node, container, nextNodePosition, sketchSize);
-            controlNumber++;
+            var node = nodes[nodeNumber];
+            var nodeSize = node.GetSize(container, nodeNumber, maxSize);
+            
+            nextNodePosition = DrawNode(node, container, nextNodePosition, nodeSize);
+            nodeNumber++;
         }
 
-        return sketchSize;
+        return maxSize;
     }
 
     private Position DrawNode(INode node, IContainer container, Position nodePosition, Size maxSize)

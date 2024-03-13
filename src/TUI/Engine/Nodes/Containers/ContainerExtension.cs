@@ -3,27 +3,83 @@ using TUI.Engine.Nodes.Attributes.Alignments;
 using TUI.Engine.Nodes.Attributes.Orientations;
 using TUI.Engine.Nodes.Attributes.Resizing;
 using TUI.Engine.Nodes.Components;
+using TUI.Engine.Rendering;
 
 namespace TUI.Engine.Nodes.Containers;
 
 public static class ContainerExtension
 {
-    public static Size GetSize(this IContainer container, Size allowableSize)
+    public static Size GetSize(this INode node, IContainer parentContainer, int nodeNumber, Size allowableSize)
     {
-        var nodeCount = container.GetNodes().Count;
-        var width = container.ResizingHorizontal switch
-        {
-            Resizing.Adaptive => container.Orientation == Orientation.Horizontal
-                ? allowableSize.Width / nodeCount
-                : allowableSize.Width,
-            Resizing.Fixed => container.GetFixedSize().Width,
-            _ => throw new ArgumentOutOfRangeException()
-        };
-        var height = container.Orientation == Orientation.Vertical
-            ? allowableSize.Height / nodeCount
-            : allowableSize.Height;
-
+        var width = GetWidth(node, parentContainer, allowableSize.Width);
+        var height = GetHeight(node, parentContainer, allowableSize.Height, nodeNumber);
         return new Size(width, height);
+    }
+
+    private static IEnumerable<INode> GetFixedNodes(this IContainer container, int? takeNodeNumber = null)
+    {
+        if (takeNodeNumber is not null)
+        {
+            return container
+                .GetNodes()
+                .Take(takeNodeNumber.Value + 1)
+                .Where(n => n.ResizingVertical == Resizing.Fixed);
+        }
+
+        return container
+            .GetNodes()
+            .Where(n => n.ResizingVertical == Resizing.Fixed);
+    }
+
+    private static int GetHeight(IResizable node, IContainer container, int maxHeight, int nodeIndex)
+    {
+        if (node.ResizingVertical == Resizing.Fixed)
+        {
+            return node.GetFixedSize().Height;
+        }
+
+        if (container.Orientation == Orientation.Horizontal)
+        {
+            return maxHeight;
+        }
+
+        var fixedNodes = container.GetFixedNodes().ToArray();
+
+        var fixedHeight = fixedNodes.Sum(s => s.GetFixedSize().Height);
+        var allowableHeight = maxHeight - fixedHeight;
+
+        var allowableCount = container.GetNodes().Count - fixedNodes.Length;
+        var nodeHeight = (allowableHeight / allowableCount).Min(1);
+        var nodeNumber = nodeIndex + 1 - container.GetFixedNodes(nodeIndex).Sum(c => c.GetFixedSize().Height);
+
+        if (allowableHeight - nodeNumber * nodeHeight < nodeHeight)
+        {
+            return allowableHeight + nodeHeight - nodeNumber * nodeHeight;
+        }
+
+        return nodeHeight;
+    }
+
+    private static int GetWidth(IResizable node, IContainer container, int maxWidth)
+    {
+        if (node.ResizingHorizontal == Resizing.Fixed)
+        {
+            return node.GetFixedSize().Width;
+        }
+
+        if (container.Orientation == Orientation.Vertical)
+        {
+            return maxWidth;
+        }
+
+        var fixedNodes = container
+            .GetNodes()
+            .Where(n => n.ResizingHorizontal == Resizing.Fixed).ToArray();
+
+        var allowableWidth = maxWidth - fixedNodes.Sum(s => s.GetFixedSize().Width);
+        var allowableCount = container.GetNodes().Count - fixedNodes.Length;
+
+        return allowableWidth / allowableCount;
     }
 }
 

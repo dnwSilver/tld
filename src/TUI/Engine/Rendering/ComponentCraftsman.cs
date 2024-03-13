@@ -21,7 +21,7 @@ public sealed class ComponentCraftsman : CraftsmanBase, IDrawable<IComponent>
 
         var correctedPencil = component.CorrectPosition(pencil, maxSize, sketchSize);
 
-        Debug(correctedPencil, pencil, maxSize);
+        Debug(pencil, maxSize);
 
         foreach (var line in sketch.Crop(maxSize))
         {

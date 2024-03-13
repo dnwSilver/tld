@@ -3,6 +3,7 @@ using TUI.Components.Controls;
 using TUI.Components.Layouts;
 using TUI.Engine.Nodes;
 using TUI.Engine.Nodes.Attributes.Alignments;
+using TUI.Engine.Nodes.Attributes.Orientations;
 using TUI.Engine.Rendering;
 using TUI.Engine.Theme;
 
@@ -21,6 +22,8 @@ public class DependenciesPage
         var nodeCraftsman = new NodeCraftsman(componentCraftsman, containerCraftsman);
 
         var header = new HeaderContainer();
+        header.SetFixed(Orientation.Vertical, 6);
+
         var copyright = new Copyright();
         copyright.SetPaddingRight(Level.Normal);
         copyright.SetAlignment(Horizontal.Right);

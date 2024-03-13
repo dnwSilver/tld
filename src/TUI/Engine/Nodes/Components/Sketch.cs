@@ -10,8 +10,10 @@ public sealed class Sketch : IEnumerable<string>
 
     public IEnumerator<string> GetEnumerator() => ContentRows.GetEnumerator();
 
-    public IEnumerable<string> Crop(Size maxSize) =>
-        ContentRows.Where(row => maxSize.Width >= row.GetWidth()).Take(maxSize.Height).ToArray();
+    public IEnumerable<string> Crop(Size maxSize) => ContentRows
+        .Select(row => maxSize.Width < row.GetWidth() ? row[..maxSize.Width] : row)
+        .Take(maxSize.Height)
+        .ToArray();
 
     public Size GetSize()
     {

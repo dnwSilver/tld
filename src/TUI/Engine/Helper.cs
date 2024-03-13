@@ -8,7 +8,7 @@ public static class Helper
 {
     private static readonly Queue<ConsoleColor> Colors = new();
 
-    static Helper()
+    private static void Init()
     {
         Colors.Enqueue(ConsoleColor.DarkYellow);
         Colors.Enqueue(ConsoleColor.DarkMagenta);
@@ -22,9 +22,14 @@ public static class Helper
 
     public static void ShowBackground(Position position, Size size)
     {
-        return; 
+        // return;
+        if (!Colors.Any())
+        {
+            Init();
+        }
+
         var color = Colors.Dequeue();
-        
+
         var top = position.Top;
         var height = 0;
 

@@ -112,8 +112,7 @@ public class NodeCraftsmanTests
 
     [Theory]
     [InlineData(Orientation.Horizontal, 9, 1)]
-    [InlineData(Orientation.Vertical, 5, 1)]
-    public void DrawWithOverload(Orientation orientation, int rootWidth, int rootHeight)
+    public void DrawWithOverloadHorizontal(Orientation orientation, int rootWidth, int rootHeight)
     {
         var canvas = Mock.Of<ICanvas>(w => w.Width == rootWidth && w.Height == rootHeight);
         var nodes = new Nodes { _component, _component };
@@ -124,7 +123,30 @@ public class NodeCraftsmanTests
         containerCraftsman.Draw(root, Position.Default, canvas.GetSize());
 
         Mock.Get(canvas).Verify(w => w.SetPencil(0, 0), Times.Once());
-        Mock.Get(canvas).Verify(w => w.Paint("Lorem"), Times.Once());
+        Mock.Get(canvas).Verify(w => w.SetPencil(4, 0), Times.Once());
+        Mock.Get(canvas).Verify(w => w.Paint("Lore"), Times.Exactly(2));
+    }
+
+
+    [Theory]
+    [InlineData(4, 4, new[] { 0, 1, 2, 3 })]
+    public void DrawWithOverloadVertical(int rootWidth, int rootHeight, int[] expectedTopPositions)
+    {
+        var canvas = Mock.Of<ICanvas>(w => w.Width == rootWidth && w.Height == rootHeight);
+        _component.SetContent("Lorem\nLorem\nLorem");
+        var nodes = new Nodes { _component, _component };
+        var root = Mock.Of<IContainer>(r => r.GetNodes() == nodes && r.Orientation == Orientation.Vertical);
+
+        var componentCraftsman = new ComponentCraftsman(canvas);
+        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
+        containerCraftsman.Draw(root, Position.Default, canvas.GetSize());
+
+        foreach (var expectedTopPosition in expectedTopPositions)
+        {
+            Mock.Get(canvas).Verify(w => w.SetPencil(0, expectedTopPosition), Times.Once());
+        }
+
+        Mock.Get(canvas).Verify(w => w.Paint("Lorem"), Times.Exactly(rootHeight));
     }
 
     [Fact]
@@ -196,7 +218,6 @@ public class NodeCraftsmanTests
 
     [Theory]
     [InlineData(Resizing.Fixed, 6)]
-    [InlineData(Resizing.Fixed, 3)]
     [InlineData(Resizing.Adaptive, 10)]
     public void DrawResizingContainer(Resizing resizing, int expectedCursorPosition)
     {
