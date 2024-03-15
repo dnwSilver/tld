@@ -1,12 +1,12 @@
 using System.Text;
 using TUI.Engine;
-using TUI.Engine.Nodes.Components;
+using TUI.Engine.Components;
 using TUI.Engine.Theme;
 using TUI.UserInterface;
 
 namespace TUI.Components.Controls.Statics.Hints;
 
-public class TagHints : ComponentStaticBase
+public class TagHints : StaticComponentAttribute
 {
     private readonly Dictionary<string, string> _hints = new()
     {

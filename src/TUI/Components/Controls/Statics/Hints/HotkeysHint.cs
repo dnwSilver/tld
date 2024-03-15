@@ -1,11 +1,11 @@
 using System.Text;
 using TUI.Engine;
-using TUI.Engine.Nodes.Components;
+using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
 namespace TUI.Components.Controls.Statics.Hints;
 
-public class HotkeysHint : ComponentStaticBase
+public class HotkeysHint : StaticComponentAttribute
 {
     private readonly Dictionary<string, string> _hints = new()
     {

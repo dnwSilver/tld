@@ -1,10 +1,9 @@
 using System.Diagnostics;
 using TUI.Components.Controls;
 using TUI.Components.Layouts;
-using TUI.Engine.Nodes;
-using TUI.Engine.Nodes.Attributes.Alignments;
-using TUI.Engine.Nodes.Attributes.Orientations;
-using TUI.Engine.Rendering;
+using TUI.Engine.Attributes.Alignments;
+using TUI.Engine.Attributes.Orientations;
+using TUI.Engine.Rendering.Canvas;
 using TUI.Engine.Theme;
 
 namespace TUI.Pages;
@@ -15,11 +14,7 @@ public class DependenciesPage
     {
         Debugger.Log(0, "Event", "Open page dependencies\n");
 
-        var canvas = new ConsoleCanvas();
-
-        var componentCraftsman = new ComponentCraftsman(canvas);
-        var containerCraftsman = new ContainerCraftsman(componentCraftsman);
-        var nodeCraftsman = new NodeCraftsman(componentCraftsman, containerCraftsman);
+        ICanvas canvas = new ConsoleCanvas();
 
         var header = new HeaderContainer();
         header.SetFixed(Orientation.Vertical, 6);
@@ -33,7 +28,7 @@ public class DependenciesPage
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
 
-        nodeCraftsman.Draw(layout, Position.Default, canvas.GetSize());
+        canvas.Draw(layout);
     }
 
     // private bool _commandLineInDisplay;

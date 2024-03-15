@@ -1,13 +1,13 @@
 using TUI.Components.Controls;
 using TUI.Domain;
 using TUI.Engine;
-using TUI.Engine.Nodes.Attributes;
-using TUI.Engine.Nodes.Attributes.Alignments;
-using TUI.Engine.Nodes.Components;
+using TUI.Engine.Attributes;
+using TUI.Engine.Attributes.Alignments;
+using TUI.Engine.Components;
 
 namespace TUI.Components.Views;
 
-public class DependenciesView : ComponentBase, IComponent
+public class DependenciesView : ComponentAttribute, IComponent
 {
     private const string ViewName = "Dependencies";
 
@@ -153,7 +153,7 @@ public class DependenciesView : ComponentBase, IComponent
     // {
     //     _table.Previous();
     // }
-    public override Sketch DrawComponent()
+    protected override Sketch DrawComponent()
     {
         throw new NotImplementedException();
     }

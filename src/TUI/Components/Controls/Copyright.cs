@@ -1,11 +1,11 @@
 using System.Text;
 using TUI.Engine;
-using TUI.Engine.Nodes.Components;
+using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
 namespace TUI.Components.Controls;
 
-public class Copyright : ComponentStaticBase
+public class Copyright : StaticComponentAttribute
 {
     protected override void RenderWithCache(StringBuilder builder)
     {

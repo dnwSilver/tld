@@ -1,14 +1,18 @@
+using TUI.Engine.Attributes.Orientations;
+using TUI.Engine.Components;
+using TUI.Engine.Containers;
 using TUI.Engine.Nodes;
-using TUI.Engine.Nodes.Attributes.Orientations;
-using TUI.Engine.Nodes.Attributes.Resizing;
-using TUI.Engine.Nodes.Components;
-using TUI.Engine.Nodes.Containers;
 
 namespace TUI.Components.Layouts;
 
 public class DashboardLayout : ContainerBase, IContainer
 {
-    public new Orientation Orientation => Orientation.Vertical;
+    public DashboardLayout()
+    {
+        SetOrientationVertical();
+        SetAdaptive(Orientation.Horizontal);
+        SetAdaptive(Orientation.Vertical);
+    }
 
     private INode _header;
     private INode _footer;
@@ -35,8 +39,4 @@ public class DashboardLayout : ContainerBase, IContainer
     {
         throw new NotImplementedException();
     }
-
-    public Resizing ResizingHorizontal => Resizing.Adaptive;
-
-    public Resizing ResizingVertical => Resizing.Adaptive;
 }

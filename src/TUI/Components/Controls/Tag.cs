@@ -1,22 +1,17 @@
 using System.Text;
 using TUI.Engine;
-using TUI.Engine.Nodes.Attributes;
-using TUI.Engine.Nodes.Attributes.Alignments;
-using TUI.Engine.Nodes.Components;
-using TUI.Engine.Rendering;
+using TUI.Engine.Attributes;
+using TUI.Engine.Attributes.Alignments;
+using TUI.Engine.Components;
 using TUI.Engine.Theme;
 using TUI.UserInterface;
 
 namespace TUI.Components.Controls;
 
-public class Tag : ComponentBase
+public class Tag : ComponentAttribute
 {
     private IEnumerable<string> _tags;
     private string _gitType;
-
-    public Tag(NodeCraftsman drawEngine)
-    {
-    }
 
     public void Bind(IEnumerable<string> tags, string gitType)
     {
@@ -59,7 +54,7 @@ public class Tag : ComponentBase
             _ => Symbols.Git
         };
 
-    public override Sketch DrawComponent()
+    protected override Sketch DrawComponent()
     {
         throw new NotImplementedException();
     }

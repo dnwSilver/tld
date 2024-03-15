@@ -1,13 +1,13 @@
 using System.Text;
 using TUI.Engine;
-using TUI.Engine.Nodes.Attributes;
-using TUI.Engine.Nodes.Attributes.Alignments;
-using TUI.Engine.Nodes.Components;
+using TUI.Engine.Attributes;
+using TUI.Engine.Attributes.Alignments;
+using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
 namespace TUI.Components.Controls;
 
-public class Dashboard : ComponentBase, IComponent
+public class Dashboard : ComponentAttribute, IComponent
 {
     private readonly string _title;
 
@@ -61,7 +61,7 @@ public class Dashboard : ComponentBase, IComponent
         dashboardBuilder.Append(Symbols.Angles.RightBottom);
     }
 
-    public override Sketch DrawComponent()
+    protected override Sketch DrawComponent()
     {
         throw new NotImplementedException();
     }
