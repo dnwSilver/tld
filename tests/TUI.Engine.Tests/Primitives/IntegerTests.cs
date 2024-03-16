@@ -1,10 +1,11 @@
 using FluentAssertions;
 
-namespace TUI.Engine.Tests.DrawTests;
+namespace TUI.Engine.Tests.Draw;
 
 public class IntegerTests
 {
     [Theory]
+    [Trait("Category", "Primitives")]
     [InlineData(5, 10, 5)]
     [InlineData(5, 5, 5)]
     [InlineData(5, 3, 3)]
@@ -15,6 +16,7 @@ public class IntegerTests
     }
 
     [Theory]
+    [Trait("Category", "Primitives")]
     [InlineData(5, 10, 10)]
     [InlineData(5, 5, 5)]
     [InlineData(5, 3, 5)]

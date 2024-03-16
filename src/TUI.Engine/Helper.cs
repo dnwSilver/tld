@@ -3,7 +3,7 @@ using Pastel;
 using TUI.Engine.Attributes;
 using TUI.Engine.Nodes;
 
-[assembly:InternalsVisibleTo("TUI.Engine.Tests", AllInternalsVisible = true)]
+[assembly: InternalsVisibleTo("TUI.Engine.Tests", AllInternalsVisible = true)]
 
 namespace TUI.Engine;
 
@@ -25,7 +25,7 @@ public static class Helper
 
     public static void ShowBackground(Position position, Size size)
     {
-        // return;
+        return;
         if (!Colors.Any())
         {
             Init();

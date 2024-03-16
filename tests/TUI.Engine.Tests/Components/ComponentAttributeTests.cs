@@ -1,13 +1,15 @@
 using FluentAssertions;
 using TUI.Engine.Attributes.Alignments;
+using TUI.Engine.Components;
 using TUI.Engine.Tests.Stubs;
 using TUI.Engine.Theme;
 
-namespace TUI.Engine.Tests.DrawTests;
+namespace TUI.Engine.Tests.Components;
 
 public class ComponentAttributeTests
 {
     [Fact]
+    [Trait("Category", nameof(IComponent))]
     public void WhenUseChainingSaveAllChange()
     {
         var logo = new TestComponent();
@@ -24,6 +26,7 @@ public class ComponentAttributeTests
     }
 
     [Fact]
+    [Trait("Category", nameof(IComponent))]
     public void WhenSetPaddingsSaveAllChange()
     {
         var component = new TestComponent();
@@ -37,6 +40,7 @@ public class ComponentAttributeTests
     }
 
     [Theory]
+    [Trait("Category", nameof(IComponent))]
     [InlineData(Vertical.Bottom)]
     [InlineData(Vertical.Center)]
     [InlineData(Vertical.Top)]
@@ -50,6 +54,7 @@ public class ComponentAttributeTests
     }
 
     [Theory]
+    [Trait("Category", nameof(IComponent))]
     [InlineData(Horizontal.Left)]
     [InlineData(Horizontal.Center)]
     [InlineData(Horizontal.Right)]

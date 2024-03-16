@@ -5,7 +5,7 @@ namespace TUI.Engine.Tests.Stubs;
 
 public class TestContainer : ContainerBase
 {
-    private Nodes.Nodes _nodes = new();
+    private readonly Nodes.Nodes _nodes = new();
 
     public override Nodes.Nodes GetNodes()
     {
