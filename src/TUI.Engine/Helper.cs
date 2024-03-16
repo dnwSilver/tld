@@ -25,7 +25,7 @@ public static class Helper
 
     public static void ShowBackground(Position position, Size size)
     {
-        return;
+        // return;
         if (!Colors.Any())
         {
             Init();

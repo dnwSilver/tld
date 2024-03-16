@@ -2,7 +2,7 @@ using TUI.Engine.Components;
 
 namespace TUI.Engine.Tests.Stubs;
 
-public class TestComponent : ComponentAttribute
+public class TestComponent : ComponentBase
 {
     private string _content = "Lorem";
 

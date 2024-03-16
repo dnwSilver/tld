@@ -5,7 +5,7 @@ using TUI.Engine.Theme;
 
 namespace TUI.Components.Controls.Statics.Hints;
 
-public class HotkeysHint : StaticComponentAttribute
+public class HotkeysHint : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {

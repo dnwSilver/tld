@@ -6,7 +6,7 @@ using TUI.Engine.Theme;
 
 namespace TUI.Engine.Tests.Components;
 
-public class ComponentAttributeTests
+public class ComponentBaseTests
 {
     [Fact]
     [Trait("Category", nameof(IComponent))]

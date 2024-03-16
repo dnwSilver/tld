@@ -5,7 +5,7 @@ using TUI.Engine.Theme;
 
 namespace TUI.Components.Controls.Statics;
 
-public class Logo : StaticComponentAttribute
+public class Logo : StaticComponentBase
 {
     protected override void RenderWithCache(StringBuilder builder)
     {

@@ -6,7 +6,7 @@ using TUI.UserInterface;
 
 namespace TUI.Components.Controls.Statics.Hints;
 
-public class AppTypeHints : StaticComponentAttribute
+public class AppTypeHints : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {

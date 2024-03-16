@@ -6,13 +6,13 @@ using TUI.Engine.Components;
 
 namespace TUI.Components.Controls;
 
-public class CellsComponentAttribute : ComponentAttribute, IComponent
+public class CellsComponentBase : ComponentBase, IComponent
 {
     private const int MaxCellWidth = 10;
 
     private readonly IEnumerable<string> _cells;
 
-    public CellsComponentAttribute(IEnumerable<string> cells)
+    public CellsComponentBase(IEnumerable<string> cells)
     {
         _cells = cells;
     }

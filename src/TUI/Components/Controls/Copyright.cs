@@ -5,7 +5,7 @@ using TUI.Engine.Theme;
 
 namespace TUI.Components.Controls;
 
-public class Copyright : StaticComponentAttribute
+public class Copyright : StaticComponentBase
 {
     protected override void RenderWithCache(StringBuilder builder)
     {

@@ -2,7 +2,7 @@ using System.Text;
 
 namespace TUI.Engine.Components;
 
-public abstract class StaticComponentAttribute : ComponentAttribute
+public abstract class StaticComponentBase : ComponentBase
 {
     private Sketch? _cache;
 

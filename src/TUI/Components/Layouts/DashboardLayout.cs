@@ -1,7 +1,9 @@
+using TUI.Engine.Attributes.Alignments;
 using TUI.Engine.Attributes.Orientations;
 using TUI.Engine.Components;
 using TUI.Engine.Containers;
 using TUI.Engine.Nodes;
+using TUI.Engine.Theme;
 
 namespace TUI.Components.Layouts;
 
@@ -16,23 +18,32 @@ public class DashboardLayout : ContainerBase, IContainer
 
     private INode _header;
     private INode _footer;
+    private INode _dashboard;
 
     public override Nodes GetNodes() =>
         new()
         {
-            _header, _footer
+            _header, _dashboard, _footer
         };
 
-    public DashboardLayout AddHeader(IContainer header)
+    public void AddDashboard(IComponent dashboard)
     {
-        _header = header;
-        return this;
+        _dashboard = dashboard;
     }
 
-    public DashboardLayout AddFooter(IComponent footer)
+    public void AddHeader(IContainer header)
     {
+        header.SetFixed(Orientation.Vertical, 6);
+        _header = header;
+    }
+
+    public void AddFooter(IComponent footer)
+    {
+        footer.SetFixed(Orientation.Vertical, 1);
+        footer.SetPaddingRight(Level.Normal);
+        footer.SetAlignment(Horizontal.Right);
+        footer.SetAlignment(Vertical.Bottom);
         _footer = footer;
-        return this;
     }
 
     public string Render()

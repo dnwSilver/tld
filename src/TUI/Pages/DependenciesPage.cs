@@ -17,14 +17,14 @@ public class DependenciesPage
         ICanvas canvas = new ConsoleCanvas();
 
         var header = new HeaderContainer();
-        header.SetFixed(Orientation.Vertical, 6);
-
         var copyright = new Copyright();
-        copyright.SetPaddingRight(Level.Normal);
-        copyright.SetAlignment(Horizontal.Right);
-        copyright.SetAlignment(Vertical.Bottom);
+        var dashboard = new Dashboard("Dependencies");
 
-        var layout = new DashboardLayout().AddHeader(header).AddFooter(copyright);
+        var layout = new DashboardLayout();
+        layout.AddHeader(header);
+        layout.AddFooter(copyright);
+        layout.AddDashboard(dashboard);
+
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
 

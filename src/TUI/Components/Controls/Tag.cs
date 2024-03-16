@@ -8,7 +8,7 @@ using TUI.UserInterface;
 
 namespace TUI.Components.Controls;
 
-public class Tag : ComponentAttribute
+public class Tag : ComponentBase
 {
     private IEnumerable<string> _tags;
     private string _gitType;

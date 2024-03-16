@@ -7,7 +7,7 @@ using TUI.Engine.Components;
 
 namespace TUI.Components.Views;
 
-public class DependenciesView : ComponentAttribute, IComponent
+public class DependenciesView : ComponentBase, IComponent
 {
     private const string ViewName = "Dependencies";
 

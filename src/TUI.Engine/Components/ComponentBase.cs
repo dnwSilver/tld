@@ -5,7 +5,7 @@ using TUI.Engine.Theme;
 
 namespace TUI.Engine.Components;
 
-public abstract class ComponentAttribute : NodeBase, IComponent
+public abstract class ComponentBase : NodeBase, IComponent
 {
     protected abstract Sketch DrawComponent();
 
@@ -13,28 +13,21 @@ public abstract class ComponentAttribute : NodeBase, IComponent
 
     #region Alignments
 
-    internal Alignment Alignment { get; private set; } = new(Defaults.HorizontalAlignment, Defaults.VerticalAlignment);
-
     Alignment IWithAlignment.Alignment => Alignment;
 
-    public void SetAlignment(Vertical vertical)
-    {
-        Alignment = Alignment with { Vertical = vertical };
-    }
+    internal Alignment Alignment { get; private set; } = new(Defaults.HorizontalAlignment, Defaults.VerticalAlignment);
 
-    public void SetAlignment(Horizontal horizontal)
-    {
-        Alignment = Alignment with { Horizontal = horizontal };
-    }
+    public void SetAlignment(Vertical vertical) => Alignment = Alignment with { Vertical = vertical };
+
+    public void SetAlignment(Horizontal horizontal) => Alignment = Alignment with { Horizontal = horizontal };
 
     #endregion
 
     #region Paddings
 
-    internal Padding Padding { get; private set; } = new(Defaults.Padding);
-    
-
     Padding IWithPadding.Padding => Padding;
+
+    internal Padding Padding { get; private set; } = new(Defaults.Padding);
 
     public void SetPadding(Level level) => Padding = new Padding(level);
 
