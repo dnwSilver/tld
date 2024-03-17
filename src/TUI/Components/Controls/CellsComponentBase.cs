@@ -29,7 +29,7 @@ public class CellsComponentBase : ComponentBase, IComponent
         // base.Render(content, position, size);
     }
 
-    protected override Sketch DrawComponent()
+    protected override Sketch DrawComponent(Size minSize)
     {
         throw new NotImplementedException();
     }

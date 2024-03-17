@@ -54,7 +54,7 @@ public class Tag : ComponentBase
             _ => Symbols.Git
         };
 
-    protected override Sketch DrawComponent()
+    protected override Sketch DrawComponent(Size minSize)
     {
         throw new NotImplementedException();
     }

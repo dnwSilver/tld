@@ -1,3 +1,4 @@
+using TUI.Engine.Attributes;
 using TUI.Engine.Components;
 
 namespace TUI.Engine.Tests.Stubs;
@@ -11,7 +12,7 @@ public class TestComponent : ComponentBase
         _content = content;
     }
 
-    protected override Sketch DrawComponent()
+    protected override Sketch DrawComponent(Size minSize)
     {
         return new Sketch(_content);
     }

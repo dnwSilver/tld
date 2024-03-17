@@ -1,10 +1,7 @@
 using System.Diagnostics;
 using TUI.Components.Controls;
 using TUI.Components.Layouts;
-using TUI.Engine.Attributes.Alignments;
-using TUI.Engine.Attributes.Orientations;
 using TUI.Engine.Rendering.Canvas;
-using TUI.Engine.Theme;
 
 namespace TUI.Pages;
 
@@ -19,12 +16,10 @@ public class DependenciesPage
         var header = new HeaderContainer();
         var copyright = new Copyright();
         var dashboard = new Dashboard("Dependencies");
-
         var layout = new DashboardLayout();
         layout.AddHeader(header);
         layout.AddFooter(copyright);
         layout.AddDashboard(dashboard);
-
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
 

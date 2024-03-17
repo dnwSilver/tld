@@ -1,7 +1,6 @@
 using System.Text;
 using TUI.Engine;
 using TUI.Engine.Attributes;
-using TUI.Engine.Attributes.Alignments;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
@@ -53,16 +52,14 @@ public class Dashboard : ComponentBase, IComponent
         builder.Append(Symbols.LineBreak);
     }
 
-    protected override Sketch DrawComponent()
+    protected override Sketch DrawComponent(Size minSize)
     {
         var builder = new StringBuilder();
 
-        var size = new Size(40, 5);
+        RenderTopLine(builder, minSize, _title);
+        RenderMiddleLine(builder, minSize);
+        RenderBottomLine(builder, minSize);
 
-        RenderTopLine(builder, size, _title);
-        RenderMiddleLine(builder, size);
-        RenderBottomLine(builder, size);
-
-        return new Sketch(builder.ToString());
+        return new Sketch(builder.ToString().Main());
     }
 }

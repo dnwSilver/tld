@@ -16,7 +16,7 @@ internal sealed class ComponentCraftsman : CraftsmanBase, IDrawable<IComponent>
 
     public Size Draw(IComponent component, Position pencil, Size maxSize)
     {
-        var sketch = component.MakeSketch();
+        var sketch = component.MakeSketch(maxSize);
         var sketchSize = sketch.GetSize();
 
         var correctedPencil = component.CorrectContentPosition(pencil, maxSize, sketchSize);

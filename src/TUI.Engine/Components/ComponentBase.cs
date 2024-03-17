@@ -1,3 +1,4 @@
+using TUI.Engine.Attributes;
 using TUI.Engine.Attributes.Alignments;
 using TUI.Engine.Attributes.Paddings;
 using TUI.Engine.Nodes;
@@ -7,9 +8,9 @@ namespace TUI.Engine.Components;
 
 public abstract class ComponentBase : NodeBase, IComponent
 {
-    protected abstract Sketch DrawComponent();
+    protected abstract Sketch DrawComponent(Size minSize);
 
-    Sketch IComponent.MakeSketch() => DrawComponent();
+    Sketch IComponent.MakeSketch(Size minSize) => DrawComponent(minSize);
 
     #region Alignments
 
