@@ -7,5 +7,11 @@ namespace TUI.Engine.Components;
 
 public interface IComponent : INode, IWithAlignment, IWithPadding
 {
+    internal bool IsRelative { get; }
+
+    public void SetRelative();
+
+    public void SetAbsolute();
+
     internal Sketch MakeSketch(Size minSize);
 }

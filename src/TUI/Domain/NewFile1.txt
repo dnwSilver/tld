@@ -2,7 +2,7 @@
  󰘳 1 󱓟 releases        select prev
  󰘳 2 󰧑 competencies    select next
  󰘳 3  dependencies   󰬌 toggle head
- 󰘳 4     󰬘 quit
+ 󰘳 4                  󰬘 quit
 
  󰎔 too new        Auth           package
   so good       󰞉 WWW           󰡨 image

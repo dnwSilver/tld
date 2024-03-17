@@ -28,7 +28,7 @@ internal sealed class ContainerCraftsman : CraftsmanBase, IDrawable<IContainer>
         {
             var node = nodes[nodeNumber];
             var nodeSize = node.GetSize(container, nodeNumber, maxSize);
-            
+
             nextNodePosition = DrawNode(node, container, nextNodePosition, nodeSize);
             nodeNumber++;
         }
@@ -45,7 +45,9 @@ internal sealed class ContainerCraftsman : CraftsmanBase, IDrawable<IContainer>
                 return GetNextNodePosition(container, containerSize, nodePosition);
             case IComponent childComponent:
                 var componentSize = _componentCraftsman.Draw(childComponent, nodePosition, maxSize);
-                return GetNextNodePosition(container, maxSize, nodePosition, componentSize);
+                return childComponent.IsRelative
+                    ? GetNextNodePosition(container, maxSize, nodePosition, componentSize)
+                    : nodePosition;
             default:
                 throw new InvalidCastException();
         }

@@ -2,25 +2,24 @@ using System.Text;
 using TUI.Engine;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
-using TUI.UserInterface;
 
-namespace TUI.Components.Controls.Statics.Hints;
+namespace TUI.Controls.Statics.Hints;
 
-public class AppTypeHints : StaticComponentBase
+public class HotkeysHint : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {
-        { Icons.NpmPackage, "package" },
-        { Icons.DockerImage, "image" },
-        { Icons.Site, "site" },
-        { Icons.Api, "api" }
+        { "", "select prev" },
+        { "", "select next" },
+        { "󰬌", "toggle head" },
+        { "󰬘", "quit" }
     };
 
     protected override void RenderWithCache(StringBuilder builder)
     {
         foreach (var hint in _hints)
         {
-            builder.Append(hint.Key);
+            builder.Append(hint.Key.Hint());
             builder.Append(Symbols.Space);
             builder.AppendLine(hint.Value.Hint());
         }

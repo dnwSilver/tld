@@ -1,6 +1,7 @@
 using System.Diagnostics;
-using TUI.Components.Controls;
-using TUI.Components.Layouts;
+using TUI.Controls.Containers;
+using TUI.Controls.Layouts;
+using TUI.Controls.Statics;
 using TUI.Engine.Rendering.Canvas;
 
 namespace TUI.Pages;
@@ -14,12 +15,14 @@ public class DependenciesPage
         ICanvas canvas = new ConsoleCanvas();
 
         var header = new HeaderContainer();
-        var copyright = new Copyright();
-        var dashboard = new Dashboard("Dependencies");
-        var layout = new DashboardLayout();
-        layout.AddHeader(header);
-        layout.AddFooter(copyright);
-        layout.AddDashboard(dashboard);
+        var copyright = new CopyrightComponent();
+        var dashboard = new DashboardContainer();
+        var layout = new DashboardLayout(header, dashboard, copyright);
+        var dependency = new DependencyContainer();
+        dashboard.AddChildren(dependency);
+        dashboard.AddChildren(dependency);
+        dashboard.AddChildren(dependency);
+        dashboard.AddChildren(dependency);
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
 

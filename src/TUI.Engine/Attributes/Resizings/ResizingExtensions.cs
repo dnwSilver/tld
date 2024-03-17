@@ -18,13 +18,15 @@ internal static class ResizingExtensions
         }
 
         var fixedNodes = container.GetFixedNodes().ToArray();
+        var absoluteNodes = container.GetAbsoluteNodes().ToArray();
 
         var fixedHeight = fixedNodes.Sum(s => s.GetFixedSize().Height);
         var allowableHeight = maxHeight - fixedHeight;
 
-        var allowableCount = container.GetNodes().Count - fixedNodes.Length;
+        var allowableCount = container.GetNodes().Count - fixedNodes.Length - absoluteNodes.Length;
         var nodeHeight = (allowableHeight / allowableCount).Min(1);
-        var nodeNumber = nodeIndex + 1 - container.GetFixedNodes(nodeIndex).Sum(c => c.GetFixedSize().Height);
+        var nodeNumber = nodeIndex + 1 - container.GetFixedNodes(nodeIndex).Count() -
+                         container.GetAbsoluteNodes(nodeIndex).Count();
 
         if (allowableHeight - nodeNumber * nodeHeight < nodeHeight)
         {

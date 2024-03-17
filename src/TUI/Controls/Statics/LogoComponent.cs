@@ -3,9 +3,9 @@ using TUI.Engine;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
-namespace TUI.Components.Controls.Statics;
+namespace TUI.Controls.Statics;
 
-public class Logo : StaticComponentBase
+public class LogoComponent : StaticComponentBase
 {
     protected override void RenderWithCache(StringBuilder builder)
     {

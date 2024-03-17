@@ -6,7 +6,7 @@ using TUI.Engine.Components;
 using TUI.Engine.Theme;
 using TUI.UserInterface;
 
-namespace TUI.Components.Controls;
+namespace TUI.Controls.Components;
 
 public class Tag : ComponentBase
 {
@@ -25,11 +25,11 @@ public class Tag : ComponentBase
 
         tagBuilder.Append(GetGitTypeImage(_gitType));
         tagBuilder.Append(Symbols.Space);
-        tagBuilder.Append(_tags.Have("public") ? Icons.NetworkPublic : Icons.NetworkPrivate);
+        tagBuilder.Append(_tags.Have("public") ? Symbols.NetworkPublic : Symbols.NetworkPrivate);
         tagBuilder.Append(Symbols.Space);
-        tagBuilder.Append(_tags.Have("seo") ? Icons.SEO : Icons.SEO.Disable());
+        tagBuilder.Append(_tags.Have("seo") ? Symbols.SEO : Symbols.SEO.Disable());
         tagBuilder.Append(Symbols.Space);
-        tagBuilder.Append(_tags.Have("auth") ? Icons.Auth : Icons.Auth.Disable());
+        tagBuilder.Append(_tags.Have("auth") ? Symbols.Auth : Symbols.Auth.Disable());
         tagBuilder.Append(Symbols.Space);
         tagBuilder.Append(GetApplicationType());
         tagBuilder.Append(Symbols.Space);
@@ -43,10 +43,10 @@ public class Tag : ComponentBase
             if (_tags.Have(application.Value))
                 return application.Key;
 
-        return Icons.Undefined;
+        return Symbols.Undefined;
     }
 
-    private static char GetGitTypeImage(string gitType) =>
+    private static string GetGitTypeImage(string gitType) =>
         gitType switch
         {
             "gitlab" => Symbols.GitLab,

@@ -5,49 +5,34 @@ using TUI.Engine.Containers;
 using TUI.Engine.Nodes;
 using TUI.Engine.Theme;
 
-namespace TUI.Components.Layouts;
+namespace TUI.Controls.Layouts;
 
 public class DashboardLayout : ContainerBase, IContainer
 {
-    public DashboardLayout()
+    private readonly INode _header;
+    private readonly INode _footer;
+    private readonly INode _dashboard;
+
+    public DashboardLayout(INode header, INode dashboard, IComponent footer)
     {
         SetOrientationVertical();
         SetAdaptive(Orientation.Horizontal);
         SetAdaptive(Orientation.Vertical);
-    }
 
-    private INode _header;
-    private INode _footer;
-    private INode _dashboard;
+        header.SetFixed(Orientation.Vertical, 6);
+        footer.SetFixed(Orientation.Vertical, 1);
+        footer.SetPaddingRight(Level.Normal);
+        footer.SetAlignment(Horizontal.Right);
+        footer.SetAlignment(Vertical.Bottom);
+
+        _header = header;
+        _footer = footer;
+        _dashboard = dashboard;
+    }
 
     public override Nodes GetNodes() =>
         new()
         {
             _header, _dashboard, _footer
         };
-
-    public void AddDashboard(IComponent dashboard)
-    {
-        _dashboard = dashboard;
-    }
-
-    public void AddHeader(IContainer header)
-    {
-        header.SetFixed(Orientation.Vertical, 6);
-        _header = header;
-    }
-
-    public void AddFooter(IComponent footer)
-    {
-        footer.SetFixed(Orientation.Vertical, 1);
-        footer.SetPaddingRight(Level.Normal);
-        footer.SetAlignment(Horizontal.Right);
-        footer.SetAlignment(Vertical.Bottom);
-        _footer = footer;
-    }
-
-    public string Render()
-    {
-        throw new NotImplementedException();
-    }
 }

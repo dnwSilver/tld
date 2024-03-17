@@ -2,18 +2,17 @@ using System.Text;
 using TUI.Engine;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
-using TUI.UserInterface;
 
-namespace TUI.Components.Controls.Statics.Hints;
+namespace TUI.Controls.Statics.Hints;
 
-public class TagHints : StaticComponentBase
+public class AppTypeHints : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {
-        { Icons.Auth, "Auth" },
-        { Icons.NetworkPublic, "WWW" },
-        { Icons.SEO, "SEO" },
-        { Icons.GitLab, "VCS" }
+        { Symbols.NpmPackage, "package" },
+        { Symbols.DockerImage, "image" },
+        { Symbols.Site, "site" },
+        { Symbols.Api, "api" }
     };
 
     protected override void RenderWithCache(StringBuilder builder)

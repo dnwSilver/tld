@@ -3,16 +3,16 @@ using TUI.Engine;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
-namespace TUI.Components.Controls;
+namespace TUI.Controls.Statics;
 
-public class Copyright : StaticComponentBase
+public class CopyrightComponent : StaticComponentBase
 {
     protected override void RenderWithCache(StringBuilder builder)
     {
-        builder.Append(Symbols.Copyright);
+        builder.Append(Symbols.Copyright.Info());
         builder.Append(Symbols.Space);
         builder.Append("Kolosov A. aka \"dnwSilver\"".Hint());
         builder.Append(Symbols.Space);
-        builder.Append(DateTime.Now.Year);
+        builder.Append(DateTime.Now.Year.Info());
     }
 }

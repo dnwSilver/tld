@@ -1,11 +1,11 @@
-using TUI.Components.Controls.Statics;
-using TUI.Components.Controls.Statics.Hints;
+using TUI.Controls.Statics;
+using TUI.Controls.Statics.Hints;
 using TUI.Engine.Attributes.Alignments;
 using TUI.Engine.Containers;
 using TUI.Engine.Nodes;
 using TUI.Engine.Theme;
 
-namespace TUI.Components.Controls;
+namespace TUI.Controls.Containers;
 
 public class HeaderContainer : ContainerBase, IContainer
 {
@@ -27,7 +27,7 @@ public class HeaderContainer : ContainerBase, IContainer
         hotkeysHints.SetPadding(Indentation.Default);
         hotkeysHints.SetAlignment(Horizontal.Left);
 
-        var logo = new Logo();
+        var logo = new LogoComponent();
         logo.SetAlignment(Horizontal.Right);
         logo.SetPaddingLeft(Indentation.Default);
         logo.SetPaddingBottom(Indentation.Default);

@@ -1,18 +1,19 @@
 using System.Text;
+using TUI.Controls.Components;
 using TUI.Engine;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
-namespace TUI.Components.Controls.Statics.Hints;
+namespace TUI.Controls.Statics.Hints;
 
 public class VersionHints : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {
-        { "󰎔", "too new".Info() },
-        { "", "so good".Hint() },
-        { "", "be nice".Main() },
-        { "󰬟", "too old".Warning() }
+        { "󰎔", VersionType.ToNew.Colorize("too new") },
+        { "", VersionType.SoGood.Colorize("so good") },
+        { "", VersionType.BeNice.Colorize("be nice") },
+        { "󰬟", VersionType.TooOld.Colorize("too old") }
     };
 
     protected override void RenderWithCache(StringBuilder builder)

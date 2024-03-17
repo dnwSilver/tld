@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TUI.Engine;
@@ -20,9 +21,9 @@ public static class Extensions
         return array.Any(item => item == findValue);
     }
 
-    public static string Repeat(this char symbol, int repeatCount)
+    public static string Repeat(this string value, int count)
     {
-        return repeatCount < 0 ? string.Empty : new string(symbol, repeatCount);
+        return count < 0 ? string.Empty : new StringBuilder(value.Length * count).Insert(0, value, count).ToString();
     }
 
     public static string RemoveColors(this string text)

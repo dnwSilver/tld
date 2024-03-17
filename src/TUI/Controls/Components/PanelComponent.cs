@@ -3,28 +3,30 @@ using TUI.Engine;
 using TUI.Engine.Attributes;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
+using static TUI.Engine.Symbols;
 
-namespace TUI.Components.Controls;
+namespace TUI.Controls.Components;
 
-public class Dashboard : ComponentBase, IComponent
+public class PanelComponent : ComponentBase, IComponent
 {
     private readonly string _title;
 
-    public Dashboard(string title)
+    public PanelComponent(string title)
     {
         _title = title;
+        SetAbsolute();
     }
 
     private static void RenderTopLine(StringBuilder builder, Size size, string title)
     {
         var halfWidth = (size.Width - title.GetWidth() - (int)Indentation.BorderWidth * 2 -
                          (int)Indentation.Default * 2) / 2;
-        builder.Append(Symbols.Angles.LeftTop);
-        builder.Append(Symbols.Lines.Horizontal.Repeat(halfWidth));
-        builder.AppendFormat("{0}{1}{0}", Symbols.Space.Repeat(Convert.ToInt32(Indentation.Default)), title);
-        builder.Append(Symbols.Lines.Horizontal.Repeat(halfWidth));
-        builder.Append(Symbols.Angles.RightTop);
-        builder.Append(Symbols.LineBreak);
+        builder.Append(Angles.LeftTop);
+        builder.Append(Lines.Horizontal.Repeat(halfWidth));
+        builder.AppendFormat("{0}{1}{0}", Space.Repeat(Convert.ToInt32(Indentation.Default)), title);
+        builder.Append(Lines.Horizontal.Repeat(halfWidth));
+        builder.Append(Angles.RightTop);
+        builder.Append(LineBreak);
     }
 
     private static void RenderMiddleLine(StringBuilder builder, Size size)
@@ -34,10 +36,10 @@ public class Dashboard : ComponentBase, IComponent
         while (dashboardHeight > 0)
         {
             var bodyWidth = size.Width - (int)Indentation.BorderWidth * 2;
-            builder.Append(Symbols.Lines.Vertical);
-            builder.Append(Symbols.Space.Repeat(bodyWidth));
-            builder.Append(Symbols.Lines.Vertical);
-            builder.Append(Symbols.LineBreak);
+            builder.Append(Lines.Vertical);
+            builder.Append(Space.Repeat(bodyWidth));
+            builder.Append(Lines.Vertical);
+            builder.Append(LineBreak);
 
             dashboardHeight--;
         }
@@ -46,10 +48,10 @@ public class Dashboard : ComponentBase, IComponent
     private static void RenderBottomLine(StringBuilder builder, Size size)
     {
         var width = size.Width - (int)Indentation.BorderWidth * 2;
-        builder.Append(Symbols.Angles.LeftBottom);
-        builder.Append(Symbols.Lines.Horizontal.Repeat(width));
-        builder.Append(Symbols.Angles.RightBottom);
-        builder.Append(Symbols.LineBreak);
+        builder.Append(Angles.LeftBottom);
+        builder.Append(Lines.Horizontal.Repeat(width));
+        builder.Append(Angles.RightBottom);
+        builder.Append(LineBreak);
     }
 
     protected override Sketch DrawComponent(Size minSize)

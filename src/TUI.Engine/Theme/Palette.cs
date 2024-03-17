@@ -18,6 +18,8 @@ public static class Palette
 
     public static string Hint(this string currentText) => currentText.Pastel(HintColor);
 
+    public static string Hint(this char currentText) => currentText.ToString().Pastel(HintColor);
+
     public static string Disable(this string currentText) => currentText.RemoveColors().Pastel(HintColor);
 
     public static string Warning(this string currentText) => currentText.Pastel(WarningColor);
@@ -25,4 +27,8 @@ public static class Palette
     public static string Error(this string currentText) => currentText.Pastel(ErrorColor);
 
     public static string Info(this string currentText) => currentText.Pastel(InfoColor);
+
+    public static string Info(this char currentText) => currentText.ToString().Pastel(InfoColor);
+
+    public static string Info(this int currentText) => currentText.ToString().Pastel(InfoColor);
 }

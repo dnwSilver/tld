@@ -1,6 +1,6 @@
 using FluentAssertions;
 
-namespace TUI.Engine.Tests.Draw;
+namespace TUI.Engine.Tests.Primitives;
 
 public class IntegerTests
 {

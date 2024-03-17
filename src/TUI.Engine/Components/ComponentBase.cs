@@ -10,6 +10,18 @@ public abstract class ComponentBase : NodeBase, IComponent
 {
     protected abstract Sketch DrawComponent(Size minSize);
 
+    public bool IsRelative { get; private set; } = true;
+
+    public void SetRelative()
+    {
+        IsRelative = true;
+    }
+
+    public void SetAbsolute()
+    {
+        IsRelative = false;
+    }
+
     Sketch IComponent.MakeSketch(Size minSize) => DrawComponent(minSize);
 
     #region Alignments

@@ -3,23 +3,23 @@ using TUI.Engine;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
 
-namespace TUI.Components.Controls.Statics.Hints;
+namespace TUI.Controls.Statics.Hints;
 
-public class HotkeysHint : StaticComponentBase
+public class TagHints : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {
-        { "", "select prev" },
-        { "", "select next" },
-        { "󰬌", "toggle head" },
-        { "󰬘", "quit" }
+        { Symbols.Auth, "Auth" },
+        { Symbols.NetworkPublic, "WWW" },
+        { Symbols.SEO, "SEO" },
+        { Symbols.Git, "VCS" }
     };
 
     protected override void RenderWithCache(StringBuilder builder)
     {
         foreach (var hint in _hints)
         {
-            builder.Append(hint.Key.Hint());
+            builder.Append(hint.Key);
             builder.Append(Symbols.Space);
             builder.AppendLine(hint.Value.Hint());
         }

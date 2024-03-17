@@ -4,7 +4,7 @@ using TUI.Engine.Attributes;
 using TUI.Engine.Attributes.Alignments;
 using TUI.Engine.Components;
 
-namespace TUI.Components.Controls;
+namespace TUI.Controls.Components;
 
 public class CellsComponentBase : ComponentBase, IComponent
 {
