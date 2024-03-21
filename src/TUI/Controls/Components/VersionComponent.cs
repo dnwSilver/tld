@@ -9,23 +9,22 @@ public class VersionComponent : ComponentBase
 {
     private readonly VersionType _type;
     private readonly string _version;
-    private readonly string? _icon;
+    private readonly Brand? _brand;
 
-    public VersionComponent(VersionType type, string version, string? icon = null)
+    public VersionComponent(VersionType type, string version, Brand? brand)
     {
         _type = type;
         _version = version;
-        _icon = icon;
+        _brand = brand;
     }
 
     protected override Sketch DrawComponent(Size minSize)
     {
         var builder = new StringBuilder();
 
-        if (_icon is not null)
+        if (_brand is not null)
         {
-            builder.Append(_icon.Colorized());
-            builder.Append(Symbols.Space);
+            builder.Append(_brand.ColorLogo());
         }
 
         builder.Append(_version);

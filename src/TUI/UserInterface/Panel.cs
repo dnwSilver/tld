@@ -1,5 +1,5 @@
 using TUI.Engine.Theme;
-using TUI.Settings;
+using TUI.Providers.Dependencies;
 
 
 namespace TUI.UserInterface;
@@ -15,7 +15,7 @@ public static class Panel
 
     private static int _marginTop;
 
-    public static void RenderRows(SourceDto[] sources, int selectedRowNumber)
+    public static void RenderRows(ProjectDto[] sources, int selectedRowNumber)
     {
         for (var index = 0; index < sources.Length; index++)
         {

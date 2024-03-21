@@ -14,7 +14,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="settings.yaml">
+        <None Update="dependencies.yaml">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>
@@ -29,6 +29,9 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\TUI.Engine\TUI.Engine.csproj"/>
+    </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Settings\" />
     </ItemGroup>
 
 </Project>

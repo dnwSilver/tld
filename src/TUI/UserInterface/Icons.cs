@@ -1,3 +1,4 @@
+using Pastel;
 using TUI.Engine;
 
 
@@ -7,9 +8,9 @@ public static class Icons
 {
     public static readonly Dictionary<string, string> Applications = new()
     {
-        { Symbols.NpmPackage, "package" },
-        { Symbols.DockerImage, "image" },
-        { Symbols.Site, "site" },
+        { Symbols.NpmPackage.Colorized(), "package" },
+        { Symbols.DockerImage.Colorized(), "image" },
+        { Symbols.Site.Pastel("666666"), "site" },
         { Symbols.Api, "api" }
     };
 }

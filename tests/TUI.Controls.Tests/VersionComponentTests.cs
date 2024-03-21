@@ -16,7 +16,8 @@ namespace TUI.Engine.Tests
         [InlineData(VersionType.TooOld, "\u001b[38;2;236;151;6m10.12.33\u001b[0m")]
         public void DrawSketchVersionTypes(VersionType versionType, string expected)
         {
-            var version = new VersionComponent(versionType, "10.12.33");
+            var brand = new Brand("Docker", "󰡨", "#1d63ed");
+            var version = new VersionComponent(versionType, "10.12.33", brand);
 
             var sketch = (version as IComponent).MakeSketch(new Size(10, 2));
 

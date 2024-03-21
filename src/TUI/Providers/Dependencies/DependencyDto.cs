@@ -1,8 +1,7 @@
 using System.Runtime.Serialization;
 using YamlDotNet.Serialization;
 
-
-namespace TUI.Settings;
+namespace TUI.Providers.Dependencies;
 
 [DataContract]
 [YamlSerializable]

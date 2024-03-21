@@ -2,31 +2,64 @@ using System.Diagnostics;
 using TUI.Controls.Containers;
 using TUI.Controls.Layouts;
 using TUI.Controls.Statics;
+using TUI.Domain;
 using TUI.Engine.Rendering.Canvas;
+using TUI.Providers.Dependencies;
 
 namespace TUI.Pages;
 
-public class DependenciesPage
+interface IPage
+{
+    void Open();
+    void Render();
+    void Bind();
+}
+
+public abstract class PageBase : IPage
 {
     public void Open()
     {
-        Debugger.Log(0, "Event", "Open page dependencies\n");
+        Debugger.Log(0, "Event", $"Open page ${GetType().UnderlyingSystemType.Name}\n");
+        Bind();
+        Render();
+    }
 
+    public abstract void Render();
+
+    public abstract void Bind();
+}
+
+public class DependenciesPage : PageBase
+{
+    private IEnumerable<Dependency> ConventionDependencies;
+
+    public override void Render()
+    {
         ICanvas canvas = new ConsoleCanvas();
 
         var header = new HeaderContainer();
         var copyright = new CopyrightComponent();
         var dashboard = new DashboardContainer();
-        var layout = new DashboardLayout(header, dashboard, copyright);
-        var dependency = new DependencyContainer();
-        dashboard.AddChildren(dependency);
-        dashboard.AddChildren(dependency);
-        dashboard.AddChildren(dependency);
-        dashboard.AddChildren(dependency);
+        var dependenciesHeader = new DependenciesContainer();
+        dependenciesHeader.AddTitleStub();
+
+        foreach (var conventionDependency in ConventionDependencies)
+        {
+            dependenciesHeader.AddDependency(conventionDependency);
+        }
+
+        dashboard.AddChildren(dependenciesHeader);
         // CommandLine = new CommandLine();
         // DependenciesView = new DependenciesView();
 
+        var layout = new DashboardLayout(header, dashboard, copyright);
         canvas.Draw(layout);
+    }
+
+    public override void Bind()
+    {
+        var repo = new DependencyRepository();
+        ConventionDependencies = repo.Read("javascript");
     }
 
     // private bool _commandLineInDisplay;

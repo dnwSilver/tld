@@ -2,8 +2,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using TUI.Engine;
 
-
-namespace TUI.Domain;
+namespace TUI.Providers.Dependencies;
 
 public class Package
 {

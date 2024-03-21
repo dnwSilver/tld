@@ -2,6 +2,7 @@ using TUI.Controls.Components;
 using TUI.Engine.Attributes.Orientations;
 using TUI.Engine.Containers;
 using TUI.Engine.Nodes;
+using TUI.Engine.Theme;
 
 namespace TUI.Controls.Containers;
 
@@ -12,7 +13,8 @@ public class DashboardContainer : ContainerBase
 
     public DashboardContainer()
     {
-        var panel = new PanelComponent("Dependencies");
+        // var panel = new PanelComponent("Dependencies ".Info() + Symbols.Node.Colorized());
+        var panel = new PanelComponent("Dependencies".Info());
         _content = new ContentContainer();
         _content.SetOrientationVertical();
         SetOrientationVertical();
