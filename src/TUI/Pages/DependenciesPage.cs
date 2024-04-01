@@ -4,6 +4,7 @@ using TUI.Controls.Containers;
 using TUI.Controls.Layouts;
 using TUI.Controls.Statics;
 using TUI.Domain;
+using TUI.Engine;
 using TUI.Engine.Rendering.Canvas;
 using TUI.Providers.Dependencies;
 using TUI.Store;
@@ -40,7 +41,6 @@ public class DependenciesPage : PageBase
         ICanvas canvas = new ConsoleCanvas();
 
         var header = new HeaderContainer();
-        var copyright = new CopyrightComponent();
         var dashboard = new DashboardContainer();
         var dependenciesHeader = new DependenciesContainer();
         dependenciesHeader.AddTitleStub();
@@ -59,7 +59,9 @@ public class DependenciesPage : PageBase
             dashboard.AddChildren(projectDependencies);
         }
 
-        var layout = new DashboardLayout(header, dashboard, copyright);
+        var breadCrumbs = new BreadCrumbsComponent(" dependencies", "JavaScript");
+        var footer = new FooterContainer(breadCrumbs);
+        var layout = new DashboardLayout(header, dashboard, footer);
         canvas.Draw(layout);
 
         // CommandLine = new CommandLine();
