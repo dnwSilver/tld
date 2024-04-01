@@ -14,7 +14,7 @@ namespace TUI.Controls.Containers;
 public class DependenciesContainer : ContainerBase
 {
     private const int VersionColumnWidth = 10;
-    private const int TitleColumnWidth = 20;
+    private const int TitleColumnWidth = 25;
 
     private readonly Nodes _dependencies = new();
 
@@ -31,6 +31,7 @@ public class DependenciesContainer : ContainerBase
     {
         title.SetPadding(Level.Normal);
         title.SetFixed(Orientation.Horizontal, TitleColumnWidth);
+        title.SetAlignment(Horizontal.Left);
 
         _dependencies.Add(title);
     }

@@ -29,7 +29,7 @@ public class DependencyRepository
         }
     }
 
-    public IEnumerable<Dependency> Read(string stackName)
+    public IEnumerable<Dependency> ReadConventions(string stackName)
     {
         return DependenciesDto.Stacks
             .Single(stack => stack.Name == stackName)
@@ -39,5 +39,23 @@ public class DependencyRepository
                 var brand = new Brand(convention.Name, convention.Icon, convention.Color);
                 return new Dependency(convention.Version, brand);
             });
+    }
+
+    public IEnumerable<Project> ReadProjects(string stackName)
+    {
+        var projects = new List<Project>();
+
+        var hubs = DependenciesDto.Stacks
+            .Single(stack => stack.Name == stackName)
+            .Hubs;
+
+        foreach (var hub in hubs)
+        {
+            projects.AddRange(hub
+                .Projects
+                .Select(proj => new Project(proj.Id, proj.Name, proj.Tags, hub.Type)));
+        }
+
+        return projects;
     }
 }

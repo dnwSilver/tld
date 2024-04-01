@@ -30,8 +30,5 @@
     <ItemGroup>
         <ProjectReference Include="..\TUI.Engine\TUI.Engine.csproj"/>
     </ItemGroup>
-    <ItemGroup>
-      <Folder Include="Settings\" />
-    </ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+using System.Text;
 using TUI.Engine.Attributes;
 
 namespace TUI.Engine.Components;
@@ -7,6 +8,8 @@ public sealed class Sketch : IEnumerable<string>
     private IEnumerable<string> ContentRows { get; }
 
     public Sketch(string content) => ContentRows = content.Split(Symbols.LineBreak);
+
+    public Sketch(StringBuilder builder) => ContentRows = builder.ToString().Split(Symbols.LineBreak);
 
     public IEnumerator<string> GetEnumerator() => ContentRows.GetEnumerator();
 

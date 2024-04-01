@@ -18,7 +18,7 @@ public static class SymbolExtensions
         { Symbols.Api, "7F52FF" },
         { Symbols.DockerImage, "086DD7" },
         { Symbols.NpmPackage, "CB0000" },
-        { Symbols.SEO, "4285F4" },
+        { Symbols.Seo, "4285F4" },
         { Symbols.Auth, "FFD700" },
     };
 }

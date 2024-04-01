@@ -9,34 +9,51 @@
   be nice       󰚩 SEO            site
  󰬟 too old        VCS            api
 
- 󰦖 wait          󰲽 build         󱓞 release
- 󱔢 reopen        󱞈 testing       󰶯 hotfix
- 󱞇 in progress   󰦕 done           publish
- 󱞇 review        󱄊 cancel
- 
-   releases 󱓟   Fact  2023
-   releases 󱓟   Fact
-   releases 󱓟   Planned
-   releases 󱓟   Planned  2024-12-31 xfirm
-   competencies 󰧑
-   growth zone 󰶼
-   dependencies  
+   󱓟 releases  Fact  2023
+   󱓟 releases  Fact
+   󱓟 releases  Planned
+   󱓟 releases  Planned  2024-12-31 xfirm
+   󰧑 competencies
+   󰶼 growth zone
+    dependencies
+   󱁤 tools
+
+
+
+󰦖 wait          󰲽 build
+󱔢 reopen        󱞈 testing
+󱞇 in progress   󰦕 done
+󱞇 review        󱄊 cancel
 
 ┌──────────────────────────────────────────────────────────────────────── Planned release ─────────────────────────────────────────────────────────────────┐
-│ 2024-12-31     4/11 xfirm       [#############     ] //green - done, blue - test, pink review/build, orange WIP    
-│                4/11 xfirm       [###############.......] //green - done, blue - test, pink review/build          
-│ 2024-12-31     4/11 xfirm       [###############.......] //green - done, blue - test, pink review/build          
-│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
-│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
-│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
-│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
-│ 2024-12-31 xfirm 4/11 [############..........] //green - done, blue - test, pink review/build                         
+│ 󱓟 Planned    󱜜   󰲌 application              Tasks
+│ 2024-12-31   1d  elk-site            4/11 󰦕 󰦕 󰦕 󰦕 󱞇 󱞇 󱞇 󱞈 󱞈 󱔢 󰦖 󰦖 󰦖 
+│                  elk-site             2/5 󰦕 󰦕 󰦖 󰦖 󰦖 
+│                  elk-site           22/22 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󰦕 󱞇 󱞇 󱞇 󱞈 󱞈 󱞈 󱔢 󰦖 󰦖 󰦖 
+│ 2024-12-31   12d xfirm               4/12 󰦕 󰦕 󰦕 󰦕 󱞇 󱞇 󱞇 󱞈 󱞈 󱞈 󱔢 󰦖 󰦖 󰦖 
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+󰨑 show stopper      󰦖 wait          󰲽 build           feature
+󰨑 first of all      󱔢 reopen        󱞈 testing         bug
+󰨑 just do it        󱞇 in progress   󰦕 done   
+󰨑 doesn't rush      󱞇 review        󱄊 cancel
+
 ┌──────────────────────────────────────────────────────────────────────── checkperson-site ────────────────────────────────────────────────────────────────┐
 │ 󰨑 󰦖  ELK-3628 Create new menu.                                    Anna P. 󰵮 Petrov A. 󰙨 Ivanov I.
 │ 󰨑 󰦕  XF-12    Change input hover.                                 Alex K. 󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
 │ 󰨑 󱞇  ELK-3628 Crete new project with menu, profile, issues and #  Anna P. 󰵮 Ivanov I. 󰙨 Petrov A., Petrov B.
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+ publish
+󱓞 release
+󰶯 hotfix
+󱓞 release candidate
 
 ┌─────────────────────────────────────────────────────────────────────────── Actual releases 2023 ─────────────────────────────────────────────────────────┐
 │   Jan       Feb       Mar       Apl       May       Jun       Jul       Aug       Sep       Oct       Nov       Dec
@@ -48,5 +65,12 @@
 
 
 
+ GA4              Jaeger          󰡾 Fallback       Screenshots        Connected          Auth
+Я YM               Prometheus      󰉼 Renovate       End2End            Disconnected      󰖟 WWW
+󰩃 Husky           󱎴 Sentry          󱉕 Lighthouse     Unit               Not implemented   󰚩 SEO
+ Probs            Grafana         󱂅 Kibana         Coverage           No need   
 
-
+┌─────────────────────────────────────────────────────────────────────────── Tools ──────────────────────────────────┐
+│                  Я      󰉼   󰩃    󱎴    󱉕          󱂅                   󰖟    󰚩        󰡾
+│ elk-site                                                                    
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

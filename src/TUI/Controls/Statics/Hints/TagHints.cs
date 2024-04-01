@@ -11,7 +11,7 @@ public class TagHints : StaticComponentBase
     {
         { Symbols.Auth, "Auth" },
         { Symbols.NetworkPublic, "WWW" },
-        { Symbols.SEO, "SEO" },
+        { Symbols.Seo, "SEO" },
         { Symbols.Git, "VCS" }
     };
 

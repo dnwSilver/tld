@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using TUI.Controls.Components;
 using TUI.Controls.Containers;
 using TUI.Controls.Layouts;
 using TUI.Controls.Statics;
 using TUI.Domain;
 using TUI.Engine.Rendering.Canvas;
 using TUI.Providers.Dependencies;
+using TUI.Store;
 
 namespace TUI.Pages;
 
@@ -31,7 +33,7 @@ public abstract class PageBase : IPage
 
 public class DependenciesPage : PageBase
 {
-    private IEnumerable<Dependency> ConventionDependencies;
+    private DependenciesStore _store;
 
     public override void Render()
     {
@@ -43,23 +45,31 @@ public class DependenciesPage : PageBase
         var dependenciesHeader = new DependenciesContainer();
         dependenciesHeader.AddTitleStub();
 
-        foreach (var conventionDependency in ConventionDependencies)
+        foreach (var conventionDependency in _store.ConventionDependencies)
         {
             dependenciesHeader.AddDependency(conventionDependency);
         }
 
         dashboard.AddChildren(dependenciesHeader);
-        // CommandLine = new CommandLine();
-        // DependenciesView = new DependenciesView();
+
+        foreach (var project in _store.Projects)
+        {
+            var projectDependencies = new DependenciesContainer();
+            projectDependencies.AddTitle(new ProjectTitle(project));
+            dashboard.AddChildren(projectDependencies);
+        }
 
         var layout = new DashboardLayout(header, dashboard, copyright);
         canvas.Draw(layout);
+
+        // CommandLine = new CommandLine();
+        // DependenciesView = new DependenciesView();
     }
 
     public override void Bind()
     {
-        var repo = new DependencyRepository();
-        ConventionDependencies = repo.Read("javascript");
+        _store = new DependenciesStore();
+        _store.Bind();
     }
 
     // private bool _commandLineInDisplay;

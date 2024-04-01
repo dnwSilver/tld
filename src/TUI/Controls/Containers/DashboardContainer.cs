@@ -13,8 +13,7 @@ public class DashboardContainer : ContainerBase
 
     public DashboardContainer()
     {
-        // var panel = new PanelComponent("Dependencies ".Info() + Symbols.Node.Colorized());
-        var panel = new PanelComponent("Dependencies".Info());
+        var panel = new PanelComponent(" ".Info() + "Dependencies".Main());
         _content = new ContentContainer();
         _content.SetOrientationVertical();
         SetOrientationVertical();

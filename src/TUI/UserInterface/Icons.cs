@@ -10,7 +10,7 @@ public static class Icons
     {
         { Symbols.NpmPackage.Colorized(), "package" },
         { Symbols.DockerImage.Colorized(), "image" },
-        { Symbols.Site.Pastel("666666"), "site" },
+        { Symbols.Site.Colorized(), "site" },
         { Symbols.Api, "api" }
     };
 }

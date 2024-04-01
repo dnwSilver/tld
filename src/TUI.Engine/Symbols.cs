@@ -15,7 +15,7 @@ public static class Symbols
     public const string Api = "";
     public const string DockerImage = "";
     public const string NpmPackage = "";
-    public const string SEO = "󰚩";
+    public const string Seo = "󰚩";
     public const string Auth = "";
     public const string NotFound = "";
 
