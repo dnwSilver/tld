@@ -25,6 +25,8 @@ internal sealed class ComponentCraftsman : CraftsmanBase, IDrawable<IComponent>
 
         foreach (var line in sketch.Crop(maxSize))
         {
+            component.DrawContext = new DrawContext(_canvas, pencil, maxSize);
+
             _canvas.SetPencil(correctedPencil);
             _canvas.Paint(line);
 

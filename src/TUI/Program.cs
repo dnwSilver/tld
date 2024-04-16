@@ -6,9 +6,12 @@ Console.CursorVisible = false;
 
 // var settings = Settings.Init();
 
+var welcomePage = new WelcomePage();
+welcomePage.Open();
+Thread.Sleep(2000);
+
 var dependenciesPage = new DependenciesPage();
 dependenciesPage.Open();
-
 // display.OpenDeps(settings.Projects[0]);
 
 var key = new ConsoleKeyInfo('1', ConsoleKey.NoName, false, false, false);

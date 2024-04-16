@@ -1,36 +1,10 @@
-using System.Diagnostics;
 using TUI.Controls.Components;
 using TUI.Controls.Containers;
 using TUI.Controls.Layouts;
-using TUI.Controls.Statics;
-using TUI.Domain;
-using TUI.Engine;
 using TUI.Engine.Rendering.Canvas;
-using TUI.Providers.Dependencies;
 using TUI.Store;
 
 namespace TUI.Pages;
-
-interface IPage
-{
-    void Open();
-    void Render();
-    void Bind();
-}
-
-public abstract class PageBase : IPage
-{
-    public void Open()
-    {
-        Debugger.Log(0, "Event", $"Open page ${GetType().UnderlyingSystemType.Name}\n");
-        Bind();
-        Render();
-    }
-
-    public abstract void Render();
-
-    public abstract void Bind();
-}
 
 public class DependenciesPage : PageBase
 {

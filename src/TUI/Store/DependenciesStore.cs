@@ -1,3 +1,4 @@
+using TUI.Controls.Components;
 using TUI.Domain;
 using TUI.Providers.Dependencies;
 
@@ -12,8 +13,12 @@ public class DependenciesStore
     public void Bind()
     {
         var repo = new DependencyRepository();
+
         ConventionDependencies = repo.ReadConventions("javascript");
+        SpeakerComponent.Instance.Shout("🤔", "Prepare javascript conventions");
+
         Projects = repo.ReadProjects("javascript");
+        SpeakerComponent.Instance.Shout("🤩", "Prepare javascript projects");
     }
 
     // private readonly static Dictionary<string, Package> Packages = new();
