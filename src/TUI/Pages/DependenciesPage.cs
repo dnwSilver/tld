@@ -33,7 +33,7 @@ public class DependenciesPage : PageBase
             dashboard.AddChildren(projectDependencies);
         }
 
-        var breadCrumbs = new BreadCrumbsComponent(" dependencies", "JavaScript");
+        var breadCrumbs = new BreadCrumbsComponent("  Dependencies", "JavaScript");
         var footer = new FooterContainer(breadCrumbs);
         var layout = new DashboardLayout(header, dashboard, footer);
         canvas.Draw(layout);

@@ -8,11 +8,10 @@ Console.CursorVisible = false;
 
 var welcomePage = new WelcomePage();
 welcomePage.Open();
-Thread.Sleep(2000);
+Thread.Sleep(500);
 
 var dependenciesPage = new DependenciesPage();
 dependenciesPage.Open();
-// display.OpenDeps(settings.Projects[0]);
 
 var key = new ConsoleKeyInfo('1', ConsoleKey.NoName, false, false, false);
 var waitCommand = true;
