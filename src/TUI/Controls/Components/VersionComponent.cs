@@ -1,7 +1,9 @@
 using System.Text;
 using TUI.Domain;
+using TUI.Engine;
 using TUI.Engine.Attributes;
 using TUI.Engine.Components;
+using TUI.Engine.Theme;
 
 namespace TUI.Controls.Components;
 
@@ -25,16 +27,18 @@ public class VersionComponent : ComponentBase
     {
         var builder = new StringBuilder();
         
-        // builder.Append(_type.ToString());
         
         if (_brand is not null)
         {
             builder.Append(_brand.ColorLogo());
         }
         
+        builder.Append(_type.ToImage().Warning());
+        builder.Append(Symbols.Space);
         builder.Append(_version);
         var sketch = builder.ToString();
         
         return new Sketch(_status.Colorize(sketch));
     }
 }
+

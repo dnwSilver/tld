@@ -18,6 +18,8 @@ public static class Symbols
     public const string Seo = "󰚩";
     public const string Auth = "";
     public const string NotFound = "";
+    public const string Error = "";
+    public const string Download = "";
 
     public static class Lines
     {

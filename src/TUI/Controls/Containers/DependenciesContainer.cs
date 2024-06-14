@@ -16,7 +16,7 @@ public class DependenciesContainer : ContainerBase
 {
     public readonly Project? Project;
     
-    private const int VersionColumnWidth = 10;
+    private const int VersionColumnWidth = 11;
     
     private const int TitleColumnWidth = 25;
     
@@ -61,6 +61,22 @@ public class DependenciesContainer : ContainerBase
         stub.SetPadding(Level.Normal);
         stub.SetAlignment(Horizontal.Right);
         stub.SetFixed(Orientation.Horizontal, VersionColumnWidth);
+        
+        if (Project is not null && Project.Legacy)
+        {
+            stub.StyleContext = new StyleContext(Palette.DisableColor);
+        }
+        
+        _dependencies.Add(stub);
+    }
+    
+    public void AddError()
+    {
+        var size = new Size(25, 1);
+        var stub = new StubComponent(size, (Symbols.Error + Symbols.Space + " Something went wrong").Error());
+        stub.SetPadding(Level.Normal);
+        stub.SetAlignment(Horizontal.Right);
+        stub.SetFixed(Orientation.Horizontal, 25);
         
         if (Project is not null && Project.Legacy)
         {

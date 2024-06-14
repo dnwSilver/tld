@@ -62,20 +62,27 @@ public class DependenciesPage : PageBase
             var project = projectDependencies.Project;
             var actualDependencies = _store.ActualDependencies(project).ToArray();
             
-            foreach (var conventionDependency in _store.ConventionDependencies)
+            if (!actualDependencies.Any())
             {
-                var actualDependency = actualDependencies.SingleOrDefault(
-                    dependency => string.Equals(dependency.Brand.Name, conventionDependency.Brand.Name,
-                        StringComparison.CurrentCultureIgnoreCase));
-                
-                if (actualDependency is null)
+                projectDependencies.AddError();
+            }
+            else
+            {
+                foreach (var conventionDependency in _store.ConventionDependencies)
                 {
-                    projectDependencies.AddDependencyStub();
-                    continue;
+                    var actualDependency = actualDependencies.SingleOrDefault(
+                        dependency => string.Equals(dependency.Brand.Name, conventionDependency.Brand.Name,
+                            StringComparison.CurrentCultureIgnoreCase));
+                    
+                    if (actualDependency is null)
+                    {
+                        projectDependencies.AddDependencyStub();
+                        continue;
+                    }
+                    
+                    var versionType = actualDependency.Comparison(conventionDependency);
+                    projectDependencies.AddDependency(actualDependency, versionType);
                 }
-                
-                var versionType = actualDependency.Comparison(conventionDependency);
-                projectDependencies.AddDependency(actualDependency, versionType);
             }
             
             Render();

@@ -1,5 +1,6 @@
 using TUI.Controls.Components;
 using TUI.Domain;
+using TUI.Engine;
 using TUI.Engine.Theme;
 using TUI.Providers.Dependencies;
 
@@ -15,14 +16,15 @@ public class DependenciesStore
     
     public IEnumerable<Dependency> ActualDependencies(Project project)
     {
-        SpeakerComponent.Instance.Shout("", $"Fetch actual dependencies for project {project.Name.Main()}");
+        SpeakerComponent.Instance.Shout(Symbols.Download.Info(), $"Fetch actual dependencies for project {project.Name.Main
+            ()}");
         try
         {
             return Repository.ReadActual(project);
         }
         catch
         {
-            SpeakerComponent.Instance.Shout("", $"Fetch failed for project{project.Name}");
+            SpeakerComponent.Instance.Shout(Symbols.Error.Error(), $"Fetch failed for project{project.Name}");
             return new List<Dependency>();
         }
     }
