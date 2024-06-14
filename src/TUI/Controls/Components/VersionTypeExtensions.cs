@@ -4,14 +4,13 @@ namespace TUI.Controls.Components;
 
 public static class VersionTypeExtensions
 {
-    public static string Colorize(this VersionType versionType, string value) =>
-        versionType switch
+    public static string Colorize(this VersionStatus versionStatus, string value) =>
+        versionStatus switch
         {
-            VersionType.TooOld => value.Warning(),
-            VersionType.ToNew => value.Info(),
-            VersionType.SoGood => value.Hint(),
-            VersionType.BeNice => value.Main(),
-            VersionType.Convention => value.Main(),
+            VersionStatus.TooOld => value.Warning(),
+            VersionStatus.ToNew => value.Info(),
+            VersionStatus.SoGood => value.Hint(),
+            VersionStatus.BeNice => value.Main(),
             _ => value
         };
 }

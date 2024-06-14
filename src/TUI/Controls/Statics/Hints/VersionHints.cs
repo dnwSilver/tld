@@ -10,10 +10,10 @@ public class VersionHints : StaticComponentBase
 {
     private readonly Dictionary<string, string> _hints = new()
     {
-        { "󰎔", VersionType.ToNew.Colorize("too new") },
-        { "", VersionType.SoGood.Colorize("so good") },
-        { "", VersionType.BeNice.Colorize("be nice") },
-        { "󰬟", VersionType.TooOld.Colorize("too old") }
+        { "󰎔", VersionStatus.ToNew.Colorize("too new") },
+        { "", VersionStatus.SoGood.Colorize("so good") },
+        { "", VersionStatus.BeNice.Colorize("be nice") },
+        { "󰬟", VersionStatus.TooOld.Colorize("too old") }
     };
 
     protected override void RenderWithCache(StringBuilder builder)

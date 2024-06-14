@@ -29,4 +29,6 @@ public class DashboardContainer : ContainerBase
     }
     
     public override Nodes GetNodes() => _children;
+    
+    public Nodes GetContent() => _content.GetNodes();
 }

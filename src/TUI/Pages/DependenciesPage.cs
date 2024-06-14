@@ -6,57 +6,97 @@ using TUI.Store;
 
 namespace TUI.Pages;
 
+public record DependenciesState(HeaderContainer Header, DashboardContainer Dashboard, FooterContainer Footer);
+
 public class DependenciesPage : PageBase
 {
     private DependenciesStore _store;
-
-    public override void Render()
+    
+    private DependenciesState _state;
+    
+    public override void Initial()
     {
-        ICanvas canvas = new ConsoleCanvas();
-
         var header = new HeaderContainer();
         var dashboard = new DashboardContainer();
         var dependenciesHeader = new DependenciesContainer();
         dependenciesHeader.AddTitleStub();
-
+        
         foreach (var conventionDependency in _store.ConventionDependencies)
         {
             dependenciesHeader.AddDependency(conventionDependency);
         }
-
+        
         dashboard.AddChildren(dependenciesHeader);
-
+        
         foreach (var project in _store.Projects)
         {
-            var projectDependencies = new DependenciesContainer();
+            var projectDependencies = new DependenciesContainer(project);
             projectDependencies.AddTitle(new ProjectTitle(project));
             dashboard.AddChildren(projectDependencies);
         }
-
+        
         var breadCrumbs = new BreadCrumbsComponent("  Dependencies", "JavaScript");
         var footer = new FooterContainer(breadCrumbs);
-        var layout = new DashboardLayout(header, dashboard, footer);
-        canvas.Draw(layout);
-
-        // CommandLine = new CommandLine();
-        // DependenciesView = new DependenciesView();
+        
+        _state = new DependenciesState(header, dashboard, footer);
     }
-
+    
+    public override void Render()
+    {
+        ICanvas canvas = new ConsoleCanvas();
+        var layout = new DashboardLayout(_state.Header, _state.Dashboard, _state.Footer);
+        canvas.Draw(layout);
+    }
+    
+    public void LoadDependencies()
+    {
+        Initial();
+        var projects = _state.Dashboard.GetContent();
+        foreach (var projectDependencies in projects.Cast<DependenciesContainer?>().Skip(1))
+        {
+            if (projectDependencies is null)
+            {
+                continue;
+            }
+            
+            var project = projectDependencies.Project;
+            var actualDependencies = _store.ActualDependencies(project).ToArray();
+            
+            foreach (var conventionDependency in _store.ConventionDependencies)
+            {
+                var actualDependency = actualDependencies.SingleOrDefault(
+                    dependency => string.Equals(dependency.Brand.Name, conventionDependency.Brand.Name,
+                        StringComparison.CurrentCultureIgnoreCase));
+                
+                if (actualDependency is null)
+                {
+                    projectDependencies.AddDependencyStub();
+                    continue;
+                }
+                
+                var versionType = actualDependency.Comparison(conventionDependency);
+                projectDependencies.AddDependency(actualDependency, versionType);
+            }
+            
+            Render();
+        }
+    }
+    
     public override void Bind()
     {
         _store = new DependenciesStore();
         _store.Bind();
     }
-
+    
     // private bool _commandLineInDisplay;
-
+    
     // private ProjectDto _currentProjectDto;
-
+    
     // private bool _headerInDisplay = true;
-
-
+    
+    
     // public string FocusedElement { get; set; } = "";
-
+    
     // public void OpenDeps(ProjectDto projectDto)
     // {
     //     _currentProjectDto = projectDto;

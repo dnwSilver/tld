@@ -1,3 +1,4 @@
+using Pastel;
 using TUI.Engine.Attributes;
 using TUI.Engine.Components;
 using TUI.Engine.Nodes;
@@ -8,31 +9,34 @@ namespace TUI.Engine.Rendering;
 internal sealed class ComponentCraftsman : CraftsmanBase, IDrawable<IComponent>
 {
     private readonly ICanvas _canvas;
-
+    
     public ComponentCraftsman(ICanvas canvas)
     {
         _canvas = canvas;
     }
-
+    
     public Size Draw(IComponent component, Position pencil, Size maxSize)
     {
         var sketch = component.MakeSketch(maxSize);
         var sketchSize = sketch.GetSize();
-
+        
         var correctedPencil = component.CorrectContentPosition(pencil, maxSize, sketchSize);
-
+        
         Debug(pencil, maxSize);
-
+        
         foreach (var line in sketch.Crop(maxSize))
         {
             component.DrawContext = new DrawContext(_canvas, pencil, maxSize);
-
+            
             _canvas.SetPencil(correctedPencil);
-            _canvas.Paint(line);
-
+            _canvas.Paint(component.StyleContext is not null
+                ? line.RemoveColors().Pastel(component.StyleContext.Foreground)
+                : line);
+            
+            
             correctedPencil = correctedPencil with { Top = correctedPencil.Top + 1 };
         }
-
+        
         return sketchSize;
     }
 }

@@ -12,12 +12,12 @@ namespace TUI.Controls.Components;
 public class ProjectTitle : ComponentBase
 {
     private readonly Project _project;
-
+    
     public ProjectTitle(Project project)
     {
         _project = project;
     }
-
+    
     protected override Sketch DrawComponent(Size minSize)
     {
         var builder = new StringBuilder();
@@ -34,14 +34,14 @@ public class ProjectTitle : ComponentBase
         builder.Append(_project.Name.Disable());
         return new Sketch(builder);
     }
-
-    private string GetHub() => _project.Hub == "gitlab" ? GitLab : GitHub;
-
+    
+    private string GetHub() => _project.Hub.Type == "gitlab" ? GitLab : GitHub;
+    
     private string GetApplicationType()
     {
         foreach (var application in Icons.Applications.Where(application => _project.Tags.Have(application.Value)))
             return application.Key;
-
+        
         return Undefined.Hint();
     }
 }

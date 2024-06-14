@@ -10,6 +10,10 @@ namespace TUI.Pages;
 
 public class WelcomePage : PageBase
 {
+    public override void Initial()
+    {
+    }
+    
     public override void Render()
     {
         ICanvas canvas = new ConsoleCanvas();

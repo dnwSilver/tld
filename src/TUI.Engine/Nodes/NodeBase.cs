@@ -57,4 +57,6 @@ public abstract class NodeBase : INode
     #endregion Resizing
 
     public DrawContext? DrawContext { get; set; }
+    
+    public StyleContext? StyleContext { get; set; }
 }

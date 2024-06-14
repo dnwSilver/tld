@@ -13,15 +13,24 @@ Thread.Sleep(500);
 var dependenciesPage = new DependenciesPage();
 dependenciesPage.Open();
 
-var key = new ConsoleKeyInfo('1', ConsoleKey.NoName, false, false, false);
+
+ConsoleKeyInfo? key = null;
+
 var waitCommand = true;
 do
 {
-    // if (key.Key == ConsoleKey.Q && !display.CommandLine.IsFocused)
-    // {
-    //     waitCommand = false;
-    //     continue;
-    // }
+    if (key?.Key == ConsoleKey.Q)
+    {
+        waitCommand = false;
+        continue;
+    }
+    
+    if (key?.Key == ConsoleKey.R)
+    {
+        dependenciesPage.LoadDependencies();
+        key = null;
+        continue;
+    }
     //
     // if (display.CommandLine.IsFocused)
     // {
@@ -58,7 +67,7 @@ do
     //             break;
     //     }
     // }
-
+    
     key = Console.ReadKey(true);
 } while (waitCommand);
 

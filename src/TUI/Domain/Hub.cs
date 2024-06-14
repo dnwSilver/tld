@@ -1,6 +1,3 @@
 namespace TUI.Domain;
 
-public record Hub
-{
-    
-}
+public record Hub(string Origin, string Type);
