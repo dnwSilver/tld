@@ -6,4 +6,5 @@ interface IPage
     void Initial();
     void Render();
     void Bind();
+    void Load();
 }

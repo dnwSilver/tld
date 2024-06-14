@@ -12,6 +12,8 @@ public abstract class PageBase : IPage
         Render();
     }
     
+    public abstract void Load();
+    
     public abstract void Initial();
     
     public abstract void Render();

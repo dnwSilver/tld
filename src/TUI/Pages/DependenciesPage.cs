@@ -10,6 +10,12 @@ public record DependenciesState(HeaderContainer Header, DashboardContainer Dashb
 
 public class DependenciesPage : PageBase
 {
+    private DependenciesPage()
+    {
+    }
+    
+    public static DependenciesPage Instance { get; } = new();
+    
     private DependenciesStore _store;
     
     private DependenciesState _state;
@@ -48,7 +54,7 @@ public class DependenciesPage : PageBase
         canvas.Draw(layout);
     }
     
-    public void LoadDependencies()
+    public override void Load()
     {
         Initial();
         var projects = _state.Dashboard.GetContent();

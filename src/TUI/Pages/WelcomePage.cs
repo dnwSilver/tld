@@ -10,6 +10,12 @@ namespace TUI.Pages;
 
 public class WelcomePage : PageBase
 {
+    private WelcomePage()
+    {
+    }
+    
+    public static WelcomePage Instance { get; } = new();
+    
     public override void Initial()
     {
     }
@@ -30,7 +36,11 @@ public class WelcomePage : PageBase
 
         canvas.Draw(layout);
     }
-
+    
+    public override void Load()
+    {
+    }
+    
     public override void Bind()
     {
     }
