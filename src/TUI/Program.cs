@@ -42,42 +42,7 @@ do
             key = Console.ReadKey(true);
             break;
     }
-    
-    // if (display.CommandLine.IsFocused)
-    // {
-    //     switch (key.Key)
-    //     {
-    //         case ConsoleKey.Escape:
-    //             display.CommandLine.IsFocused = false;
-    //             break;
-    //         default:
-    //             Console.Write(key.KeyChar);
-    //
-    //             break;
-    //     }
-    // }
-    // else
-    // {
-    //     switch (key.KeyChar)
-    //     {
-    //         case ':':
-    //             display.OpenCommandLine();
-    //             break;
-    //     }
-    //
-    //     switch (key.Key)
-    //     {
-    //         case ConsoleKey.DownArrow:
-    //             display.Next();
-    //             break;
-    //         case ConsoleKey.UpArrow:
-    //             display.Previous();
-    //             break;
-    //         case ConsoleKey.E:
-    //             display.Toggle();
-    //             break;
-    //     }
-    // }
 } while (waitCommand);
 
 Console.Clear();
+Console.CursorVisible = true;
