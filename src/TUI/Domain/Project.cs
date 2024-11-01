@@ -1,21 +1,14 @@
-using TUI.Settings;
-using YamlDotNet.Serialization;
-
-
 namespace TUI.Domain;
 
-[YamlSerializable]
-public class Project
+public record Project(int Id, string Name, IEnumerable<string> Tags, Hub Hub)
 {
-    [YamlMember]
-    public string Icon { get; set; }
-
-    [YamlMember]
-    public string Name { get; set; }
-
-    [YamlMember]
-    public DependencyDto[] Dependencies { get; set; }
-
-    [YamlMember]
-    public IList<SourceDto> Sources { get; set; }
+    private IEnumerable<Dependency> Dependencies => new List<Dependency>();
+    
+    public bool IsPublicNetwork => Tags.Contains("public");
+    
+    public bool HasAuth => Tags.Contains("auth");
+    
+    public bool SeoDependent => Tags.Contains("seo");
+    
+    public bool Legacy => Tags.Contains("legacy");
 }

@@ -1,32 +1,48 @@
-﻿using TUI.Controls;
-using Settings = TUI.Domain.Settings;
+﻿using TUI.Pages;
 
 
 Console.Clear();
 Console.CursorVisible = false;
 
-var settings = Settings.Init();
+var welcomePage = WelcomePage.Instance;
+welcomePage.Open();
+Thread.Sleep(500);
 
-var display = new Display();
-display.OpenDeps(settings.Projects[0]);
+IPage currentPage = DependenciesPage.Instance;
+currentPage.Open();
 
-var hotKey = ConsoleKey.NoName;
+
+ConsoleKeyInfo? key = null;
+
+var waitCommand = true;
 do
 {
-    switch (hotKey)
+    switch (key?.Key)
     {
-        case ConsoleKey.DownArrow:
-            display.Next();
+        case ConsoleKey.Q:
+            waitCommand = false;
             break;
-        case ConsoleKey.UpArrow:
-            display.Previous();
+        case ConsoleKey.R:
+            key = null;
+            currentPage.Load();
             break;
-        case ConsoleKey.E:
-            display.ToggleHeader();
+        case ConsoleKey.D1:
+            key = null;
+            currentPage = DependenciesPage.Instance;
+            Console.Clear();
+            currentPage.Render();
+            break;
+        case ConsoleKey.D0:
+            key = null;
+            currentPage = WelcomePage.Instance;
+            Console.Clear();
+            currentPage.Render();
+            break;
+        default:
+            key = Console.ReadKey(true);
             break;
     }
-
-    hotKey = Console.ReadKey(intercept: true).Key;
-} while (hotKey != ConsoleKey.Q);
+} while (waitCommand);
 
 Console.Clear();
+Console.CursorVisible = true;
