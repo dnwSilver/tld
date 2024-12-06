@@ -1,4 +1,5 @@
 using TUI.Controls.Components;
+using TUI.Engine;
 
 namespace TUI.Domain;
 
@@ -8,17 +9,17 @@ public class Version
     public readonly int Minor;
     public readonly int Patch;
     public readonly VersionType Type;
-    
+
     public Version(string version)
     {
         var parts = version.Split('.');
-        
-        Major = Convert.ToInt32(parts[0].Replace("^", "").Replace("~", ""));
+
+        Major = Convert.ToInt32(parts[0].RemoveVersionPrefix());
         Minor = Convert.ToInt32(parts[1]);
         Patch = Convert.ToInt32(string.Join("", parts[2].TakeWhile(char.IsDigit)));
-        
+
         var extension = parts[2].Replace(Patch.ToString(), "");
-        
+
         Type = extension switch
         {
             not null when extension.Contains("rc") => VersionType.Candidate,

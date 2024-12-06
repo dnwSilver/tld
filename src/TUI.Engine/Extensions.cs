@@ -40,9 +40,14 @@ public static class Extensions
         return stringInfo.LengthInTextElements;
     }
 
+    public static string RemoveVersionPrefix(this string version)
+    {
+        return version.Replace("^", "").Replace("v", "").Replace("~", "");
+    }
+
     public static Version ToVersion(this string textVersion)
     {
-        var version = textVersion.Replace("^", "").Replace("v", "").Replace("~", "").Split(".");
+        var version = textVersion.RemoveVersionPrefix().Split(".");
         var major = Convert.ToInt32(version[0]);
         var minor = Convert.ToInt32(version[1]);
         var patch = Convert.ToInt32(version[2].Split('-')[0]);
