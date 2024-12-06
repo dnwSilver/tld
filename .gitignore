@@ -342,4 +342,4 @@ healthchecksdb
 *.DotSettings
 *.DS_Store
 **/*.Production.json
-Logs/
+**/*.log

@@ -1,8 +1,11 @@
-﻿using TUI.Pages;
+﻿using TUI.Logs;
+using TUI.Pages;
 
 
 Console.Clear();
 Console.CursorVisible = false;
+
+Log.Info("Run application.");
 
 var welcomePage = WelcomePage.Instance;
 welcomePage.Open();
@@ -21,9 +24,11 @@ do
     {
         case ConsoleKey.Q:
             waitCommand = false;
+            Log.Trace("Run command quit.");
             break;
         case ConsoleKey.R:
             key = null;
+            Log.Trace("Run command load deps.");
             currentPage.Load();
             break;
         case ConsoleKey.D1:
@@ -44,5 +49,6 @@ do
     }
 } while (waitCommand);
 
+Log.Info("Quit application.");
 Console.Clear();
 Console.CursorVisible = true;

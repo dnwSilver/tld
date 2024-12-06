@@ -3,6 +3,7 @@ using TUI.Engine;
 using TUI.Engine.Attributes;
 using TUI.Engine.Components;
 using TUI.Engine.Theme;
+using TUI.Logs;
 using static TUI.Engine.Symbols;
 
 namespace TUI.Controls.Components;
@@ -19,12 +20,13 @@ public class PanelComponent : ComponentBase, IComponent
     
     private static void RenderTopLine(StringBuilder builder, Size size, string title)
     {
-        var halfWidth = (size.Width - title.GetWidth() - (int)Indentation.BorderWidth * 2 -
-                         (int)Indentation.Default * 2) / 2;
+        var availableWidth = (size.Width - title.GetWidth() - (int)Indentation.BorderWidth * 2 -
+                              (int)Indentation.Default * 2);
+        var halfWidth =  availableWidth/ 2;
         builder.Append(Angles.LeftTop);
         builder.Append(Lines.Horizontal.Repeat(halfWidth));
         builder.AppendFormat("{0}{1}{0}", Space.Repeat(Convert.ToInt32(Indentation.Default)), title);
-        builder.Append(Lines.Horizontal.Repeat(halfWidth + halfWidth % 2));
+        builder.Append(Lines.Horizontal.Repeat(halfWidth + availableWidth % 2));
         builder.Append(Angles.RightTop);
         builder.Append(LineBreak);
     }

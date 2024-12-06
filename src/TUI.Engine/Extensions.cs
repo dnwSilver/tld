@@ -42,7 +42,7 @@ public static class Extensions
 
     public static Version ToVersion(this string textVersion)
     {
-        var version = textVersion.Replace("^", "").Replace("~", "").Split(".");
+        var version = textVersion.Replace("^", "").Replace("v", "").Replace("~", "").Split(".");
         var major = Convert.ToInt32(version[0]);
         var minor = Convert.ToInt32(version[1]);
         var patch = Convert.ToInt32(version[2].Split('-')[0]);
