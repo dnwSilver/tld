@@ -25,11 +25,21 @@ public class DependenciesStore
         {
             return Repository.ReadActual(project);
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
-            Log.Error("Fail load actual deps for project " +project.Name + ". " + ex.Message);
-            Debugger.Log(0, "error", ex.Message);
-            SpeakerComponent.Instance.Shout(Symbols.Error.Error(), $"Fetch failed for project{project.Name}");
+            if (ex.Message.Contains("404 (Not Found)"))
+            {
+                Log.Warning("Fail load actual deps for project " + project.Name + ".");
+                Debugger.Log(0, "error", ex.Message);
+                SpeakerComponent.Instance.Shout(Symbols.Error.Warning(), $"Project {project.Name} not found.");
+            }
+            else
+            {
+                Log.Error("Fetch failed for project " + project.Name + ". " + ex.Message);
+                Debugger.Log(0, "warning", ex.Message);
+                SpeakerComponent.Instance.Shout(Symbols.Error.Error(), $"Fetch failed for project{project.Name}");
+            }
+
             return new List<Dependency>();
         }
     }

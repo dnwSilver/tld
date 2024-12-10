@@ -69,6 +69,7 @@ public class DependencyRepository
         if (project.Hub.Type == "gitlab")
         {
             var endpoint = GetGitlabEndpoint(project.Hub.Origin, project.Id);
+            Log.Trace($"Fetch endpoint {endpoint}.");
             using HttpClient client = new();
             var json = client.GetStringAsync(endpoint).GetAwaiter().GetResult();
             var packageJson = JsonSerializer.Deserialize<PackageJson>(json);
