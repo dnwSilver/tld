@@ -21,6 +21,11 @@ public class Version
 
         Major = Convert.ToInt32(parts[0].RemoveVersionPrefix());
 
+        if (version.StartsWith("^"))
+        {
+            Type = VersionType.Unstable;
+        }
+
         if (parts.Length == 1)
         {
             return;
@@ -44,7 +49,7 @@ public class Version
             not null when extension.Contains("alpha") => VersionType.Alpha,
             not null when extension.Contains("canary") => VersionType.Canary,
             not null when extension.Contains("next") => VersionType.Next,
-            _ => VersionType.Release
+            _ => version.StartsWith("^") ? VersionType.Unstable : VersionType.Release
         };
     }
 }

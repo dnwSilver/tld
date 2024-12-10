@@ -13,9 +13,10 @@ public static class VersionExtensions
                 VersionType.Candidate => "󰑣",
                 VersionType.Canary => "󱗆",
                 VersionType.Next => "󰒭",
+                VersionType.Unstable => "󱓉",
                 _ => ""
             };
-    
+
     public static string Colorize(this VersionStatus versionStatus, string value) =>
         versionStatus switch
         {
