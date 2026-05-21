@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dnwSilver/tld/internal/storage"
 	"github.com/dnwSilver/tld/internal/ui"
 )
 
@@ -9,11 +10,13 @@ type model struct {
 	width   int
 	height  int
 	creator ui.Creator
+	store   *storage.Store
 }
 
-func newModel() model {
+func newModel(store *storage.Store) model {
 	return model{
 		creator: ui.NewCreator(),
+		store:   store,
 	}
 }
 
