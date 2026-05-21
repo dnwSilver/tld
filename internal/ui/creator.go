@@ -2,48 +2,64 @@ package ui
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dnwSilver/tld/internal/ui/components"
+	"github.com/dnwSilver/tld/internal/ui/screens"
+	"github.com/dnwSilver/tld/internal/ui/uikit"
 )
 
 type Creator struct {
-	palette Palette
-	hints   Hints
-	logo    Logo
-	screen  DefaultScreen
+	palette       uikit.Palette
+	hints         components.Hints
+	logo          components.Logo
+	defaultScreen screens.DefaultScreen
+	stacksScreen  screens.StacksScreen
 }
 
 func NewCreator() Creator {
-	palette := NewPalette()
+	palette := uikit.NewPalette()
 
 	return Creator{
-		palette: palette,
-		hints:   NewHints(palette),
-		logo:    NewLogo(palette),
-		screen:  NewDefaultScreen(palette),
+		palette:       palette,
+		hints:         components.NewHints(palette),
+		logo:          components.NewLogo(palette),
+		defaultScreen: screens.NewDefaultScreen(palette),
+		stacksScreen:  screens.NewStacksScreen(palette),
 	}
 }
 
-func (c Creator) Render(width, height int) string {
+func (c Creator) Render(
+	width int,
+	height int,
+	screen uikit.Screen,
+	stacks []uikit.Stack,
+	selectedStackID int64,
+	stackForm uikit.StackForm,
+	deleteConfirm uikit.DeleteConfirm,
+) string {
 	base := lipgloss.NewStyle().
 		Width(width).
 		Height(height).
 		Background(c.palette.Background).
 		Foreground(c.palette.Primary)
 
-	top := c.renderTopBar(width)
+	top := c.renderTopBar(width, screen)
 	topHeight := lipgloss.Height(top)
-	bodyHeight := max(height-topHeight, 1)
-	body := c.screen.Render(width, bodyHeight)
+	bodyHeight := uikit.Max(height-topHeight, 1)
+	body := c.defaultScreen.Render(width, bodyHeight, len(stacks))
+	if screen == uikit.ScreenStacks {
+		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, stackForm, deleteConfirm)
+	}
 
 	return base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
 }
 
-func (c Creator) renderTopBar(width int) string {
-	hints := c.hints.Render()
+func (c Creator) renderTopBar(width int, screen uikit.Screen) string {
+	hints := c.hints.Render(screen)
 	logo := c.logo.Render()
-	topHeight := max(lipgloss.Height(hints), lipgloss.Height(logo))
-	hints = padBlockHeight(c.palette, hints, topHeight)
-	logo = padBlockHeight(c.palette, logo, topHeight)
-	gap := backgroundBlock(c.palette, max(width-lipgloss.Width(hints)-lipgloss.Width(logo), 0), topHeight)
+	topHeight := uikit.Max(lipgloss.Height(hints), lipgloss.Height(logo))
+	hints = uikit.PadBlockHeight(c.palette, hints, topHeight)
+	logo = uikit.PadBlockHeight(c.palette, logo, topHeight)
+	gap := uikit.BackgroundBlock(c.palette, uikit.Max(width-lipgloss.Width(hints)-lipgloss.Width(logo), 0), topHeight)
 
 	return lipgloss.NewStyle().
 		Width(width).

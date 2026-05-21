@@ -116,3 +116,68 @@ func TestCacheTTL(t *testing.T) {
 		t.Fatalf("delete expired cache: %v", err)
 	}
 }
+
+func TestStacks(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	repository := store.Stacks()
+	stack, err := repository.Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	if stack.Icon != "" || stack.Name != "Git" || stack.Color != "#84BA64" {
+		t.Fatalf("stack = %#v", stack)
+	}
+
+	count, err := repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count stacks: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	stacks, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list stacks: %v", err)
+	}
+	if len(stacks) != 1 {
+		t.Fatalf("len(stacks) = %d, want 1", len(stacks))
+	}
+	if stacks[0].Icon != "" || stacks[0].Name != "Git" || stacks[0].Color != "#84BA64" {
+		t.Fatalf("stacks[0] = %#v", stacks[0])
+	}
+
+	if err := repository.Update(ctx, stack.ID, "", "Java", "#EC9706"); err != nil {
+		t.Fatalf("update stack: %v", err)
+	}
+
+	stacks, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list stacks after update: %v", err)
+	}
+	if stacks[0].Icon != "" || stacks[0].Name != "Java" || stacks[0].Color != "#EC9706" {
+		t.Fatalf("updated stack = %#v", stacks[0])
+	}
+
+	if err := repository.Delete(ctx, stack.ID); err != nil {
+		t.Fatalf("delete stack: %v", err)
+	}
+
+	count, err = repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count stacks after delete: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count = %d, want 0", count)
+	}
+}

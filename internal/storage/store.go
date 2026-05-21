@@ -92,6 +92,10 @@ func (s *Store) Cache() CacheRepository {
 	return CacheRepository{db: s.db}
 }
 
+func (s *Store) Stacks() StackRepository {
+	return StackRepository{db: s.db}
+}
+
 func (s *Store) verify(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping database: %w", err)

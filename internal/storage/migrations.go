@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -35,8 +35,13 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
-	if version < currentSchemaVersion {
+	if version < 1 {
 		if err := migrateV1(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 2 {
+		if err := migrateV2(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -94,6 +99,31 @@ func migrateV1(ctx context.Context, tx *sql.Tx) error {
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema v1: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV2(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS stacks (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				icon TEXT NOT NULL,
+				name TEXT NOT NULL,
+				color TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (name)
+			)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (2)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v2: %w", err)
 		}
 	}
 

@@ -1,16 +1,17 @@
-package ui
+package components
 
 import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dnwSilver/tld/internal/ui/uikit"
 )
 
 type Logo struct {
-	palette Palette
+	palette uikit.Palette
 }
 
-func NewLogo(palette Palette) Logo {
+func NewLogo(palette uikit.Palette) Logo {
 	return Logo{
 		palette: palette,
 	}
@@ -30,7 +31,7 @@ func (l Logo) Render() string {
 		hintStyle.Render("  ╱╱") + mainStyle.Render("┃┃") + hintStyle.Render("╱") + mainStyle.Render("┃┃") + hintStyle.Render("╱") + mainStyle.Render("╭╮┃┃┃┃"),
 		hintStyle.Render(" ╱╱╱") + mainStyle.Render("┃┃") + hintStyle.Render("╱") + mainStyle.Render("┃╰━╯┣╯╰╯┃"),
 		hintStyle.Render("╱╱╱╱") + mainStyle.Render("╰╯") + hintStyle.Render("╱") + mainStyle.Render("╰━━━┻━━━╯"),
-	}, symbolLineBreak)
+	}, uikit.SymbolLineBreak)
 
 	return lipgloss.NewStyle().
 		Background(l.palette.Background).
