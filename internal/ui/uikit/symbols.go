@@ -30,5 +30,7 @@ const (
 	SymbolBeNice         = ""
 	SymbolTooOld         = "󰬟"
 	SymbolDashboard      = "󰡃"
-	SymbolStack          = ""
+	SymbolStack          = ""
+	SymbolNamespace      = ""
+	SymbolDependency     = ""
 )

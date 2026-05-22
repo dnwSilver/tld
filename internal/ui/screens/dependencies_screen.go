@@ -9,39 +9,28 @@ import (
 	"github.com/dnwSilver/tld/internal/ui/uikit"
 )
 
-type StacksScreen struct {
-	palette     uikit.Palette
-	screenTitle string
-	symbol      string
+type DependenciesScreen struct {
+	palette uikit.Palette
 }
 
 const (
-	stackFormLabelWidth = 5
-	stackFormValueWidth = 24
+	dependencyFormLabelWidth = 5
+	dependencyFormValueWidth = 24
 )
 
-func NewStacksScreen(palette uikit.Palette) StacksScreen {
-	return StacksScreen{
-		palette:     palette,
-		screenTitle: "Stacks",
-		symbol:      uikit.SymbolStack,
+func NewDependenciesScreen(palette uikit.Palette) DependenciesScreen {
+	return DependenciesScreen{
+		palette: palette,
 	}
 }
 
-func NewNamespacesScreen(palette uikit.Palette) StacksScreen {
-	return StacksScreen{
-		palette:     palette,
-		screenTitle: "Namespaces",
-		symbol:      uikit.SymbolNamespace,
-	}
-}
-
-func (s StacksScreen) Render(
+func (s DependenciesScreen) Render(
 	width int,
 	height int,
+	dependencies []uikit.Dependency,
+	selectedDependencyID int64,
 	stacks []uikit.Stack,
-	selectedStackID int64,
-	form uikit.StackForm,
+	form uikit.DependencyForm,
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	boxWidth := uikit.Max(width, 2)
@@ -49,8 +38,8 @@ func (s StacksScreen) Render(
 	contentWidth := uikit.Max(boxWidth-2, 1)
 	contentHeight := uikit.Max(boxHeight-2, 1)
 
-	content := s.renderContent(contentWidth, contentHeight, stacks, selectedStackID, form, deleteConfirm)
-	box := s.renderBox(contentWidth, contentHeight, s.title(len(stacks)), content)
+	content := s.renderContent(contentWidth, contentHeight, dependencies, selectedDependencyID, stacks, form, deleteConfirm)
+	box := s.renderBox(contentWidth, contentHeight, s.title(len(dependencies)), content)
 
 	footer := lipgloss.NewStyle().
 		Width(width).
@@ -62,27 +51,29 @@ func (s StacksScreen) Render(
 	return lipgloss.JoinVertical(lipgloss.Left, box, footer)
 }
 
-func (s StacksScreen) renderContent(
+func (s DependenciesScreen) renderContent(
 	width int,
 	height int,
+	dependencies []uikit.Dependency,
+	selectedDependencyID int64,
 	stacks []uikit.Stack,
-	selectedStackID int64,
-	form uikit.StackForm,
+	form uikit.DependencyForm,
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	lines := make([]string, 0, height)
-	iconColumnWidth := s.iconColumnWidth(stacks)
-	lines = append(lines, s.tableHeader(width, iconColumnWidth))
+	iconColumnWidth := s.iconColumnWidth(dependencies)
+	stackColumnWidth := s.stackColumnWidth(dependencies)
+	lines = append(lines, s.tableHeader(width, iconColumnWidth, stackColumnWidth))
 
-	if len(stacks) == 0 {
+	if len(dependencies) == 0 {
 		empty := lipgloss.NewStyle().
 			Background(s.palette.Background).
 			Foreground(s.palette.Hint).
-			Render("No " + strings.ToLower(s.screenTitle) + " yet")
+			Render("No dependencies yet")
 		lines = append(lines, s.centerLine(width, empty))
 	} else {
-		for _, stack := range stacks {
-			lines = append(lines, s.renderStackRow(width, stack, stack.ID == selectedStackID, iconColumnWidth))
+		for _, dependency := range dependencies {
+			lines = append(lines, s.renderDependencyRow(width, dependency, dependency.ID == selectedDependencyID, iconColumnWidth, stackColumnWidth))
 		}
 	}
 
@@ -95,7 +86,7 @@ func (s StacksScreen) renderContent(
 	}
 
 	if form.Open {
-		lines = s.renderModal(lines, width, height, form)
+		lines = s.renderModal(lines, width, height, stacks, form)
 	}
 	if deleteConfirm.Open {
 		lines = s.renderDeleteConfirm(lines, width, height, deleteConfirm)
@@ -104,15 +95,15 @@ func (s StacksScreen) renderContent(
 	return strings.Join(lines, uikit.SymbolLineBreak)
 }
 
-func (s StacksScreen) title(stackCount int) string {
+func (s DependenciesScreen) title(dependencyCount int) string {
 	return lipgloss.NewStyle().
 		Background(s.palette.Background).
 		Foreground(s.palette.Warning).
 		Bold(true).
-		Render(s.symbol + " " + s.screenTitle + " [" + uikit.FormatInt(stackCount) + "]")
+		Render(uikit.SymbolDependency + " Dependencies [" + uikit.FormatInt(dependencyCount) + "]")
 }
 
-func (s StacksScreen) renderBox(width, height int, title, content string) string {
+func (s DependenciesScreen) renderBox(width, height int, title, content string) string {
 	contentLines := strings.Split(content, uikit.SymbolLineBreak)
 	for len(contentLines) < height {
 		contentLines = append(contentLines, uikit.BackgroundSpaces(s.palette, width))
@@ -131,7 +122,7 @@ func (s StacksScreen) renderBox(width, height int, title, content string) string
 	return strings.Join(lines, uikit.SymbolLineBreak)
 }
 
-func (s StacksScreen) topBorder(width int, title string) string {
+func (s DependenciesScreen) topBorder(width int, title string) string {
 	titleWidth := lipgloss.Width(title)
 	available := uikit.Max(width-titleWidth-2, 0)
 	left := int(math.Floor(float64(available) / 2))
@@ -146,18 +137,18 @@ func (s StacksScreen) topBorder(width int, title string) string {
 		s.borderPart("┐")
 }
 
-func (s StacksScreen) borderFill(width int) string {
+func (s DependenciesScreen) borderFill(width int) string {
 	return s.borderPart(strings.Repeat("─", uikit.Max(width, 0)))
 }
 
-func (s StacksScreen) borderPart(value string) string {
+func (s DependenciesScreen) borderPart(value string) string {
 	return lipgloss.NewStyle().
 		Background(s.palette.Background).
 		Foreground(s.palette.Primary).
 		Render(value)
 }
 
-func (s StacksScreen) tableHeader(width int, iconColumnWidth int) string {
+func (s DependenciesScreen) tableHeader(width int, iconColumnWidth int, stackColumnWidth int) string {
 	iconColumn := lipgloss.NewStyle().
 		Background(s.palette.Background).
 		Foreground(s.palette.Hint).
@@ -167,22 +158,38 @@ func (s StacksScreen) tableHeader(width int, iconColumnWidth int) string {
 		Background(s.palette.Background).
 		Foreground(s.palette.Hint).
 		Bold(true).
+		Width(24).
 		Render("name")
-	content := iconColumn + nameColumn
+	stackColumn := lipgloss.NewStyle().
+		Background(s.palette.Background).
+		Foreground(s.palette.Hint).
+		Bold(true).
+		Width(stackColumnWidth).
+		Render("stack")
+	content := iconColumn + nameColumn + stackColumn
 
 	return content + uikit.BackgroundSpaces(s.palette, width-lipgloss.Width(content))
 }
 
-func (s StacksScreen) iconColumnWidth(stacks []uikit.Stack) int {
+func (s DependenciesScreen) iconColumnWidth(dependencies []uikit.Dependency) int {
 	width := 2
-	for _, stack := range stacks {
-		width = uikit.Max(width, lipgloss.Width(stack.Icon))
+	for _, dependency := range dependencies {
+		width = uikit.Max(width, lipgloss.Width(dependency.Icon))
 	}
 
 	return width
 }
 
-func (s StacksScreen) renderStackRow(width int, stack uikit.Stack, selected bool, iconColumnWidth int) string {
+func (s DependenciesScreen) stackColumnWidth(dependencies []uikit.Dependency) int {
+	width := 5
+	for _, dependency := range dependencies {
+		width = uikit.Max(width, lipgloss.Width(dependency.StackName))
+	}
+
+	return width
+}
+
+func (s DependenciesScreen) renderDependencyRow(width int, dependency uikit.Dependency, selected bool, iconColumnWidth int, stackColumnWidth int) string {
 	rowPalette := s.palette
 	background := s.palette.Background
 	foreground := s.palette.Text
@@ -190,23 +197,29 @@ func (s StacksScreen) renderStackRow(width int, stack uikit.Stack, selected bool
 		background = s.palette.Hover
 	}
 
-	color := lipgloss.Color(uikit.NormalizeHexColor(stack.Color))
+	color := lipgloss.Color(uikit.NormalizeHexColor(dependency.Color))
 	iconColumn := lipgloss.NewStyle().
 		Background(background).
 		Foreground(color).
 		Width(iconColumnWidth).
-		Render(stack.Icon)
+		Render(dependency.Icon)
 	nameColumn := lipgloss.NewStyle().
 		Background(background).
 		Foreground(foreground).
-		Render(stack.Name)
-	content := iconColumn + nameColumn
+		Width(24).
+		Render(dependency.Name)
+	stackColumn := lipgloss.NewStyle().
+		Background(background).
+		Foreground(s.palette.Hint).
+		Width(stackColumnWidth).
+		Render(dependency.StackName)
+	content := iconColumn + nameColumn + stackColumn
 	rowPalette.Background = background
 
 	return content + uikit.BackgroundSpaces(rowPalette, width-lipgloss.Width(content))
 }
 
-func (s StacksScreen) centerLine(width int, content string) string {
+func (s DependenciesScreen) centerLine(width int, content string) string {
 	contentWidth := lipgloss.Width(content)
 	left := uikit.Max((width-contentWidth)/2, 0)
 	right := uikit.Max(width-left-contentWidth, 0)
@@ -214,8 +227,8 @@ func (s StacksScreen) centerLine(width int, content string) string {
 	return uikit.BackgroundSpaces(s.palette, left) + content + uikit.BackgroundSpaces(s.palette, right)
 }
 
-func (s StacksScreen) renderModal(lines []string, width, height int, form uikit.StackForm) []string {
-	modal := strings.Split(s.modal(width, form), uikit.SymbolLineBreak)
+func (s DependenciesScreen) renderModal(lines []string, width, height int, stacks []uikit.Stack, form uikit.DependencyForm) []string {
+	modal := strings.Split(s.modal(width, stacks, form), uikit.SymbolLineBreak)
 	modalHeight := len(modal)
 	top := uikit.Max((height-modalHeight)/2, 0)
 
@@ -234,26 +247,40 @@ func (s StacksScreen) renderModal(lines []string, width, height int, form uikit.
 	return lines
 }
 
-func (s StacksScreen) modal(width int, form uikit.StackForm) string {
-	modalWidth := uikit.Min(uikit.Max(width-6, 32), 54)
+func (s DependenciesScreen) modal(width int, stacks []uikit.Stack, form uikit.DependencyForm) string {
+	modalWidth := uikit.Min(uikit.Max(width-6, 34), 58)
 	contentWidth := uikit.Max(modalWidth-2, 1)
 	modal := components.NewModal(s.palette, s.palette.Primary)
-	title := modal.Title(s.symbol + " Add " + s.singularTitle())
+	title := modal.Title(uikit.SymbolDependency + " Add dependency")
 	if form.Mode == uikit.StackFormModeEdit {
-		title = modal.Title(s.symbol + " Edit " + s.singularTitle())
+		title = modal.Title(uikit.SymbolDependency + " Edit dependency")
 	}
 	rows := []string{
-		modal.CenterLine(contentWidth, s.inputLine("Icon", form.Icon, form.Focus == uikit.StackFormFieldIcon)),
-		modal.CenterLine(contentWidth, s.inputLine("Color", form.Color, form.Focus == uikit.StackFormFieldColor)),
-		modal.CenterLine(contentWidth, s.inputLine("Name", form.Name, form.Focus == uikit.StackFormFieldName)),
+		modal.CenterLine(contentWidth, s.inputLine("Icon", form.Icon, form.Focus == uikit.DependencyFormFieldIcon)),
+		modal.CenterLine(contentWidth, s.inputLine("Color", form.Color, form.Focus == uikit.DependencyFormFieldColor)),
+		modal.CenterLine(contentWidth, s.inputLine("Name", form.Name, form.Focus == uikit.DependencyFormFieldName)),
+		modal.CenterLine(contentWidth, s.inputLine("Stack", s.stackName(stacks, form.StackID), form.Focus == uikit.DependencyFormFieldStack)),
 		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
-		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave)),
+		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, form.Focus == uikit.DependencyFormFieldStack)),
 	}
 
 	return modal.Render(contentWidth, title, rows)
 }
 
-func (s StacksScreen) inputLine(label, value string, focused bool) string {
+func (s DependenciesScreen) stackName(stacks []uikit.Stack, stackID int64) string {
+	for _, stack := range stacks {
+		if stack.ID == stackID {
+			return stack.Name
+		}
+	}
+	if len(stacks) == 0 {
+		return "No stacks"
+	}
+
+	return ""
+}
+
+func (s DependenciesScreen) inputLine(label, value string, focused bool) string {
 	prefix := "  "
 	if focused {
 		prefix = "> "
@@ -266,7 +293,7 @@ func (s StacksScreen) inputLine(label, value string, focused bool) string {
 	labelPart := lipgloss.NewStyle().
 		Background(s.palette.Background).
 		Foreground(s.palette.Hint).
-		Width(stackFormLabelWidth).
+		Width(dependencyFormLabelWidth).
 		Align(lipgloss.Right).
 		Render(label)
 	separatorPart := lipgloss.NewStyle().
@@ -277,12 +304,12 @@ func (s StacksScreen) inputLine(label, value string, focused bool) string {
 		Background(s.palette.Background).
 		Foreground(s.palette.Primary).
 		Render(value)
-	valuePadding := uikit.BackgroundSpaces(s.palette, stackFormValueWidth-lipgloss.Width(valuePart))
+	valuePadding := uikit.BackgroundSpaces(s.palette, dependencyFormValueWidth-lipgloss.Width(valuePart))
 
 	return prefixPart + labelPart + separatorPart + valuePart + valuePadding
 }
 
-func (s StacksScreen) actionsLine(canSave bool) string {
+func (s DependenciesScreen) actionsLine(canSave bool, stackFocused bool) string {
 	saveColor := s.palette.Disable
 	if canSave {
 		saveColor = s.palette.Primary
@@ -291,11 +318,15 @@ func (s StacksScreen) actionsLine(canSave bool) string {
 	modal := components.NewModal(s.palette, s.palette.Primary)
 	cancel := modal.Text(s.palette.Warning, "[Esc] Cancel")
 	save := modal.Text(saveColor, "[Enter] Save")
+	stack := ""
+	if stackFocused {
+		stack = modal.Spaces(3) + modal.Text(s.palette.Hint, "[h/j] Stack")
+	}
 
-	return cancel + modal.Spaces(3) + save
+	return cancel + modal.Spaces(3) + save + stack
 }
 
-func (s StacksScreen) renderDeleteConfirm(lines []string, width, height int, confirm uikit.DeleteConfirm) []string {
+func (s DependenciesScreen) renderDeleteConfirm(lines []string, width, height int, confirm uikit.DeleteConfirm) []string {
 	modal := strings.Split(s.deleteConfirmModal(width, confirm), uikit.SymbolLineBreak)
 	modalHeight := len(modal)
 	top := uikit.Max((height-modalHeight)/2, 0)
@@ -315,12 +346,12 @@ func (s StacksScreen) renderDeleteConfirm(lines []string, width, height int, con
 	return lines
 }
 
-func (s StacksScreen) deleteConfirmModal(width int, confirm uikit.DeleteConfirm) string {
+func (s DependenciesScreen) deleteConfirmModal(width int, confirm uikit.DeleteConfirm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 34), 58)
 	contentWidth := uikit.Max(modalWidth-2, 1)
 	modal := components.NewModal(s.palette, s.palette.Error)
-	question := "Delete " + s.singularTitle() + " " + confirm.Name + "?"
-	title := modal.Title(uikit.SymbolError + " Delete " + s.singularTitle())
+	question := "Delete dependency " + confirm.Name + "?"
+	title := modal.Title(uikit.SymbolError + " Delete dependency")
 	rows := []string{
 		modal.CenterLine(contentWidth, modal.Text(s.palette.Hint, question)),
 		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, confirm.Error)),
@@ -330,18 +361,10 @@ func (s StacksScreen) deleteConfirmModal(width int, confirm uikit.DeleteConfirm)
 	return modal.Render(contentWidth, title, rows)
 }
 
-func (s StacksScreen) deleteActionsLine() string {
+func (s DependenciesScreen) deleteActionsLine() string {
 	modal := components.NewModal(s.palette, s.palette.Error)
 	no := modal.Text(s.palette.Primary, "[Esc] No")
 	yes := modal.Text(s.palette.Error, "[Enter] Yes")
 
 	return no + modal.Spaces(3) + yes
-}
-
-func (s StacksScreen) singularTitle() string {
-	if s.screenTitle == "Namespaces" {
-		return "namespace"
-	}
-
-	return "stack"
 }

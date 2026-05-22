@@ -96,6 +96,14 @@ func (s *Store) Stacks() StackRepository {
 	return StackRepository{db: s.db}
 }
 
+func (s *Store) Namespaces() NamespaceRepository {
+	return NamespaceRepository{db: s.db}
+}
+
+func (s *Store) Dependencies() DependencyRepository {
+	return DependencyRepository{db: s.db}
+}
+
 func (s *Store) verify(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping database: %w", err)

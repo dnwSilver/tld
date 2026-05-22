@@ -133,8 +133,7 @@ func TestCreateStackFromForm(t *testing.T) {
 		t.Fatal("expected reload command")
 	}
 
-	next, _ = updated.Update(cmd().(stacksLoadedMsg))
-	updated = next.(model)
+	updated = applyBatch(t, updated, cmd)
 	if len(updated.stacks) != 1 {
 		t.Fatalf("len(stacks) = %d, want 1", len(updated.stacks))
 	}
@@ -143,6 +142,65 @@ func TestCreateStackFromForm(t *testing.T) {
 	}
 	if updated.selectedStackID != updated.stacks[0].ID {
 		t.Fatalf("selected stack = %d, want %d", updated.selectedStackID, updated.stacks[0].ID)
+	}
+}
+
+func TestCreateDependencyFromForm(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stack, err := store.Stacks().Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenDependencies
+	m.stacks = []ui.Stack{{ID: stack.ID, Icon: stack.Icon, Name: stack.Name, Color: stack.Color}}
+	m.dependencyForm = ui.DependencyForm{
+		Open:    true,
+		Focus:   ui.DependencyFormFieldName,
+		StackID: stack.ID,
+		Icon:    "",
+		Color:   "#EC9706",
+		Name:    "Package",
+		CanSave: true,
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := next.(model)
+	if cmd == nil {
+		t.Fatal("expected create command")
+	}
+
+	next, cmd = updated.Update(cmd().(dependencySavedMsg))
+	updated = next.(model)
+	if updated.dependencyForm.Open {
+		t.Fatal("dependency form should be closed after save")
+	}
+	if cmd == nil {
+		t.Fatal("expected reload command")
+	}
+
+	next, _ = updated.Update(cmd().(dependenciesLoadedMsg))
+	updated = next.(model)
+	if len(updated.dependencies) != 1 {
+		t.Fatalf("len(dependencies) = %d, want 1", len(updated.dependencies))
+	}
+	if updated.dependencies[0].Name != "Package" {
+		t.Fatalf("dependency name = %q, want Package", updated.dependencies[0].Name)
+	}
+	if updated.dependencies[0].StackID != stack.ID {
+		t.Fatalf("dependency stack = %d, want %d", updated.dependencies[0].StackID, stack.ID)
+	}
+	if updated.selectedDependencyID != updated.dependencies[0].ID {
+		t.Fatalf("selected dependency = %d, want %d", updated.selectedDependencyID, updated.dependencies[0].ID)
 	}
 }
 
@@ -208,4 +266,23 @@ func key(value string) tea.KeyMsg {
 		Type:  tea.KeyRunes,
 		Runes: []rune(value),
 	}
+}
+
+func applyBatch(t *testing.T, m model, cmd tea.Cmd) model {
+	t.Helper()
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		next, _ := m.Update(msg)
+		return next.(model)
+	}
+
+	updated := m
+	for _, batchCmd := range batch {
+		next, _ := updated.Update(batchCmd())
+		updated = next.(model)
+	}
+
+	return updated
 }

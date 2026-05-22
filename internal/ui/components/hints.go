@@ -44,26 +44,26 @@ func (h Hints) Render(screen uikit.Screen) string {
 			h.renderHint(h.palette.Hint, uikit.SymbolQuit, "quit", 16),
 		),
 	}
-	if screen == uikit.ScreenStacks {
+	if screen == uikit.ScreenStacks || screen == uikit.ScreenNamespaces || screen == uikit.ScreenDependencies {
 		rows = []string{
 			h.renderRow(
-				h.renderHint(h.palette.Hint, uikit.SymbolDashboard, "0 home", 12),
+				h.renderHint(h.palette.Hint, uikit.SymbolDashboard, "0 home", 18),
 				h.renderHint(h.palette.Primary, uikit.SymbolAdd, "[a] add", 20),
 			),
 			h.renderRow(
-				h.renderHint(h.palette.Hint, uikit.SymbolStack, "1 stacks", 12),
+				h.renderHint(h.palette.Hint, uikit.SymbolStack, "1 stacks", 18),
 				h.renderHint(h.palette.Info, uikit.SymbolEdit, "[e] edit", 20),
 			),
 			h.renderRow(
-				h.renderHint(h.palette.Hint, "", "", 12),
+				h.renderHint(h.palette.Hint, uikit.SymbolNamespace, "2 namespaces", 18),
 				h.renderHint(h.palette.Error, uikit.SymbolDelete, "[d] delete", 20),
 			),
 			h.renderRow(
-				h.renderHint(h.palette.Hint, "", "", 12),
+				h.renderHint(h.palette.Hint, uikit.SymbolDependency, "3 deps", 18),
 				h.renderHint(h.palette.Hint, uikit.SymbolSelectPrev, "[h] prev", 20),
 			),
 			h.renderRow(
-				h.renderHint(h.palette.Hint, "", "", 12),
+				h.renderHint(h.palette.Hint, "", "", 18),
 				h.renderHint(h.palette.Hint, uikit.SymbolSelectNext, "[j] next", 20),
 			),
 		}

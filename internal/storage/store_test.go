@@ -181,3 +181,135 @@ func TestStacks(t *testing.T) {
 		t.Fatalf("count = %d, want 0", count)
 	}
 }
+
+func TestNamespaces(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	repository := store.Namespaces()
+	namespace, err := repository.Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	if namespace.Icon != "󱃾" || namespace.Name != "Production" || namespace.Color != "#25799F" {
+		t.Fatalf("namespace = %#v", namespace)
+	}
+
+	count, err := repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count namespaces: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	namespaces, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list namespaces: %v", err)
+	}
+	if len(namespaces) != 1 {
+		t.Fatalf("len(namespaces) = %d, want 1", len(namespaces))
+	}
+
+	if err := repository.Update(ctx, namespace.ID, "󰒋", "Staging", "#EC9706"); err != nil {
+		t.Fatalf("update namespace: %v", err)
+	}
+
+	namespaces, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list namespaces after update: %v", err)
+	}
+	if namespaces[0].Icon != "󰒋" || namespaces[0].Name != "Staging" || namespaces[0].Color != "#EC9706" {
+		t.Fatalf("updated namespace = %#v", namespaces[0])
+	}
+
+	if err := repository.Delete(ctx, namespace.ID); err != nil {
+		t.Fatalf("delete namespace: %v", err)
+	}
+
+	count, err = repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count namespaces after delete: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count = %d, want 0", count)
+	}
+}
+
+func TestDependencies(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stack, err := store.Stacks().Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+
+	repository := store.Dependencies()
+	dependency, err := repository.Create(ctx, stack.ID, "", "Package", "#EC9706")
+	if err != nil {
+		t.Fatalf("create dependency: %v", err)
+	}
+	if dependency.StackID != stack.ID || dependency.Icon != "" || dependency.Name != "Package" || dependency.Color != "#EC9706" {
+		t.Fatalf("dependency = %#v", dependency)
+	}
+
+	count, err := repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count dependencies: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	dependencies, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list dependencies: %v", err)
+	}
+	if len(dependencies) != 1 {
+		t.Fatalf("len(dependencies) = %d, want 1", len(dependencies))
+	}
+	if dependencies[0].StackName != "Git" {
+		t.Fatalf("dependency stack name = %q, want Git", dependencies[0].StackName)
+	}
+
+	if err := repository.Update(ctx, dependency.ID, stack.ID, "󰎙", "Runtime", "#25799F"); err != nil {
+		t.Fatalf("update dependency: %v", err)
+	}
+
+	dependencies, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list dependencies after update: %v", err)
+	}
+	if dependencies[0].Icon != "󰎙" || dependencies[0].Name != "Runtime" || dependencies[0].Color != "#25799F" {
+		t.Fatalf("updated dependency = %#v", dependencies[0])
+	}
+
+	if err := repository.Delete(ctx, dependency.ID); err != nil {
+		t.Fatalf("delete dependency: %v", err)
+	}
+
+	count, err = repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count dependencies after delete: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count = %d, want 0", count)
+	}
+}

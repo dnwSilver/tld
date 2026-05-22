@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 2
+const currentSchemaVersion = 4
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -42,6 +42,16 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 2 {
 		if err := migrateV2(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 3 {
+		if err := migrateV3(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 4 {
+		if err := migrateV4(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -124,6 +134,62 @@ func migrateV2(ctx context.Context, tx *sql.Tx) error {
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema v2: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV3(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS namespaces (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				icon TEXT NOT NULL,
+				name TEXT NOT NULL,
+				color TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (name)
+			)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v3: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV4(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS dependencies (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				stack_id INTEGER NOT NULL,
+				icon TEXT NOT NULL,
+				name TEXT NOT NULL,
+				color TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (stack_id, name),
+				FOREIGN KEY (stack_id) REFERENCES stacks (id) ON UPDATE CASCADE ON DELETE RESTRICT
+			)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_dependencies_stack_id
+			ON dependencies (stack_id)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (4)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v4: %w", err)
 		}
 	}
 

@@ -5,6 +5,8 @@ type Screen int
 const (
 	ScreenDefault Screen = iota
 	ScreenStacks
+	ScreenNamespaces
+	ScreenDependencies
 )
 
 type Stack struct {
@@ -12,6 +14,22 @@ type Stack struct {
 	Icon  string
 	Name  string
 	Color string
+}
+
+type Namespace struct {
+	ID    int64
+	Icon  string
+	Name  string
+	Color string
+}
+
+type Dependency struct {
+	ID        int64
+	StackID   int64
+	StackName string
+	Icon      string
+	Name      string
+	Color     string
 }
 
 type StackFormMode int
@@ -39,6 +57,28 @@ type StackForm struct {
 	Name    string
 	CanSave bool
 	Error   string
+}
+
+type DependencyFormField int
+
+const (
+	DependencyFormFieldIcon DependencyFormField = iota
+	DependencyFormFieldColor
+	DependencyFormFieldName
+	DependencyFormFieldStack
+)
+
+type DependencyForm struct {
+	Open         bool
+	Mode         StackFormMode
+	DependencyID int64
+	StackID      int64
+	Focus        DependencyFormField
+	Icon         string
+	Color        string
+	Name         string
+	CanSave      bool
+	Error        string
 }
 
 type DeleteConfirm struct {

@@ -8,22 +8,26 @@ import (
 )
 
 type Creator struct {
-	palette       uikit.Palette
-	hints         components.Hints
-	logo          components.Logo
-	defaultScreen screens.DefaultScreen
-	stacksScreen  screens.StacksScreen
+	palette            uikit.Palette
+	hints              components.Hints
+	logo               components.Logo
+	defaultScreen      screens.DefaultScreen
+	stacksScreen       screens.StacksScreen
+	namespacesScreen   screens.StacksScreen
+	dependenciesScreen screens.DependenciesScreen
 }
 
 func NewCreator() Creator {
 	palette := uikit.NewPalette()
 
 	return Creator{
-		palette:       palette,
-		hints:         components.NewHints(palette),
-		logo:          components.NewLogo(palette),
-		defaultScreen: screens.NewDefaultScreen(palette),
-		stacksScreen:  screens.NewStacksScreen(palette),
+		palette:            palette,
+		hints:              components.NewHints(palette),
+		logo:               components.NewLogo(palette),
+		defaultScreen:      screens.NewDefaultScreen(palette),
+		stacksScreen:       screens.NewStacksScreen(palette),
+		namespacesScreen:   screens.NewNamespacesScreen(palette),
+		dependenciesScreen: screens.NewDependenciesScreen(palette),
 	}
 }
 
@@ -33,8 +37,16 @@ func (c Creator) Render(
 	screen uikit.Screen,
 	stacks []uikit.Stack,
 	selectedStackID int64,
+	namespaces []uikit.Namespace,
+	selectedNamespaceID int64,
+	dependencies []uikit.Dependency,
+	selectedDependencyID int64,
 	stackForm uikit.StackForm,
+	namespaceForm uikit.StackForm,
+	dependencyForm uikit.DependencyForm,
 	deleteConfirm uikit.DeleteConfirm,
+	namespaceDeleteConfirm uikit.DeleteConfirm,
+	dependencyDeleteConfirm uikit.DeleteConfirm,
 ) string {
 	base := lipgloss.NewStyle().
 		Width(width).
@@ -49,8 +61,43 @@ func (c Creator) Render(
 	if screen == uikit.ScreenStacks {
 		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, stackForm, deleteConfirm)
 	}
+	if screen == uikit.ScreenNamespaces {
+		body = c.namespacesScreen.Render(
+			width,
+			bodyHeight,
+			toStackItems(namespaces),
+			selectedNamespaceID,
+			namespaceForm,
+			namespaceDeleteConfirm,
+		)
+	}
+	if screen == uikit.ScreenDependencies {
+		body = c.dependenciesScreen.Render(
+			width,
+			bodyHeight,
+			dependencies,
+			selectedDependencyID,
+			stacks,
+			dependencyForm,
+			dependencyDeleteConfirm,
+		)
+	}
 
 	return base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
+}
+
+func toStackItems(namespaces []uikit.Namespace) []uikit.Stack {
+	items := make([]uikit.Stack, 0, len(namespaces))
+	for _, namespace := range namespaces {
+		items = append(items, uikit.Stack{
+			ID:    namespace.ID,
+			Icon:  namespace.Icon,
+			Name:  namespace.Name,
+			Color: namespace.Color,
+		})
+	}
+
+	return items
 }
 
 func (c Creator) renderTopBar(width int, screen uikit.Screen) string {
@@ -59,7 +106,12 @@ func (c Creator) renderTopBar(width int, screen uikit.Screen) string {
 	topHeight := uikit.Max(lipgloss.Height(hints), lipgloss.Height(logo))
 	hints = uikit.PadBlockHeight(c.palette, hints, topHeight)
 	logo = uikit.PadBlockHeight(c.palette, logo, topHeight)
-	gap := uikit.BackgroundBlock(c.palette, uikit.Max(width-lipgloss.Width(hints)-lipgloss.Width(logo), 0), topHeight)
+	gapWidth := uikit.Max(width-lipgloss.Width(hints)-lipgloss.Width(logo), 0)
+	gap := lipgloss.NewStyle().
+		Width(gapWidth).
+		Height(topHeight).
+		Background(c.palette.Background).
+		Render("")
 
 	return lipgloss.NewStyle().
 		Width(width).
