@@ -44,7 +44,8 @@ func isListScreen(screen uikit.Screen) bool {
 	return screen == uikit.ScreenStacks ||
 		screen == uikit.ScreenNamespaces ||
 		screen == uikit.ScreenDependencies ||
-		screen == uikit.ScreenSources
+		screen == uikit.ScreenSources ||
+		screen == uikit.ScreenPolicies
 }
 
 func (h Hints) defaultRows() []string {
@@ -68,7 +69,7 @@ func (h Hints) defaultRows() []string {
 			h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 16),
 		),
 		h.row(
-			hintSpec{h.palette.Warning, uikit.SymbolTooOld, "too old", 10},
+			hintSpec{h.palette.Primary, uikit.SymbolTooOld, "too old", 10},
 			hintSpec{h.palette.Error, uikit.SymbolGitLab, "VCS", 8},
 			hintSpec{h.palette.Primary, uikit.SymbolAPI, "api", 11},
 			h.fromBinding(h.palette.Hint, uikit.KeyQuit, 16),
@@ -83,6 +84,7 @@ func (h Hints) listRows() []string {
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyNamespaces, 18), h.fromBinding(h.palette.Error, uikit.KeyDelete, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyDependencies, 18), h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeySources, 18), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPolicies, 18), hintSpec{h.palette.Hint, "", "[Tab] pane", 20}),
 	}
 }
 

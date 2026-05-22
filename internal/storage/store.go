@@ -108,6 +108,10 @@ func (s *Store) Sources() SourceRepository {
 	return SourceRepository{db: s.db}
 }
 
+func (s *Store) Policies() PolicyRepository {
+	return PolicyRepository{db: s.db}
+}
+
 func (s *Store) verify(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping database: %w", err)

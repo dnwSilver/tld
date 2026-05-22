@@ -41,7 +41,11 @@ func (s DependenciesScreen) Render(
 	count := len(dependencies)
 	title := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Dependencies", &count)
 	content := s.renderContent(contentWidth, contentHeight, dependencies, selectedDependencyID, stacks, form, deleteConfirm)
-	box := components.NewBox(s.palette, s.palette.Hint).Render(contentWidth, contentHeight, title, content)
+	borderColor := s.palette.Primary
+	if form.Open || deleteConfirm.Open {
+		borderColor = s.palette.Hint
+	}
+	box := components.NewBox(s.palette, borderColor).Render(contentWidth, contentHeight, title, content)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 
 	return lipgloss.JoinVertical(lipgloss.Left, box, footer)
@@ -111,14 +115,14 @@ func (s DependenciesScreen) renderDependencyRow(width int, dependency uikit.Depe
 }
 
 func (s DependenciesScreen) renderModal(lines []string, width, height int, stacks []uikit.Stack, form uikit.DependencyForm) []string {
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	return modal.Overlay(lines, width, height, s.modal(width, stacks, form))
 }
 
 func (s DependenciesScreen) modal(width int, stacks []uikit.Stack, form uikit.DependencyForm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 34), 58)
 	contentWidth := uikit.Max(modalWidth-2, 1)
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 
 	action := "Add"
 	if form.Mode == uikit.StackFormModeEdit {
@@ -164,7 +168,7 @@ func (s DependenciesScreen) inputLine(label, value string, focused bool) string 
 func (s DependenciesScreen) actionsLine(canSave bool, stackFocused bool) string {
 	saveColor := s.palette.Disable
 	if canSave {
-		saveColor = s.palette.Warning
+		saveColor = s.palette.Primary
 	}
 
 	actions := []components.Action{
@@ -179,14 +183,14 @@ func (s DependenciesScreen) actionsLine(canSave bool, stackFocused bool) string 
 }
 
 func (s DependenciesScreen) renderDeleteConfirm(lines []string, width, height int, confirm uikit.DeleteConfirm) []string {
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	return modal.Overlay(lines, width, height, s.deleteConfirmModal(width, confirm))
 }
 
 func (s DependenciesScreen) deleteConfirmModal(width int, confirm uikit.DeleteConfirm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 34), 58)
 	contentWidth := uikit.Max(modalWidth-2, 1)
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	question := "Delete dependency " + confirm.Name + "?"
 	title := modal.Title(uikit.SymbolError + " Delete dependency")
 

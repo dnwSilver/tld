@@ -15,7 +15,7 @@ type StacksScreen struct {
 }
 
 const (
-	stackFormLabelWidth = 5
+	stackFormLabelWidth = 6
 	stackFormValueWidth = 24
 )
 
@@ -40,6 +40,7 @@ func (s StacksScreen) Render(
 	height int,
 	stacks []uikit.Stack,
 	selectedStackID int64,
+	policies []uikit.Policy,
 	form uikit.StackForm,
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
@@ -50,8 +51,12 @@ func (s StacksScreen) Render(
 
 	count := len(stacks)
 	title := components.ScreenTitle(s.palette, s.symbol, s.screenTitle, &count)
-	content := s.renderContent(contentWidth, contentHeight, stacks, selectedStackID, form, deleteConfirm)
-	box := components.NewBox(s.palette, s.palette.Hint).Render(contentWidth, contentHeight, title, content)
+	content := s.renderContent(contentWidth, contentHeight, stacks, selectedStackID, policies, form, deleteConfirm)
+	borderColor := s.palette.Primary
+	if form.Open || deleteConfirm.Open {
+		borderColor = s.palette.Hint
+	}
+	box := components.NewBox(s.palette, borderColor).Render(contentWidth, contentHeight, title, content)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 
 	return lipgloss.JoinVertical(lipgloss.Left, box, footer)
@@ -62,6 +67,7 @@ func (s StacksScreen) renderContent(
 	height int,
 	stacks []uikit.Stack,
 	selectedStackID int64,
+	policies []uikit.Policy,
 	form uikit.StackForm,
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
@@ -87,7 +93,7 @@ func (s StacksScreen) renderContent(
 	}
 
 	if form.Open {
-		lines = s.renderModal(lines, width, height, form)
+		lines = s.renderModal(lines, width, height, policies, form)
 	}
 	if deleteConfirm.Open {
 		lines = s.renderDeleteConfirm(lines, width, height, deleteConfirm)
@@ -97,10 +103,16 @@ func (s StacksScreen) renderContent(
 }
 
 func (s StacksScreen) tableHeader(width int, iconColumnWidth int) string {
-	return components.RenderTableRow(s.palette, s.palette.Background, width, []components.TableCell{
+	cells := []components.TableCell{
 		{Value: "", Width: iconColumnWidth, Foreground: s.palette.Hint},
 		{Value: "name", Foreground: s.palette.Hint, Bold: true},
-	})
+	}
+	if s.screenTitle == "Namespaces" {
+		cells[1].Width = 24
+		cells = append(cells, components.TableCell{Value: "policy", Foreground: s.palette.Hint, Bold: true})
+	}
+
+	return components.RenderTableRow(s.palette, s.palette.Background, width, cells)
 }
 
 func (s StacksScreen) renderStackRow(width int, stack uikit.Stack, selected bool, iconColumnWidth int) string {
@@ -110,21 +122,27 @@ func (s StacksScreen) renderStackRow(width int, stack uikit.Stack, selected bool
 	}
 	iconColor := lipgloss.Color(uikit.NormalizeHexColor(stack.Color))
 
-	return components.RenderTableRow(s.palette, background, width, []components.TableCell{
+	cells := []components.TableCell{
 		{Value: stack.Icon, Width: iconColumnWidth, Foreground: iconColor},
 		{Value: stack.Name, Foreground: s.palette.Text},
-	})
+	}
+	if s.screenTitle == "Namespaces" {
+		cells[1].Width = 24
+		cells = append(cells, components.TableCell{Value: stack.PolicyName, Foreground: s.palette.Hint})
+	}
+
+	return components.RenderTableRow(s.palette, background, width, cells)
 }
 
-func (s StacksScreen) renderModal(lines []string, width, height int, form uikit.StackForm) []string {
-	modal := components.NewModal(s.palette, s.palette.Hint)
-	return modal.Overlay(lines, width, height, s.modal(width, form))
+func (s StacksScreen) renderModal(lines []string, width, height int, policies []uikit.Policy, form uikit.StackForm) []string {
+	modal := components.NewModal(s.palette, s.palette.Primary)
+	return modal.Overlay(lines, width, height, s.modal(width, policies, form))
 }
 
-func (s StacksScreen) modal(width int, form uikit.StackForm) string {
+func (s StacksScreen) modal(width int, policies []uikit.Policy, form uikit.StackForm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 32), 54)
 	contentWidth := uikit.Max(modalWidth-2, 1)
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 
 	action := "Add"
 	if form.Mode == uikit.StackFormModeEdit {
@@ -136,9 +154,14 @@ func (s StacksScreen) modal(width int, form uikit.StackForm) string {
 		modal.CenterLine(contentWidth, s.inputLine("Icon", form.Icon, form.Focus == uikit.StackFormFieldIcon)),
 		modal.CenterLine(contentWidth, s.inputLine("Color", form.Color, form.Focus == uikit.StackFormFieldColor)),
 		modal.CenterLine(contentWidth, s.inputLine("Name", form.Name, form.Focus == uikit.StackFormFieldName)),
-		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
-		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave)),
 	}
+	if s.screenTitle == "Namespaces" {
+		rows = append(rows, modal.CenterLine(contentWidth, s.inputLine("Policy", form.Policy, form.Focus == uikit.StackFormFieldPolicy)))
+	}
+	rows = append(rows,
+		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
+		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, s.screenTitle == "Namespaces" && form.Focus == uikit.StackFormFieldPolicy)),
+	)
 
 	return modal.Render(contentWidth, title, rows)
 }
@@ -153,27 +176,32 @@ func (s StacksScreen) inputLine(label, value string, focused bool) string {
 	})
 }
 
-func (s StacksScreen) actionsLine(canSave bool) string {
+func (s StacksScreen) actionsLine(canSave bool, policyFocused bool) string {
 	saveColor := s.palette.Disable
 	if canSave {
-		saveColor = s.palette.Warning
+		saveColor = s.palette.Primary
 	}
 
-	return components.RenderActions(s.palette, []components.Action{
+	actions := []components.Action{
 		{Hint: uikit.KeyCancel.Hint, Color: s.palette.Primary},
 		{Hint: uikit.KeySave.Hint, Color: saveColor},
-	})
+	}
+	if policyFocused {
+		actions = append(actions, components.Action{Hint: uikit.KeyPolicyPick.Hint, Color: s.palette.Hint})
+	}
+
+	return components.RenderActions(s.palette, actions)
 }
 
 func (s StacksScreen) renderDeleteConfirm(lines []string, width, height int, confirm uikit.DeleteConfirm) []string {
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	return modal.Overlay(lines, width, height, s.deleteConfirmModal(width, confirm))
 }
 
 func (s StacksScreen) deleteConfirmModal(width int, confirm uikit.DeleteConfirm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 34), 58)
 	contentWidth := uikit.Max(modalWidth-2, 1)
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	question := "Delete " + s.singularTitle() + " " + confirm.Name + "?"
 	title := modal.Title(uikit.SymbolError + " Delete " + s.singularTitle())
 

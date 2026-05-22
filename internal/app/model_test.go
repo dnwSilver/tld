@@ -258,6 +258,121 @@ func TestCreateSourceFromForm(t *testing.T) {
 	}
 }
 
+func TestCreatePolicyFromForm(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenPolicies
+	m.namespaces = []ui.Namespace{{ID: namespace.ID, Icon: namespace.Icon, Name: namespace.Name, Color: namespace.Color}}
+	m.policyForm = ui.PolicyForm{
+		Open:    true,
+		Focus:   ui.PolicyFormFieldName,
+		Name:    "Production policy",
+		CanSave: true,
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := next.(model)
+	if cmd == nil {
+		t.Fatal("expected create command")
+	}
+
+	next, cmd = updated.Update(cmd().(policySavedMsg))
+	updated = next.(model)
+	if updated.policyForm.Open {
+		t.Fatal("policy form should be closed after save")
+	}
+	if cmd == nil {
+		t.Fatal("expected reload command")
+	}
+
+	next, cmd = updated.Update(cmd().(policiesLoadedMsg))
+	updated = next.(model)
+	if len(updated.policies) != 1 {
+		t.Fatalf("len(policies) = %d, want 1", len(updated.policies))
+	}
+	if updated.policies[0].Name != "Production policy" {
+		t.Fatalf("policy name = %q, want Production policy", updated.policies[0].Name)
+	}
+	if cmd == nil {
+		t.Fatal("expected policy values reload command")
+	}
+}
+
+func TestCreatePolicyValueFromForm(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stack, err := store.Stacks().Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "Package", "#EC9706")
+	if err != nil {
+		t.Fatalf("create dependency: %v", err)
+	}
+	policy, err := store.Policies().Create(ctx, "Production policy")
+	if err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenPolicies
+	m.policyFocus = ui.PolicyPaneValues
+	m.selectedPolicyID = policy.ID
+	m.dependencies = []ui.Dependency{{ID: dependency.ID, StackID: stack.ID, StackName: stack.Name, Icon: dependency.Icon, Name: dependency.Name, Color: dependency.Color}}
+	m.policyValueForm = ui.PolicyValueForm{
+		Open:         true,
+		Focus:        ui.PolicyValueFormFieldVersion,
+		PolicyID:     policy.ID,
+		DependencyID: dependency.ID,
+		Version:      "1.2.3",
+		CanSave:      true,
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := next.(model)
+	if cmd == nil {
+		t.Fatal("expected create command")
+	}
+
+	next, cmd = updated.Update(cmd().(policyValueSavedMsg))
+	updated = next.(model)
+	if updated.policyValueForm.Open {
+		t.Fatal("policy value form should be closed after save")
+	}
+	if cmd == nil {
+		t.Fatal("expected reload command")
+	}
+
+	next, _ = updated.Update(cmd().(policyValuesLoadedMsg))
+	updated = next.(model)
+	if len(updated.policyValues) != 1 {
+		t.Fatalf("len(policyValues) = %d, want 1", len(updated.policyValues))
+	}
+	if updated.policyValues[0].Version != "1.2.3" {
+		t.Fatalf("policy value version = %q, want 1.2.3", updated.policyValues[0].Version)
+	}
+}
+
 func TestSourcePATIsMaskedInView(t *testing.T) {
 	m := newModel(nil)
 	m.width = 100

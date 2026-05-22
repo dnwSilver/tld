@@ -11,7 +11,7 @@ func ScreenTitle(palette uikit.Palette, symbol, text string, count *int) string 
 		value += " [" + uikit.FormatInt(*count) + "]"
 	}
 
-	return uikit.BoldText(palette, palette.Warning, value)
+	return uikit.BoldText(palette, palette.Primary, value)
 }
 
 func ScreenFooter(palette uikit.Palette, width int, text string) string {

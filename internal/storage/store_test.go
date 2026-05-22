@@ -378,3 +378,90 @@ func TestSources(t *testing.T) {
 		t.Fatalf("count = %d, want 0", count)
 	}
 }
+
+func TestPolicies(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "Package", "#EC9706")
+	if err != nil {
+		t.Fatalf("create dependency: %v", err)
+	}
+
+	repository := store.Policies()
+	policy, err := repository.Create(ctx, "Production policy")
+	if err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	if policy.Name != "Production policy" {
+		t.Fatalf("policy = %#v", policy)
+	}
+	if _, err := repository.AssignToNamespace(ctx, namespace.ID, policy.Name); err != nil {
+		t.Fatalf("assign policy: %v", err)
+	}
+
+	policies, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list policies: %v", err)
+	}
+	if len(policies) != 1 || policies[0].DependencyCount != 0 {
+		t.Fatalf("policies = %#v", policies)
+	}
+
+	value, err := repository.CreateValue(ctx, policy.ID, dependency.ID, "1.2.3")
+	if err != nil {
+		t.Fatalf("create policy value: %v", err)
+	}
+	if value.PolicyID != policy.ID || value.DependencyID != dependency.ID || value.Version != "1.2.3" {
+		t.Fatalf("policy value = %#v", value)
+	}
+	policies, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list policies after value: %v", err)
+	}
+	if len(policies) != 1 || policies[0].DependencyCount != 1 {
+		t.Fatalf("policies after value = %#v", policies)
+	}
+
+	values, err := repository.ListValues(ctx, policy.ID)
+	if err != nil {
+		t.Fatalf("list policy values: %v", err)
+	}
+	if len(values) != 1 || values[0].DependencyName != "Package" || values[0].Version != "1.2.3" {
+		t.Fatalf("policy values = %#v", values)
+	}
+
+	if err := repository.UpdateValue(ctx, value.ID, dependency.ID, "2.0.0"); err != nil {
+		t.Fatalf("update policy value: %v", err)
+	}
+	values, err = repository.ListValues(ctx, policy.ID)
+	if err != nil {
+		t.Fatalf("list policy values after update: %v", err)
+	}
+	if values[0].Version != "2.0.0" {
+		t.Fatalf("updated policy value = %#v", values[0])
+	}
+
+	if err := repository.DeleteValue(ctx, value.ID); err != nil {
+		t.Fatalf("delete policy value: %v", err)
+	}
+	if err := repository.Delete(ctx, policy.ID); err != nil {
+		t.Fatalf("delete policy: %v", err)
+	}
+}

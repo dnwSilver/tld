@@ -42,7 +42,11 @@ func (s SourcesScreen) Render(
 	count := len(sources)
 	title := components.ScreenTitle(s.palette, uikit.SymbolSource, "Sources", &count)
 	content := s.renderContent(contentWidth, contentHeight, sources, selectedSourceID, form, deleteConfirm)
-	box := components.NewBox(s.palette, s.palette.Hint).Render(contentWidth, contentHeight, title, content)
+	borderColor := s.palette.Primary
+	if form.Open || deleteConfirm.Open {
+		borderColor = s.palette.Hint
+	}
+	box := components.NewBox(s.palette, borderColor).Render(contentWidth, contentHeight, title, content)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 
 	return lipgloss.JoinVertical(lipgloss.Left, box, footer)
@@ -108,14 +112,14 @@ func (s SourcesScreen) renderSourceRow(width int, source uikit.Source, selected 
 }
 
 func (s SourcesScreen) renderModal(lines []string, width, height int, form uikit.SourceForm) []string {
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	return modal.Overlay(lines, width, height, s.modal(width, form))
 }
 
 func (s SourcesScreen) modal(width int, form uikit.SourceForm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 38), 62)
 	contentWidth := uikit.Max(modalWidth-2, 1)
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 
 	action := "Add"
 	if form.Mode == uikit.StackFormModeEdit {
@@ -148,7 +152,7 @@ func (s SourcesScreen) inputLine(label, value string, focused bool) string {
 func (s SourcesScreen) actionsLine(canSave bool, typeFocused bool) string {
 	saveColor := s.palette.Disable
 	if canSave {
-		saveColor = s.palette.Warning
+		saveColor = s.palette.Primary
 	}
 
 	actions := []components.Action{
@@ -163,14 +167,14 @@ func (s SourcesScreen) actionsLine(canSave bool, typeFocused bool) string {
 }
 
 func (s SourcesScreen) renderDeleteConfirm(lines []string, width, height int, confirm uikit.DeleteConfirm) []string {
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	return modal.Overlay(lines, width, height, s.deleteConfirmModal(width, confirm))
 }
 
 func (s SourcesScreen) deleteConfirmModal(width int, confirm uikit.DeleteConfirm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 34), 58)
 	contentWidth := uikit.Max(modalWidth-2, 1)
-	modal := components.NewModal(s.palette, s.palette.Hint)
+	modal := components.NewModal(s.palette, s.palette.Primary)
 	question := "Delete source " + confirm.Name + "?"
 	title := modal.Title(uikit.SymbolError + " Delete source")
 

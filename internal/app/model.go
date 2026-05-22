@@ -23,14 +23,22 @@ type model struct {
 	selectedDependencyID    int64
 	sources                 []ui.Source
 	selectedSourceID        int64
+	policies                []ui.Policy
+	selectedPolicyID        int64
+	policyValues            []ui.PolicyValue
+	selectedPolicyValueID   int64
+	policyFocus             ui.PolicyPane
 	form                    ui.StackForm
 	namespaceForm           ui.StackForm
 	dependencyForm          ui.DependencyForm
 	sourceForm              ui.SourceForm
+	policyForm              ui.PolicyForm
+	policyValueForm         ui.PolicyValueForm
 	deleteConfirm           ui.DeleteConfirm
 	namespaceDeleteConfirm  ui.DeleteConfirm
 	dependencyDeleteConfirm ui.DeleteConfirm
 	sourceDeleteConfirm     ui.DeleteConfirm
+	policyDeleteConfirm     ui.DeleteConfirm
 	err                     error
 }
 
@@ -54,6 +62,16 @@ type sourcesLoadedMsg struct {
 	err     error
 }
 
+type policiesLoadedMsg struct {
+	policies []ui.Policy
+	err      error
+}
+
+type policyValuesLoadedMsg struct {
+	values []ui.PolicyValue
+	err    error
+}
+
 type stackSavedMsg struct {
 	stackID int64
 	err     error
@@ -72,6 +90,16 @@ type dependencySavedMsg struct {
 type sourceSavedMsg struct {
 	sourceID int64
 	err      error
+}
+
+type policySavedMsg struct {
+	policyID int64
+	err      error
+}
+
+type policyValueSavedMsg struct {
+	valueID int64
+	err     error
 }
 
 type stackDeletedMsg struct {
@@ -94,6 +122,16 @@ type sourceDeletedMsg struct {
 	err      error
 }
 
+type policyDeletedMsg struct {
+	policyID int64
+	err      error
+}
+
+type policyValueDeletedMsg struct {
+	valueID int64
+	err     error
+}
+
 func newModel(store *storage.Store) model {
 	return model{
 		creator:      ui.NewCreator(),
@@ -103,11 +141,14 @@ func newModel(store *storage.Store) model {
 		namespaces:   []ui.Namespace{},
 		dependencies: []ui.Dependency{},
 		sources:      []ui.Source{},
+		policies:     []ui.Policy{},
+		policyValues: []ui.PolicyValue{},
+		policyFocus:  ui.PolicyPanePolicies,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.loadStacks(), m.loadNamespaces(), m.loadDependencies(), m.loadSources())
+	return tea.Batch(m.loadStacks(), m.loadNamespaces(), m.loadDependencies(), m.loadSources(), m.loadPolicies())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -116,6 +157,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tea.KeyMsg:
+		if m.policyDeleteConfirm.Open {
+			return m.updatePolicyDeleteConfirm(msg)
+		}
 		if m.sourceDeleteConfirm.Open {
 			return m.updateSourceDeleteConfirm(msg)
 		}
@@ -133,6 +177,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.sourceForm.Open {
 			return m.updateSourceForm(msg)
+		}
+		if m.policyForm.Open {
+			return m.updatePolicyForm(msg)
+		}
+		if m.policyValueForm.Open {
+			return m.updatePolicyValueForm(msg)
 		}
 		if m.namespaceForm.Open {
 			return m.updateNamespaceForm(msg)
@@ -153,6 +203,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = ui.ScreenDependencies
 		case ui.KeySources.Matches(key):
 			m.screen = ui.ScreenSources
+		case ui.KeyPolicies.Matches(key):
+			m.screen = ui.ScreenPolicies
 		case ui.KeyAdd.Matches(key):
 			m.openAddForm()
 		case ui.KeyEdit.Matches(key):
@@ -161,8 +213,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openDelete()
 		case ui.KeyPrev.Matches(key):
 			m.selectPreviousOnScreen()
+			if m.screen == ui.ScreenPolicies && m.policyFocus == ui.PolicyPanePolicies {
+				return m, m.loadPolicyValues()
+			}
 		case ui.KeyNext.Matches(key):
 			m.selectNextOnScreen()
+			if m.screen == ui.ScreenPolicies && m.policyFocus == ui.PolicyPanePolicies {
+				return m, m.loadPolicyValues()
+			}
+		case key == "tab":
+			m.togglePolicyPane()
 		case ui.KeyQuit.Matches(key):
 			return m, tea.Quit
 		}
@@ -190,6 +250,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sources = msg.sources
 			m.ensureSelectedSource()
 		}
+	case policiesLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.policies = msg.policies
+			m.ensureSelectedPolicy()
+			return m, m.loadPolicyValues()
+		}
+	case policyValuesLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.policyValues = msg.values
+			m.ensureSelectedPolicyValue()
+		}
 	case stackSavedMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -203,7 +276,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.selectedNamespaceID = msg.namespaceID
 			m.namespaceForm = ui.StackForm{}
-			return m, m.loadNamespaces()
+			return m, tea.Batch(m.loadNamespaces(), m.loadPolicies())
 		}
 		m.namespaceForm.Error = msg.err.Error()
 	case dependencySavedMsg:
@@ -222,6 +295,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadSources()
 		}
 		m.sourceForm.Error = msg.err.Error()
+	case policySavedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.selectedPolicyID = msg.policyID
+			m.policyForm = ui.PolicyForm{}
+			return m, m.loadPolicies()
+		}
+		m.policyForm.Error = msg.err.Error()
+	case policyValueSavedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.selectedPolicyValueID = msg.valueID
+			m.policyValueForm = ui.PolicyValueForm{}
+			return m, m.loadPolicyValues()
+		}
+		m.policyValueForm.Error = msg.err.Error()
 	case stackDeletedMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -239,7 +328,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedNamespaceID = 0
 			}
 			m.namespaceDeleteConfirm = ui.DeleteConfirm{}
-			return m, m.loadNamespaces()
+			return m, tea.Batch(m.loadNamespaces(), m.loadPolicies())
 		}
 		m.namespaceDeleteConfirm.Error = msg.err.Error()
 	case dependencyDeletedMsg:
@@ -262,6 +351,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadSources()
 		}
 		m.sourceDeleteConfirm.Error = msg.err.Error()
+	case policyDeletedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			if m.selectedPolicyID == msg.policyID {
+				m.selectedPolicyID = 0
+			}
+			m.policyValues = []ui.PolicyValue{}
+			m.selectedPolicyValueID = 0
+			m.policyDeleteConfirm = ui.DeleteConfirm{}
+			return m, m.loadPolicies()
+		}
+		m.policyDeleteConfirm.Error = msg.err.Error()
+	case policyValueDeletedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			if m.selectedPolicyValueID == msg.valueID {
+				m.selectedPolicyValueID = 0
+			}
+			m.policyDeleteConfirm = ui.DeleteConfirm{}
+			return m, m.loadPolicyValues()
+		}
+		m.policyDeleteConfirm.Error = msg.err.Error()
 	}
 
 	return m, nil
@@ -284,14 +395,22 @@ func (m model) View() string {
 		m.selectedDependencyID,
 		m.sources,
 		m.selectedSourceID,
+		m.policies,
+		m.selectedPolicyID,
+		m.policyValues,
+		m.selectedPolicyValueID,
+		m.policyFocus,
 		m.form,
 		m.namespaceForm,
 		m.dependencyForm,
 		m.sourceForm,
+		m.policyForm,
+		m.policyValueForm,
 		m.deleteConfirm,
 		m.namespaceDeleteConfirm,
 		m.dependencyDeleteConfirm,
 		m.sourceDeleteConfirm,
+		m.policyDeleteConfirm,
 	)
 }
 
@@ -303,7 +422,7 @@ func (m model) updateStackForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) updateNamespaceForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action stackFormAction
-	m.namespaceForm, action = updateStackFormState(msg, m.namespaceForm)
+	m.namespaceForm, action = updateNamespaceFormState(msg, m.namespaceForm, m.policies)
 	return m.finishStackFormAction(action, m.saveNamespace)
 }
 
@@ -341,6 +460,40 @@ func updateStackFormState(msg tea.KeyMsg, form ui.StackForm) (ui.StackForm, stac
 	return normalizeStackForm(form), stackFormActionNone
 }
 
+func updateNamespaceFormState(msg tea.KeyMsg, form ui.StackForm, policies []ui.Policy) (ui.StackForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.StackForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanSave {
+			return form, stackFormActionNone
+		}
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextNamespaceFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousNamespaceFormField(form.Focus)
+	case isOneOf(msg, "left", "h"):
+		if form.Focus == ui.StackFormFieldPolicy {
+			form.PolicyID = previousPolicyID(policies, form.PolicyID)
+		}
+	case isOneOf(msg, "right", "l"):
+		if form.Focus == ui.StackFormFieldPolicy {
+			form.PolicyID = nextPolicyID(policies, form.PolicyID)
+		}
+	case isBackspaceKey(msg):
+		form = deleteNamespaceFormRune(form)
+	default:
+		if msg.Type == tea.KeyRunes {
+			form = appendNamespaceFormRunes(form, msg.Runes)
+		}
+	}
+
+	return normalizeNamespaceForm(form, policies), stackFormActionNone
+}
+
 func (m model) finishStackFormAction(action stackFormAction, save func() tea.Cmd) (tea.Model, tea.Cmd) {
 	switch action {
 	case stackFormActionQuit:
@@ -362,6 +515,18 @@ func (m model) updateSourceForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action stackFormAction
 	m.sourceForm, action = updateSourceFormState(msg, m.sourceForm)
 	return m.finishStackFormAction(action, m.saveSource)
+}
+
+func (m model) updatePolicyForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var action stackFormAction
+	m.policyForm, action = updatePolicyFormState(msg, m.policyForm, m.namespaces)
+	return m.finishStackFormAction(action, m.savePolicy)
+}
+
+func (m model) updatePolicyValueForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var action stackFormAction
+	m.policyValueForm, action = updatePolicyValueFormState(msg, m.policyValueForm, m.dependencies)
+	return m.finishStackFormAction(action, m.savePolicyValue)
 }
 
 func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []ui.Stack) (ui.DependencyForm, stackFormAction) {
@@ -432,6 +597,74 @@ func updateSourceFormState(msg tea.KeyMsg, form ui.SourceForm) (ui.SourceForm, s
 	return normalizeSourceForm(form), stackFormActionNone
 }
 
+func updatePolicyFormState(msg tea.KeyMsg, form ui.PolicyForm, namespaces []ui.Namespace) (ui.PolicyForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.PolicyForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanSave {
+			return form, stackFormActionNone
+		}
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextPolicyFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousPolicyFormField(form.Focus)
+	case isOneOf(msg, "left", "h"):
+		if form.Focus == ui.PolicyFormFieldNamespace {
+			form.NamespaceID = previousNamespaceID(namespaces, form.NamespaceID)
+		}
+	case isOneOf(msg, "right", "l"):
+		if form.Focus == ui.PolicyFormFieldNamespace {
+			form.NamespaceID = nextNamespaceID(namespaces, form.NamespaceID)
+		}
+	case isBackspaceKey(msg):
+		form = deletePolicyFormRune(form)
+	default:
+		if msg.Type == tea.KeyRunes {
+			form = appendPolicyFormRunes(form, msg.Runes)
+		}
+	}
+
+	return normalizePolicyForm(form, namespaces), stackFormActionNone
+}
+
+func updatePolicyValueFormState(msg tea.KeyMsg, form ui.PolicyValueForm, dependencies []ui.Dependency) (ui.PolicyValueForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.PolicyValueForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanSave {
+			return form, stackFormActionNone
+		}
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextPolicyValueFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousPolicyValueFormField(form.Focus)
+	case isOneOf(msg, "left", "h"):
+		if form.Focus == ui.PolicyValueFormFieldDependency {
+			form.DependencyID = previousDependencyID(dependencies, form.DependencyID)
+		}
+	case isOneOf(msg, "right", "l"):
+		if form.Focus == ui.PolicyValueFormFieldDependency {
+			form.DependencyID = nextDependencyID(dependencies, form.DependencyID)
+		}
+	case isBackspaceKey(msg):
+		form = deletePolicyValueFormRune(form)
+	default:
+		if msg.Type == tea.KeyRunes {
+			form = appendPolicyValueFormRunes(form, msg.Runes)
+		}
+	}
+
+	return normalizePolicyValueForm(form, dependencies), stackFormActionNone
+}
+
 func (m model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action deleteConfirmAction
 	m.deleteConfirm, action = updateDeleteConfirmState(msg, m.deleteConfirm)
@@ -454,6 +687,15 @@ func (m model) updateSourceDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action deleteConfirmAction
 	m.sourceDeleteConfirm, action = updateDeleteConfirmState(msg, m.sourceDeleteConfirm)
 	return m.finishDeleteConfirmAction(action, m.deleteSource)
+}
+
+func (m model) updatePolicyDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var action deleteConfirmAction
+	m.policyDeleteConfirm, action = updateDeleteConfirmState(msg, m.policyDeleteConfirm)
+	if m.policyFocus == ui.PolicyPaneValues {
+		return m.finishDeleteConfirmAction(action, m.deletePolicyValue)
+	}
+	return m.finishDeleteConfirmAction(action, m.deletePolicy)
 }
 
 type deleteConfirmAction int
@@ -493,11 +735,20 @@ func (m *model) openAddForm() {
 	case ui.ScreenStacks:
 		m.form = newStackForm()
 	case ui.ScreenNamespaces:
-		m.namespaceForm = newStackForm()
+		m.namespaceForm = newNamespaceForm(m.policies)
 	case ui.ScreenDependencies:
 		m.dependencyForm = newDependencyForm(m.stacks)
 	case ui.ScreenSources:
 		m.sourceForm = newSourceForm()
+	case ui.ScreenPolicies:
+		if m.policyFocus == ui.PolicyPaneValues {
+			if m.selectedPolicyID == 0 {
+				return
+			}
+			m.policyValueForm = newPolicyValueForm(m.selectedPolicyID, m.dependencies)
+			return
+		}
+		m.policyForm = newPolicyForm(m.namespaces, m.policies)
 	}
 }
 
@@ -511,6 +762,12 @@ func (m *model) openEditForm() {
 		m.openEditDependencyForm()
 	case ui.ScreenSources:
 		m.openEditSourceForm()
+	case ui.ScreenPolicies:
+		if m.policyFocus == ui.PolicyPaneValues {
+			m.openEditPolicyValueForm()
+			return
+		}
+		m.openEditPolicyForm()
 	}
 }
 
@@ -524,6 +781,12 @@ func (m *model) openDelete() {
 		m.openDependencyDeleteConfirm()
 	case ui.ScreenSources:
 		m.openSourceDeleteConfirm()
+	case ui.ScreenPolicies:
+		if m.policyFocus == ui.PolicyPaneValues {
+			m.openPolicyValueDeleteConfirm()
+			return
+		}
+		m.openPolicyDeleteConfirm()
 	}
 }
 
@@ -537,6 +800,12 @@ func (m *model) selectPreviousOnScreen() {
 		m.selectPreviousDependency()
 	case ui.ScreenSources:
 		m.selectPreviousSource()
+	case ui.ScreenPolicies:
+		if m.policyFocus == ui.PolicyPaneValues {
+			m.selectPreviousPolicyValue()
+			return
+		}
+		m.selectPreviousPolicy()
 	}
 }
 
@@ -550,7 +819,28 @@ func (m *model) selectNextOnScreen() {
 		m.selectNextDependency()
 	case ui.ScreenSources:
 		m.selectNextSource()
+	case ui.ScreenPolicies:
+		if m.policyFocus == ui.PolicyPaneValues {
+			m.selectNextPolicyValue()
+			return
+		}
+		m.selectNextPolicy()
 	}
+}
+
+func (m *model) togglePolicyPane() {
+	if m.screen != ui.ScreenPolicies {
+		return
+	}
+	if m.selectedPolicyID == 0 {
+		m.policyFocus = ui.PolicyPanePolicies
+		return
+	}
+	if m.policyFocus == ui.PolicyPanePolicies {
+		m.policyFocus = ui.PolicyPaneValues
+		return
+	}
+	m.policyFocus = ui.PolicyPanePolicies
 }
 
 func (m model) loadStacks() tea.Cmd {
@@ -613,6 +903,37 @@ func (m model) loadSources() tea.Cmd {
 	}
 }
 
+func (m model) loadPolicies() tea.Cmd {
+	return func() tea.Msg {
+		if m.store == nil {
+			return policiesLoadedMsg{policies: []ui.Policy{}}
+		}
+
+		policies, err := m.store.Policies().List(context.Background())
+		if err != nil {
+			return policiesLoadedMsg{err: err}
+		}
+
+		return policiesLoadedMsg{policies: toUIPolicies(policies)}
+	}
+}
+
+func (m model) loadPolicyValues() tea.Cmd {
+	policyID := m.selectedPolicyID
+	return func() tea.Msg {
+		if m.store == nil {
+			return policyValuesLoadedMsg{values: []ui.PolicyValue{}}
+		}
+
+		values, err := m.store.Policies().ListValues(context.Background(), policyID)
+		if err != nil {
+			return policyValuesLoadedMsg{err: err}
+		}
+
+		return policyValuesLoadedMsg{values: toUIPolicyValues(values)}
+	}
+}
+
 func (m model) saveStack() tea.Cmd {
 	form := m.form
 	return func() tea.Msg {
@@ -644,11 +965,18 @@ func (m model) saveNamespace() tea.Cmd {
 		name := strings.TrimSpace(form.Name)
 		color := strings.TrimSpace(form.Color)
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Namespaces().Update(context.Background(), form.StackID, icon, name, color)
+			if err := m.store.Namespaces().Update(context.Background(), form.StackID, icon, name, color); err != nil {
+				return namespaceSavedMsg{namespaceID: form.StackID, err: err}
+			}
+			err := m.store.Namespaces().SetPolicy(context.Background(), form.StackID, form.PolicyID)
 			return namespaceSavedMsg{namespaceID: form.StackID, err: err}
 		}
 
 		namespace, err := m.store.Namespaces().Create(context.Background(), icon, name, color)
+		if err != nil {
+			return namespaceSavedMsg{err: err}
+		}
+		err = m.store.Namespaces().SetPolicy(context.Background(), namespace.ID, form.PolicyID)
 		return namespaceSavedMsg{namespaceID: namespace.ID, err: err}
 	}
 }
@@ -691,6 +1019,42 @@ func (m model) saveSource() tea.Cmd {
 
 		source, err := m.store.Sources().Create(context.Background(), name, patToken, sourceURL, sourceType)
 		return sourceSavedMsg{sourceID: source.ID, err: err}
+	}
+}
+
+func (m model) savePolicy() tea.Cmd {
+	form := m.policyForm
+	return func() tea.Msg {
+		if m.store == nil {
+			return policySavedMsg{policyID: form.PolicyID}
+		}
+
+		name := strings.TrimSpace(form.Name)
+		if form.Mode == ui.StackFormModeEdit {
+			err := m.store.Policies().Update(context.Background(), form.PolicyID, name)
+			return policySavedMsg{policyID: form.PolicyID, err: err}
+		}
+
+		policy, err := m.store.Policies().Create(context.Background(), name)
+		return policySavedMsg{policyID: policy.ID, err: err}
+	}
+}
+
+func (m model) savePolicyValue() tea.Cmd {
+	form := m.policyValueForm
+	return func() tea.Msg {
+		if m.store == nil {
+			return policyValueSavedMsg{valueID: form.PolicyValueID}
+		}
+
+		version := strings.TrimSpace(form.Version)
+		if form.Mode == ui.StackFormModeEdit {
+			err := m.store.Policies().UpdateValue(context.Background(), form.PolicyValueID, form.DependencyID, version)
+			return policyValueSavedMsg{valueID: form.PolicyValueID, err: err}
+		}
+
+		value, err := m.store.Policies().CreateValue(context.Background(), form.PolicyID, form.DependencyID, version)
+		return policyValueSavedMsg{valueID: value.ID, err: err}
 	}
 }
 
@@ -742,6 +1106,30 @@ func (m model) deleteSource() tea.Cmd {
 	}
 }
 
+func (m model) deletePolicy() tea.Cmd {
+	confirm := m.policyDeleteConfirm
+	return func() tea.Msg {
+		if m.store == nil {
+			return policyDeletedMsg{policyID: confirm.StackID}
+		}
+
+		err := m.store.Policies().Delete(context.Background(), confirm.StackID)
+		return policyDeletedMsg{policyID: confirm.StackID, err: err}
+	}
+}
+
+func (m model) deletePolicyValue() tea.Cmd {
+	confirm := m.policyDeleteConfirm
+	return func() tea.Msg {
+		if m.store == nil {
+			return policyValueDeletedMsg{valueID: confirm.StackID}
+		}
+
+		err := m.store.Policies().DeleteValue(context.Background(), confirm.StackID)
+		return policyValueDeletedMsg{valueID: confirm.StackID, err: err}
+	}
+}
+
 func toUIStacks(stacks []storage.Stack) []ui.Stack {
 	result := make([]ui.Stack, 0, len(stacks))
 	for _, stack := range stacks {
@@ -760,10 +1148,11 @@ func toUINamespaces(namespaces []storage.Namespace) []ui.Namespace {
 	result := make([]ui.Namespace, 0, len(namespaces))
 	for _, namespace := range namespaces {
 		result = append(result, ui.Namespace{
-			ID:    namespace.ID,
-			Icon:  namespace.Icon,
-			Name:  namespace.Name,
-			Color: namespace.Color,
+			ID:       namespace.ID,
+			Icon:     namespace.Icon,
+			Name:     namespace.Name,
+			Color:    namespace.Color,
+			PolicyID: namespace.PolicyID,
 		})
 	}
 
@@ -803,12 +1192,50 @@ func toUISources(sources []storage.Source) []ui.Source {
 	return result
 }
 
+func toUIPolicies(policies []storage.Policy) []ui.Policy {
+	result := make([]ui.Policy, 0, len(policies))
+	for _, policy := range policies {
+		result = append(result, ui.Policy{
+			ID:              policy.ID,
+			Name:            policy.Name,
+			DependencyCount: policy.DependencyCount,
+		})
+	}
+
+	return result
+}
+
+func toUIPolicyValues(values []storage.PolicyValue) []ui.PolicyValue {
+	result := make([]ui.PolicyValue, 0, len(values))
+	for _, value := range values {
+		result = append(result, ui.PolicyValue{
+			ID:              value.ID,
+			PolicyID:        value.PolicyID,
+			DependencyID:    value.DependencyID,
+			DependencyIcon:  value.DependencyIcon,
+			DependencyName:  value.DependencyName,
+			DependencyColor: value.DependencyColor,
+			Version:         value.Version,
+		})
+	}
+
+	return result
+}
+
 func newStackForm() ui.StackForm {
 	return ui.StackForm{
 		Open:  true,
 		Mode:  ui.StackFormModeCreate,
 		Focus: ui.StackFormFieldIcon,
 	}
+}
+
+func newNamespaceForm(policies []ui.Policy) ui.StackForm {
+	form := newStackForm()
+	if len(policies) > 0 {
+		form.PolicyID = policies[0].ID
+	}
+	return normalizeNamespaceForm(form, policies)
 }
 
 func newDependencyForm(stacks []ui.Stack) ui.DependencyForm {
@@ -831,6 +1258,27 @@ func newSourceForm() ui.SourceForm {
 		Focus: ui.SourceFormFieldName,
 		Type:  storage.SourceTypeGitLab,
 	})
+}
+
+func newPolicyForm(namespaces []ui.Namespace, policies []ui.Policy) ui.PolicyForm {
+	return normalizePolicyForm(ui.PolicyForm{
+		Open:  true,
+		Mode:  ui.StackFormModeCreate,
+		Focus: ui.PolicyFormFieldName,
+	}, namespaces)
+}
+
+func newPolicyValueForm(policyID int64, dependencies []ui.Dependency) ui.PolicyValueForm {
+	form := ui.PolicyValueForm{
+		Open:     true,
+		Mode:     ui.StackFormModeCreate,
+		PolicyID: policyID,
+		Focus:    ui.PolicyValueFormFieldDependency,
+	}
+	if len(dependencies) > 0 {
+		form.DependencyID = dependencies[0].ID
+	}
+	return normalizePolicyValueForm(form, dependencies)
 }
 
 func (m *model) openEditStackForm() {
@@ -858,6 +1306,8 @@ func (m *model) openEditNamespaceForm() {
 	}
 
 	m.namespaceForm = editStackForm(namespace.ID, namespace.Icon, namespace.Color, namespace.Name)
+	m.namespaceForm.PolicyID = namespace.PolicyID
+	m.namespaceForm = normalizeNamespaceForm(m.namespaceForm, m.policies)
 }
 
 func (m *model) openNamespaceDeleteConfirm() {
@@ -923,6 +1373,56 @@ func (m *model) openSourceDeleteConfirm() {
 	m.sourceDeleteConfirm = deleteConfirm(source.ID, source.Name)
 }
 
+func (m *model) openEditPolicyForm() {
+	policy, ok := m.selectedPolicy()
+	if !ok {
+		return
+	}
+
+	m.policyForm = normalizePolicyForm(ui.PolicyForm{
+		Open:     true,
+		Mode:     ui.StackFormModeEdit,
+		PolicyID: policy.ID,
+		Focus:    ui.PolicyFormFieldName,
+		Name:     policy.Name,
+	}, m.namespaces)
+}
+
+func (m *model) openPolicyDeleteConfirm() {
+	policy, ok := m.selectedPolicy()
+	if !ok {
+		return
+	}
+
+	m.policyDeleteConfirm = deleteConfirm(policy.ID, policy.Name)
+}
+
+func (m *model) openEditPolicyValueForm() {
+	value, ok := m.selectedPolicyValue()
+	if !ok {
+		return
+	}
+
+	m.policyValueForm = normalizePolicyValueForm(ui.PolicyValueForm{
+		Open:          true,
+		Mode:          ui.StackFormModeEdit,
+		PolicyValueID: value.ID,
+		PolicyID:      value.PolicyID,
+		DependencyID:  value.DependencyID,
+		Focus:         ui.PolicyValueFormFieldDependency,
+		Version:       value.Version,
+	}, m.dependencies)
+}
+
+func (m *model) openPolicyValueDeleteConfirm() {
+	value, ok := m.selectedPolicyValue()
+	if !ok {
+		return
+	}
+
+	m.policyDeleteConfirm = deleteConfirm(value.ID, value.DependencyName)
+}
+
 func editStackForm(id int64, icon string, color string, name string) ui.StackForm {
 	return normalizeStackForm(ui.StackForm{
 		Open:    true,
@@ -947,6 +1447,10 @@ func stackID(s ui.Stack) int64           { return s.ID }
 func namespaceID(n ui.Namespace) int64   { return n.ID }
 func dependencyID(d ui.Dependency) int64 { return d.ID }
 func sourceID(s ui.Source) int64         { return s.ID }
+func policyID(p ui.Policy) int64         { return p.ID }
+func policyValueID(v ui.PolicyValue) int64 {
+	return v.ID
+}
 
 func (m *model) ensureSelectedStack() {
 	m.selectedStackID = ensureSelected(m.stacks, m.selectedStackID, stackID)
@@ -962,6 +1466,19 @@ func (m *model) ensureSelectedDependency() {
 
 func (m *model) ensureSelectedSource() {
 	m.selectedSourceID = ensureSelected(m.sources, m.selectedSourceID, sourceID)
+}
+
+func (m *model) ensureSelectedPolicy() {
+	oldID := m.selectedPolicyID
+	m.selectedPolicyID = ensureSelected(m.policies, m.selectedPolicyID, policyID)
+	if oldID != m.selectedPolicyID {
+		m.policyValues = []ui.PolicyValue{}
+		m.selectedPolicyValueID = 0
+	}
+}
+
+func (m *model) ensureSelectedPolicyValue() {
+	m.selectedPolicyValueID = ensureSelected(m.policyValues, m.selectedPolicyValueID, policyValueID)
 }
 
 func (m *model) selectPreviousStack() {
@@ -996,6 +1513,32 @@ func (m *model) selectNextSource() {
 	m.selectedSourceID = selectNext(m.sources, m.selectedSourceID, sourceID)
 }
 
+func (m *model) selectPreviousPolicy() {
+	oldID := m.selectedPolicyID
+	m.selectedPolicyID = selectPrevious(m.policies, m.selectedPolicyID, policyID)
+	if oldID != m.selectedPolicyID {
+		m.policyValues = []ui.PolicyValue{}
+		m.selectedPolicyValueID = 0
+	}
+}
+
+func (m *model) selectNextPolicy() {
+	oldID := m.selectedPolicyID
+	m.selectedPolicyID = selectNext(m.policies, m.selectedPolicyID, policyID)
+	if oldID != m.selectedPolicyID {
+		m.policyValues = []ui.PolicyValue{}
+		m.selectedPolicyValueID = 0
+	}
+}
+
+func (m *model) selectPreviousPolicyValue() {
+	m.selectedPolicyValueID = selectPrevious(m.policyValues, m.selectedPolicyValueID, policyValueID)
+}
+
+func (m *model) selectNextPolicyValue() {
+	m.selectedPolicyValueID = selectNext(m.policyValues, m.selectedPolicyValueID, policyValueID)
+}
+
 func (m model) selectedStack() (ui.Stack, bool) {
 	return findByID(m.stacks, m.selectedStackID, stackID)
 }
@@ -1012,6 +1555,28 @@ func (m model) selectedSource() (ui.Source, bool) {
 	return findByID(m.sources, m.selectedSourceID, sourceID)
 }
 
+func (m model) selectedPolicy() (ui.Policy, bool) {
+	return findByID(m.policies, m.selectedPolicyID, policyID)
+}
+
+func (m model) selectedPolicyValue() (ui.PolicyValue, bool) {
+	return findByID(m.policyValues, m.selectedPolicyValueID, policyValueID)
+}
+
+func (m model) policyNameForNamespace(id int64) string {
+	namespace, ok := findByID(m.namespaces, id, namespaceID)
+	if !ok {
+		return ""
+	}
+	for _, policy := range m.policies {
+		if policy.ID == namespace.PolicyID {
+			return policy.Name
+		}
+	}
+
+	return ""
+}
+
 func nextStackFormField(field ui.StackFormField) ui.StackFormField {
 	if field == ui.StackFormFieldName {
 		return ui.StackFormFieldIcon
@@ -1023,6 +1588,22 @@ func nextStackFormField(field ui.StackFormField) ui.StackFormField {
 func previousStackFormField(field ui.StackFormField) ui.StackFormField {
 	if field == ui.StackFormFieldIcon {
 		return ui.StackFormFieldName
+	}
+
+	return field - 1
+}
+
+func nextNamespaceFormField(field ui.StackFormField) ui.StackFormField {
+	if field == ui.StackFormFieldPolicy {
+		return ui.StackFormFieldIcon
+	}
+
+	return field + 1
+}
+
+func previousNamespaceFormField(field ui.StackFormField) ui.StackFormField {
+	if field == ui.StackFormFieldIcon {
+		return ui.StackFormFieldPolicy
 	}
 
 	return field - 1
@@ -1055,10 +1636,55 @@ func deleteStackFormRune(form ui.StackForm) ui.StackForm {
 	return normalizeStackForm(form)
 }
 
+func appendNamespaceFormRunes(form ui.StackForm, runes []rune) ui.StackForm {
+	value := string(runes)
+	switch form.Focus {
+	case ui.StackFormFieldIcon:
+		form.Icon += value
+	case ui.StackFormFieldColor:
+		form.Color += value
+	case ui.StackFormFieldName:
+		form.Name += value
+	case ui.StackFormFieldPolicy:
+	}
+
+	return form
+}
+
+func deleteNamespaceFormRune(form ui.StackForm) ui.StackForm {
+	switch form.Focus {
+	case ui.StackFormFieldIcon:
+		form.Icon = trimLastRune(form.Icon)
+	case ui.StackFormFieldColor:
+		form.Color = trimLastRune(form.Color)
+	case ui.StackFormFieldName:
+		form.Name = trimLastRune(form.Name)
+	case ui.StackFormFieldPolicy:
+	}
+
+	return form
+}
+
 func normalizeStackForm(form ui.StackForm) ui.StackForm {
 	form.CanSave = strings.TrimSpace(form.Icon) != "" &&
 		strings.TrimSpace(form.Color) != "" &&
 		strings.TrimSpace(form.Name) != ""
+	if form.CanSave {
+		form.Error = ""
+	}
+
+	return form
+}
+
+func normalizeNamespaceForm(form ui.StackForm, policies []ui.Policy) ui.StackForm {
+	if !hasPolicyID(policies, form.PolicyID) && len(policies) > 0 {
+		form.PolicyID = policies[0].ID
+	}
+	form.Policy = policyNameByID(policies, form.PolicyID)
+	form.CanSave = strings.TrimSpace(form.Icon) != "" &&
+		strings.TrimSpace(form.Color) != "" &&
+		strings.TrimSpace(form.Name) != "" &&
+		hasPolicyID(policies, form.PolicyID)
 	if form.CanSave {
 		form.Error = ""
 	}
@@ -1093,6 +1719,30 @@ func nextSourceFormField(field ui.SourceFormField) ui.SourceFormField {
 func previousSourceFormField(field ui.SourceFormField) ui.SourceFormField {
 	if field == ui.SourceFormFieldName {
 		return ui.SourceFormFieldType
+	}
+
+	return field - 1
+}
+
+func nextPolicyFormField(field ui.PolicyFormField) ui.PolicyFormField {
+	return ui.PolicyFormFieldName
+}
+
+func previousPolicyFormField(field ui.PolicyFormField) ui.PolicyFormField {
+	return ui.PolicyFormFieldName
+}
+
+func nextPolicyValueFormField(field ui.PolicyValueFormField) ui.PolicyValueFormField {
+	if field == ui.PolicyValueFormFieldVersion {
+		return ui.PolicyValueFormFieldDependency
+	}
+
+	return field + 1
+}
+
+func previousPolicyValueFormField(field ui.PolicyValueFormField) ui.PolicyValueFormField {
+	if field == ui.PolicyValueFormFieldDependency {
+		return ui.PolicyValueFormFieldVersion
 	}
 
 	return field - 1
@@ -1156,6 +1806,38 @@ func deleteSourceFormRune(form ui.SourceForm) ui.SourceForm {
 	return form
 }
 
+func appendPolicyFormRunes(form ui.PolicyForm, runes []rune) ui.PolicyForm {
+	if form.Focus == ui.PolicyFormFieldName {
+		form.Name += string(runes)
+	}
+
+	return form
+}
+
+func deletePolicyFormRune(form ui.PolicyForm) ui.PolicyForm {
+	if form.Focus == ui.PolicyFormFieldName {
+		form.Name = trimLastRune(form.Name)
+	}
+
+	return form
+}
+
+func appendPolicyValueFormRunes(form ui.PolicyValueForm, runes []rune) ui.PolicyValueForm {
+	if form.Focus == ui.PolicyValueFormFieldVersion {
+		form.Version += string(runes)
+	}
+
+	return form
+}
+
+func deletePolicyValueFormRune(form ui.PolicyValueForm) ui.PolicyValueForm {
+	if form.Focus == ui.PolicyValueFormFieldVersion {
+		form.Version = trimLastRune(form.Version)
+	}
+
+	return form
+}
+
 func normalizeDependencyForm(form ui.DependencyForm, stacks []ui.Stack) ui.DependencyForm {
 	if !hasStackID(stacks, form.StackID) && len(stacks) > 0 {
 		form.StackID = stacks[0].ID
@@ -1186,8 +1868,46 @@ func normalizeSourceForm(form ui.SourceForm) ui.SourceForm {
 	return form
 }
 
+func normalizePolicyForm(form ui.PolicyForm, namespaces []ui.Namespace) ui.PolicyForm {
+	form.CanSave = strings.TrimSpace(form.Name) != ""
+	if form.CanSave {
+		form.Error = ""
+	}
+
+	return form
+}
+
+func normalizePolicyValueForm(form ui.PolicyValueForm, dependencies []ui.Dependency) ui.PolicyValueForm {
+	if !hasDependencyID(dependencies, form.DependencyID) && len(dependencies) > 0 {
+		form.DependencyID = dependencies[0].ID
+	}
+	form.CanSave = form.PolicyID != 0 &&
+		strings.TrimSpace(form.Version) != "" &&
+		hasDependencyID(dependencies, form.DependencyID)
+	if form.CanSave {
+		form.Error = ""
+	}
+
+	return form
+}
+
 func hasStackID(stacks []ui.Stack, id int64) bool {
 	_, ok := findByID(stacks, id, stackID)
+	return ok
+}
+
+func hasNamespaceID(namespaces []ui.Namespace, id int64) bool {
+	_, ok := findByID(namespaces, id, namespaceID)
+	return ok
+}
+
+func hasPolicyID(policies []ui.Policy, id int64) bool {
+	_, ok := findByID(policies, id, policyID)
+	return ok
+}
+
+func hasDependencyID(dependencies []ui.Dependency, id int64) bool {
+	_, ok := findByID(dependencies, id, dependencyID)
 	return ok
 }
 
@@ -1197,6 +1917,42 @@ func previousStackID(stacks []ui.Stack, id int64) int64 {
 
 func nextStackID(stacks []ui.Stack, id int64) int64 {
 	return selectNext(stacks, id, stackID)
+}
+
+func previousNamespaceID(namespaces []ui.Namespace, id int64) int64 {
+	return selectPrevious(namespaces, id, namespaceID)
+}
+
+func nextNamespaceID(namespaces []ui.Namespace, id int64) int64 {
+	return selectNext(namespaces, id, namespaceID)
+}
+
+func previousPolicyID(policies []ui.Policy, id int64) int64 {
+	return selectPrevious(policies, id, policyID)
+}
+
+func nextPolicyID(policies []ui.Policy, id int64) int64 {
+	return selectNext(policies, id, policyID)
+}
+
+func policyNameByID(policies []ui.Policy, id int64) string {
+	for _, policy := range policies {
+		if policy.ID == id {
+			return policy.Name
+		}
+	}
+	if len(policies) == 0 {
+		return "No policies"
+	}
+	return ""
+}
+
+func previousDependencyID(dependencies []ui.Dependency, id int64) int64 {
+	return selectPrevious(dependencies, id, dependencyID)
+}
+
+func nextDependencyID(dependencies []ui.Dependency, id int64) int64 {
+	return selectNext(dependencies, id, dependencyID)
 }
 
 var sourceTypes = []string{

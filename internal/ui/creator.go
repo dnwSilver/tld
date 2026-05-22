@@ -16,6 +16,7 @@ type Creator struct {
 	namespacesScreen   screens.StacksScreen
 	dependenciesScreen screens.DependenciesScreen
 	sourcesScreen      screens.SourcesScreen
+	policiesScreen     screens.PoliciesScreen
 }
 
 func NewCreator() Creator {
@@ -30,6 +31,7 @@ func NewCreator() Creator {
 		namespacesScreen:   screens.NewNamespacesScreen(palette),
 		dependenciesScreen: screens.NewDependenciesScreen(palette),
 		sourcesScreen:      screens.NewSourcesScreen(palette),
+		policiesScreen:     screens.NewPoliciesScreen(palette),
 	}
 }
 
@@ -45,14 +47,22 @@ func (c Creator) Render(
 	selectedDependencyID int64,
 	sources []uikit.Source,
 	selectedSourceID int64,
+	policies []uikit.Policy,
+	selectedPolicyID int64,
+	policyValues []uikit.PolicyValue,
+	selectedPolicyValueID int64,
+	policyFocus uikit.PolicyPane,
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
 	dependencyForm uikit.DependencyForm,
 	sourceForm uikit.SourceForm,
+	policyForm uikit.PolicyForm,
+	policyValueForm uikit.PolicyValueForm,
 	deleteConfirm uikit.DeleteConfirm,
 	namespaceDeleteConfirm uikit.DeleteConfirm,
 	dependencyDeleteConfirm uikit.DeleteConfirm,
 	sourceDeleteConfirm uikit.DeleteConfirm,
+	policyDeleteConfirm uikit.DeleteConfirm,
 ) string {
 	base := lipgloss.NewStyle().
 		Width(width).
@@ -65,14 +75,15 @@ func (c Creator) Render(
 	bodyHeight := uikit.Max(height-topHeight, 1)
 	body := c.defaultScreen.Render(width, bodyHeight, len(stacks))
 	if screen == uikit.ScreenStacks {
-		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, stackForm, deleteConfirm)
+		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, nil, stackForm, deleteConfirm)
 	}
 	if screen == uikit.ScreenNamespaces {
 		body = c.namespacesScreen.Render(
 			width,
 			bodyHeight,
-			toStackItems(namespaces),
+			toNamespaceItems(namespaces, policies),
 			selectedNamespaceID,
+			policies,
 			namespaceForm,
 			namespaceDeleteConfirm,
 		)
@@ -98,22 +109,49 @@ func (c Creator) Render(
 			sourceDeleteConfirm,
 		)
 	}
+	if screen == uikit.ScreenPolicies {
+		body = c.policiesScreen.Render(
+			width,
+			bodyHeight,
+			policies,
+			selectedPolicyID,
+			policyValues,
+			selectedPolicyValueID,
+			policyFocus,
+			namespaces,
+			dependencies,
+			policyForm,
+			policyValueForm,
+			policyDeleteConfirm,
+		)
+	}
 
 	return base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
 }
 
-func toStackItems(namespaces []uikit.Namespace) []uikit.Stack {
+func toNamespaceItems(namespaces []uikit.Namespace, policies []uikit.Policy) []uikit.Stack {
 	items := make([]uikit.Stack, 0, len(namespaces))
 	for _, namespace := range namespaces {
 		items = append(items, uikit.Stack{
-			ID:    namespace.ID,
-			Icon:  namespace.Icon,
-			Name:  namespace.Name,
-			Color: namespace.Color,
+			ID:         namespace.ID,
+			Icon:       namespace.Icon,
+			Name:       namespace.Name,
+			Color:      namespace.Color,
+			PolicyName: policyNameForNamespace(policies, namespace.PolicyID),
 		})
 	}
 
 	return items
+}
+
+func policyNameForNamespace(policies []uikit.Policy, policyID int64) string {
+	for _, policy := range policies {
+		if policy.ID == policyID {
+			return policy.Name + "[" + uikit.FormatInt(policy.DependencyCount) + "]"
+		}
+	}
+
+	return ""
 }
 
 func (c Creator) renderTopBar(width int, screen uikit.Screen) string {

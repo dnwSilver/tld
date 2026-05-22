@@ -34,4 +34,5 @@ const (
 	SymbolNamespace      = ""
 	SymbolDependency     = ""
 	SymbolSource         = ""
+	SymbolPolicy         = "󰯄"
 )

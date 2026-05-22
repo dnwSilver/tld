@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dnwSilver/tld/internal/ui/uikit"
 )
 
@@ -54,10 +55,12 @@ func (m Modal) Overlay(lines []string, viewportWidth, viewportHeight int, block 
 			break
 		}
 
-		blockWidth := lipgloss.Width(row)
+		blockWidth := ansi.StringWidth(row)
 		left := uikit.Max((viewportWidth-blockWidth)/2, 0)
-		right := uikit.Max(viewportWidth-left-blockWidth, 0)
-		lines[target] = uikit.BackgroundSpaces(m.palette, left) + row + uikit.BackgroundSpaces(m.palette, right)
+		rightStart := left + blockWidth
+		prefix := ansi.Cut(lines[target], 0, left)
+		suffix := ansi.Cut(lines[target], rightStart, viewportWidth)
+		lines[target] = prefix + row + suffix
 	}
 
 	return lines
@@ -72,7 +75,7 @@ func (m Modal) Spaces(width int) string {
 func (m Modal) Title(title string) string {
 	return lipgloss.NewStyle().
 		Background(m.palette.Background).
-		Foreground(m.palette.Warning).
+		Foreground(m.palette.Primary).
 		Bold(true).
 		Render(title)
 }

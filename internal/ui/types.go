@@ -10,12 +10,22 @@ const (
 	ScreenNamespaces   = uikit.ScreenNamespaces
 	ScreenDependencies = uikit.ScreenDependencies
 	ScreenSources      = uikit.ScreenSources
+	ScreenPolicies     = uikit.ScreenPolicies
 )
 
 type Stack = uikit.Stack
 type Namespace = uikit.Namespace
 type Dependency = uikit.Dependency
 type Source = uikit.Source
+type Policy = uikit.Policy
+type PolicyValue = uikit.PolicyValue
+type PolicyPane = uikit.PolicyPane
+
+const (
+	PolicyPanePolicies = uikit.PolicyPanePolicies
+	PolicyPaneValues   = uikit.PolicyPaneValues
+)
+
 type StackFormMode = uikit.StackFormMode
 
 const (
@@ -26,9 +36,10 @@ const (
 type StackFormField = uikit.StackFormField
 
 const (
-	StackFormFieldIcon  = uikit.StackFormFieldIcon
-	StackFormFieldColor = uikit.StackFormFieldColor
-	StackFormFieldName  = uikit.StackFormFieldName
+	StackFormFieldIcon   = uikit.StackFormFieldIcon
+	StackFormFieldColor  = uikit.StackFormFieldColor
+	StackFormFieldName   = uikit.StackFormFieldName
+	StackFormFieldPolicy = uikit.StackFormFieldPolicy
 )
 
 type StackForm = uikit.StackForm
@@ -52,6 +63,22 @@ const (
 )
 
 type SourceForm = uikit.SourceForm
+type PolicyFormField = uikit.PolicyFormField
+
+const (
+	PolicyFormFieldName      = uikit.PolicyFormFieldName
+	PolicyFormFieldNamespace = uikit.PolicyFormFieldNamespace
+)
+
+type PolicyForm = uikit.PolicyForm
+type PolicyValueFormField = uikit.PolicyValueFormField
+
+const (
+	PolicyValueFormFieldDependency = uikit.PolicyValueFormFieldDependency
+	PolicyValueFormFieldVersion    = uikit.PolicyValueFormFieldVersion
+)
+
+type PolicyValueForm = uikit.PolicyValueForm
 type DeleteConfirm = uikit.DeleteConfirm
 
 type Binding = uikit.Binding
@@ -62,6 +89,7 @@ var (
 	KeyNamespaces     = uikit.KeyNamespaces
 	KeyDependencies   = uikit.KeyDependencies
 	KeySources        = uikit.KeySources
+	KeyPolicies       = uikit.KeyPolicies
 	KeyAdd            = uikit.KeyAdd
 	KeyEdit           = uikit.KeyEdit
 	KeyDelete         = uikit.KeyDelete
@@ -69,5 +97,8 @@ var (
 	KeyNext           = uikit.KeyNext
 	KeyStackPick      = uikit.KeyStackPick
 	KeySourceTypePick = uikit.KeySourceTypePick
+	KeyNamespacePick  = uikit.KeyNamespacePick
+	KeyPolicyPick     = uikit.KeyPolicyPick
+	KeyDependencyPick = uikit.KeyDependencyPick
 	KeyQuit           = uikit.KeyQuit
 )

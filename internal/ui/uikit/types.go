@@ -8,20 +8,23 @@ const (
 	ScreenNamespaces
 	ScreenDependencies
 	ScreenSources
+	ScreenPolicies
 )
 
 type Stack struct {
-	ID    int64
-	Icon  string
-	Name  string
-	Color string
+	ID         int64
+	Icon       string
+	Name       string
+	Color      string
+	PolicyName string
 }
 
 type Namespace struct {
-	ID    int64
-	Icon  string
-	Name  string
-	Color string
+	ID       int64
+	Icon     string
+	Name     string
+	Color    string
+	PolicyID int64
 }
 
 type Dependency struct {
@@ -43,6 +46,29 @@ type Source struct {
 	Type     string
 }
 
+type Policy struct {
+	ID              int64
+	Name            string
+	DependencyCount int
+}
+
+type PolicyValue struct {
+	ID              int64
+	PolicyID        int64
+	DependencyID    int64
+	DependencyIcon  string
+	DependencyName  string
+	DependencyColor string
+	Version         string
+}
+
+type PolicyPane int
+
+const (
+	PolicyPanePolicies PolicyPane = iota
+	PolicyPaneValues
+)
+
 type StackFormMode int
 
 const (
@@ -56,18 +82,21 @@ const (
 	StackFormFieldIcon StackFormField = iota
 	StackFormFieldColor
 	StackFormFieldName
+	StackFormFieldPolicy
 )
 
 type StackForm struct {
-	Open    bool
-	Mode    StackFormMode
-	StackID int64
-	Focus   StackFormField
-	Icon    string
-	Color   string
-	Name    string
-	CanSave bool
-	Error   string
+	Open     bool
+	Mode     StackFormMode
+	StackID  int64
+	Focus    StackFormField
+	Icon     string
+	Color    string
+	Name     string
+	PolicyID int64
+	Policy   string
+	CanSave  bool
+	Error    string
 }
 
 type DependencyFormField int
@@ -112,6 +141,43 @@ type SourceForm struct {
 	Type     string
 	CanSave  bool
 	Error    string
+}
+
+type PolicyFormField int
+
+const (
+	PolicyFormFieldName PolicyFormField = iota
+	PolicyFormFieldNamespace
+)
+
+type PolicyForm struct {
+	Open        bool
+	Mode        StackFormMode
+	PolicyID    int64
+	NamespaceID int64
+	Focus       PolicyFormField
+	Name        string
+	CanSave     bool
+	Error       string
+}
+
+type PolicyValueFormField int
+
+const (
+	PolicyValueFormFieldDependency PolicyValueFormField = iota
+	PolicyValueFormFieldVersion
+)
+
+type PolicyValueForm struct {
+	Open          bool
+	Mode          StackFormMode
+	PolicyValueID int64
+	PolicyID      int64
+	DependencyID  int64
+	Focus         PolicyValueFormField
+	Version       string
+	CanSave       bool
+	Error         string
 }
 
 type DeleteConfirm struct {

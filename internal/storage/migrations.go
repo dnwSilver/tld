@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 5
+const currentSchemaVersion = 7
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -57,6 +57,16 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 5 {
 		if err := migrateV5(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 6 {
+		if err := migrateV6(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 7 {
+		if err := migrateV7(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -228,4 +238,175 @@ func migrateV5(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	return nil
+}
+
+func migrateV6(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS policies (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (name)
+			)
+		`,
+		`
+			ALTER TABLE namespaces
+			ADD COLUMN policy_id INTEGER REFERENCES policies (id) ON UPDATE CASCADE ON DELETE SET NULL
+		`,
+		`
+			CREATE TABLE IF NOT EXISTS policy_values (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				policy_id INTEGER NOT NULL,
+				dependency_id INTEGER NOT NULL,
+				version TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (policy_id, dependency_id),
+				FOREIGN KEY (policy_id) REFERENCES policies (id) ON UPDATE CASCADE ON DELETE CASCADE,
+				FOREIGN KEY (dependency_id) REFERENCES dependencies (id) ON UPDATE CASCADE ON DELETE RESTRICT
+			)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_policy_values_policy_id
+			ON policy_values (policy_id)
+		`,
+		`
+			INSERT OR IGNORE INTO policies (name, created_at, updated_at)
+			SELECT name, CAST(strftime('%s', 'now') AS INTEGER), CAST(strftime('%s', 'now') AS INTEGER)
+			FROM namespaces
+		`,
+		`
+			UPDATE namespaces
+			SET policy_id = (
+				SELECT policies.id
+				FROM policies
+				WHERE policies.name = namespaces.name
+			)
+			WHERE policy_id IS NULL
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (6)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v6: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV7(ctx context.Context, tx *sql.Tx) error {
+	hasNamespacePolicyID, err := hasColumn(ctx, tx, "namespaces", "policy_id")
+	if err != nil {
+		return err
+	}
+	if !hasNamespacePolicyID {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE namespaces ADD COLUMN policy_id INTEGER"); err != nil {
+			return fmt.Errorf("add namespace policy id: %w", err)
+		}
+	}
+
+	hasPolicyNamespaceID, err := hasColumn(ctx, tx, "policies", "namespace_id")
+	if err != nil {
+		return err
+	}
+	if hasPolicyNamespaceID {
+		statements := []string{
+			`
+				CREATE TABLE policies_v7 (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL,
+					created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+					updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+					UNIQUE (name)
+				)
+			`,
+			`
+				INSERT OR IGNORE INTO policies_v7 (id, name, created_at, updated_at)
+				SELECT id, name, created_at, updated_at
+				FROM policies
+			`,
+			`
+				UPDATE namespaces
+				SET policy_id = (
+					SELECT policies.id
+					FROM policies
+					WHERE policies.namespace_id = namespaces.id
+				)
+				WHERE policy_id IS NULL
+			`,
+			"ALTER TABLE policy_values RENAME TO policy_values_v6",
+			"ALTER TABLE policies RENAME TO policies_v6",
+			"ALTER TABLE policies_v7 RENAME TO policies",
+			`
+				CREATE TABLE policy_values (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					policy_id INTEGER NOT NULL,
+					dependency_id INTEGER NOT NULL,
+					version TEXT NOT NULL,
+					created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+					updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+					UNIQUE (policy_id, dependency_id),
+					FOREIGN KEY (policy_id) REFERENCES policies (id) ON UPDATE CASCADE ON DELETE CASCADE,
+					FOREIGN KEY (dependency_id) REFERENCES dependencies (id) ON UPDATE CASCADE ON DELETE RESTRICT
+				)
+			`,
+			`
+				INSERT OR IGNORE INTO policy_values (id, policy_id, dependency_id, version, created_at, updated_at)
+				SELECT id, policy_id, dependency_id, version, created_at, updated_at
+				FROM policy_values_v6
+			`,
+			`
+				CREATE INDEX IF NOT EXISTS idx_policy_values_policy_id
+				ON policy_values (policy_id)
+			`,
+			"DROP TABLE policy_values_v6",
+			"DROP TABLE policies_v6",
+		}
+
+		for _, statement := range statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply schema v7: %w", err)
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO schema_migrations (version) VALUES (7)"); err != nil {
+		return fmt.Errorf("apply schema v7: %w", err)
+	}
+
+	return nil
+}
+
+func hasColumn(ctx context.Context, tx *sql.Tx, table string, column string) (bool, error) {
+	rows, err := tx.QueryContext(ctx, "PRAGMA table_info("+table+")")
+	if err != nil {
+		return false, fmt.Errorf("read table info: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var primaryKey int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, fmt.Errorf("scan table info: %w", err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("iterate table info: %w", err)
+	}
+
+	return false, nil
 }
