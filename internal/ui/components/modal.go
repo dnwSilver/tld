@@ -44,6 +44,25 @@ func (m Modal) CenterLine(width int, content string) string {
 	return m.Spaces(left) + content + m.Spaces(right)
 }
 
+func (m Modal) Overlay(lines []string, viewportWidth, viewportHeight int, block string) []string {
+	rows := strings.Split(block, uikit.SymbolLineBreak)
+	top := uikit.Max((viewportHeight-len(rows))/2, 0)
+
+	for index, row := range rows {
+		target := top + index
+		if target >= len(lines) {
+			break
+		}
+
+		blockWidth := lipgloss.Width(row)
+		left := uikit.Max((viewportWidth-blockWidth)/2, 0)
+		right := uikit.Max(viewportWidth-left-blockWidth, 0)
+		lines[target] = uikit.BackgroundSpaces(m.palette, left) + row + uikit.BackgroundSpaces(m.palette, right)
+	}
+
+	return lines
+}
+
 func (m Modal) Spaces(width int) string {
 	return lipgloss.NewStyle().
 		Background(m.palette.Background).

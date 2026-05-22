@@ -115,66 +115,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateStackForm(msg)
 		}
 
-		switch msg.String() {
-		case "0", "cmd+0", "alt+0":
+		key := msg.String()
+		switch {
+		case ui.KeyHome.Matches(key):
 			m.screen = ui.ScreenDefault
-		case "1", "cmd+1", "alt+1":
+		case ui.KeyStacks.Matches(key):
 			m.screen = ui.ScreenStacks
-		case "2", "cmd+2", "alt+2":
+		case ui.KeyNamespaces.Matches(key):
 			m.screen = ui.ScreenNamespaces
-		case "3", "cmd+3", "alt+3":
+		case ui.KeyDependencies.Matches(key):
 			m.screen = ui.ScreenDependencies
-		case "a":
-			if m.screen == ui.ScreenStacks {
-				m.form = newStackForm()
-			}
-			if m.screen == ui.ScreenNamespaces {
-				m.namespaceForm = newStackForm()
-			}
-			if m.screen == ui.ScreenDependencies {
-				m.dependencyForm = newDependencyForm(m.stacks)
-			}
-		case "e":
-			if m.screen == ui.ScreenStacks {
-				m.openEditStackForm()
-			}
-			if m.screen == ui.ScreenNamespaces {
-				m.openEditNamespaceForm()
-			}
-			if m.screen == ui.ScreenDependencies {
-				m.openEditDependencyForm()
-			}
-		case "d":
-			if m.screen == ui.ScreenStacks {
-				m.openDeleteConfirm()
-			}
-			if m.screen == ui.ScreenNamespaces {
-				m.openNamespaceDeleteConfirm()
-			}
-			if m.screen == ui.ScreenDependencies {
-				m.openDependencyDeleteConfirm()
-			}
-		case "up", "h", "k":
-			if m.screen == ui.ScreenStacks {
-				m.selectPreviousStack()
-			}
-			if m.screen == ui.ScreenNamespaces {
-				m.selectPreviousNamespace()
-			}
-			if m.screen == ui.ScreenDependencies {
-				m.selectPreviousDependency()
-			}
-		case "down", "j":
-			if m.screen == ui.ScreenStacks {
-				m.selectNextStack()
-			}
-			if m.screen == ui.ScreenNamespaces {
-				m.selectNextNamespace()
-			}
-			if m.screen == ui.ScreenDependencies {
-				m.selectNextDependency()
-			}
-		case "ctrl+c", "esc", "q":
+		case ui.KeyAdd.Matches(key):
+			m.openAddForm()
+		case ui.KeyEdit.Matches(key):
+			m.openEditForm()
+		case ui.KeyDelete.Matches(key):
+			m.openDelete()
+		case ui.KeyPrev.Matches(key):
+			m.selectPreviousOnScreen()
+		case ui.KeyNext.Matches(key):
+			m.selectNextOnScreen()
+		case ui.KeyQuit.Matches(key):
 			return m, tea.Quit
 		}
 	case stacksLoadedMsg:
@@ -279,134 +240,205 @@ func (m model) View() string {
 }
 
 func (m model) updateStackForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.form = ui.StackForm{}
-		return m, nil
-	case "enter":
-		if !m.form.CanSave {
-			return m, nil
-		}
-		return m, m.saveStack()
-	case "tab", "down":
-		m.form.Focus = nextStackFormField(m.form.Focus)
-	case "shift+tab", "up":
-		m.form.Focus = previousStackFormField(m.form.Focus)
-	case "backspace":
-		m.form = deleteStackFormRune(m.form)
-	default:
-		if msg.Type == tea.KeyRunes {
-			m.form = appendStackFormRunes(m.form, msg.Runes)
-		}
-	}
-
-	m.form = normalizeStackForm(m.form)
-	return m, nil
+	var action stackFormAction
+	m.form, action = updateStackFormState(msg, m.form)
+	return m.finishStackFormAction(action, m.saveStack)
 }
 
 func (m model) updateNamespaceForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.namespaceForm = ui.StackForm{}
-		return m, nil
-	case "enter":
-		if !m.namespaceForm.CanSave {
-			return m, nil
+	var action stackFormAction
+	m.namespaceForm, action = updateStackFormState(msg, m.namespaceForm)
+	return m.finishStackFormAction(action, m.saveNamespace)
+}
+
+type stackFormAction int
+
+const (
+	stackFormActionNone stackFormAction = iota
+	stackFormActionQuit
+	stackFormActionSave
+)
+
+func updateStackFormState(msg tea.KeyMsg, form ui.StackForm) (ui.StackForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.StackForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanSave {
+			return form, stackFormActionNone
 		}
-		return m, m.saveNamespace()
-	case "tab", "down":
-		m.namespaceForm.Focus = nextStackFormField(m.namespaceForm.Focus)
-	case "shift+tab", "up":
-		m.namespaceForm.Focus = previousStackFormField(m.namespaceForm.Focus)
-	case "backspace":
-		m.namespaceForm = deleteStackFormRune(m.namespaceForm)
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextStackFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousStackFormField(form.Focus)
+	case isBackspaceKey(msg):
+		form = deleteStackFormRune(form)
 	default:
 		if msg.Type == tea.KeyRunes {
-			m.namespaceForm = appendStackFormRunes(m.namespaceForm, msg.Runes)
+			form = appendStackFormRunes(form, msg.Runes)
 		}
 	}
 
-	m.namespaceForm = normalizeStackForm(m.namespaceForm)
-	return m, nil
+	return normalizeStackForm(form), stackFormActionNone
+}
+
+func (m model) finishStackFormAction(action stackFormAction, save func() tea.Cmd) (tea.Model, tea.Cmd) {
+	switch action {
+	case stackFormActionQuit:
+		return m, tea.Quit
+	case stackFormActionSave:
+		return m, save()
+	default:
+		return m, nil
+	}
 }
 
 func (m model) updateDependencyForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.dependencyForm = ui.DependencyForm{}
-		return m, nil
-	case "enter":
-		if !m.dependencyForm.CanSave {
-			return m, nil
+	var action stackFormAction
+	m.dependencyForm, action = updateDependencyFormState(msg, m.dependencyForm, m.stacks)
+	return m.finishStackFormAction(action, m.saveDependency)
+}
+
+func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []ui.Stack) (ui.DependencyForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.DependencyForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanSave {
+			return form, stackFormActionNone
 		}
-		return m, m.saveDependency()
-	case "tab", "down":
-		m.dependencyForm.Focus = nextDependencyFormField(m.dependencyForm.Focus)
-	case "shift+tab", "up":
-		m.dependencyForm.Focus = previousDependencyFormField(m.dependencyForm.Focus)
-	case "left", "h":
-		if m.dependencyForm.Focus == ui.DependencyFormFieldStack {
-			m.dependencyForm.StackID = previousStackID(m.stacks, m.dependencyForm.StackID)
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextDependencyFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousDependencyFormField(form.Focus)
+	case isOneOf(msg, "left", "h"):
+		if form.Focus == ui.DependencyFormFieldStack {
+			form.StackID = previousStackID(stacks, form.StackID)
 		}
-	case "right", "j":
-		if m.dependencyForm.Focus == ui.DependencyFormFieldStack {
-			m.dependencyForm.StackID = nextStackID(m.stacks, m.dependencyForm.StackID)
+	case isOneOf(msg, "right", "j"):
+		if form.Focus == ui.DependencyFormFieldStack {
+			form.StackID = nextStackID(stacks, form.StackID)
 		}
-	case "backspace":
-		m.dependencyForm = deleteDependencyFormRune(m.dependencyForm)
+	case isBackspaceKey(msg):
+		form = deleteDependencyFormRune(form)
 	default:
 		if msg.Type == tea.KeyRunes {
-			m.dependencyForm = appendDependencyFormRunes(m.dependencyForm, msg.Runes)
+			form = appendDependencyFormRunes(form, msg.Runes)
 		}
 	}
 
-	m.dependencyForm = normalizeDependencyForm(m.dependencyForm, m.stacks)
-	return m, nil
+	return normalizeDependencyForm(form, stacks), stackFormActionNone
 }
 
 func (m model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.deleteConfirm = ui.DeleteConfirm{}
-	case "enter":
-		return m, m.deleteStack()
-	}
-
-	return m, nil
+	var action deleteConfirmAction
+	m.deleteConfirm, action = updateDeleteConfirmState(msg, m.deleteConfirm)
+	return m.finishDeleteConfirmAction(action, m.deleteStack)
 }
 
 func (m model) updateNamespaceDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.namespaceDeleteConfirm = ui.DeleteConfirm{}
-	case "enter":
-		return m, m.deleteNamespace()
-	}
-
-	return m, nil
+	var action deleteConfirmAction
+	m.namespaceDeleteConfirm, action = updateDeleteConfirmState(msg, m.namespaceDeleteConfirm)
+	return m.finishDeleteConfirmAction(action, m.deleteNamespace)
 }
 
 func (m model) updateDependencyDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.dependencyDeleteConfirm = ui.DeleteConfirm{}
-	case "enter":
-		return m, m.deleteDependency()
+	var action deleteConfirmAction
+	m.dependencyDeleteConfirm, action = updateDeleteConfirmState(msg, m.dependencyDeleteConfirm)
+	return m.finishDeleteConfirmAction(action, m.deleteDependency)
+}
+
+type deleteConfirmAction int
+
+const (
+	deleteConfirmActionNone deleteConfirmAction = iota
+	deleteConfirmActionQuit
+	deleteConfirmActionDelete
+)
+
+func updateDeleteConfirmState(msg tea.KeyMsg, confirm ui.DeleteConfirm) (ui.DeleteConfirm, deleteConfirmAction) {
+	switch {
+	case isQuitKey(msg):
+		return confirm, deleteConfirmActionQuit
+	case isCancelKey(msg):
+		return ui.DeleteConfirm{}, deleteConfirmActionNone
+	case isEnterKey(msg):
+		return confirm, deleteConfirmActionDelete
 	}
 
-	return m, nil
+	return confirm, deleteConfirmActionNone
+}
+
+func (m model) finishDeleteConfirmAction(action deleteConfirmAction, performDelete func() tea.Cmd) (tea.Model, tea.Cmd) {
+	switch action {
+	case deleteConfirmActionQuit:
+		return m, tea.Quit
+	case deleteConfirmActionDelete:
+		return m, performDelete()
+	default:
+		return m, nil
+	}
+}
+
+func (m *model) openAddForm() {
+	switch m.screen {
+	case ui.ScreenStacks:
+		m.form = newStackForm()
+	case ui.ScreenNamespaces:
+		m.namespaceForm = newStackForm()
+	case ui.ScreenDependencies:
+		m.dependencyForm = newDependencyForm(m.stacks)
+	}
+}
+
+func (m *model) openEditForm() {
+	switch m.screen {
+	case ui.ScreenStacks:
+		m.openEditStackForm()
+	case ui.ScreenNamespaces:
+		m.openEditNamespaceForm()
+	case ui.ScreenDependencies:
+		m.openEditDependencyForm()
+	}
+}
+
+func (m *model) openDelete() {
+	switch m.screen {
+	case ui.ScreenStacks:
+		m.openDeleteConfirm()
+	case ui.ScreenNamespaces:
+		m.openNamespaceDeleteConfirm()
+	case ui.ScreenDependencies:
+		m.openDependencyDeleteConfirm()
+	}
+}
+
+func (m *model) selectPreviousOnScreen() {
+	switch m.screen {
+	case ui.ScreenStacks:
+		m.selectPreviousStack()
+	case ui.ScreenNamespaces:
+		m.selectPreviousNamespace()
+	case ui.ScreenDependencies:
+		m.selectPreviousDependency()
+	}
+}
+
+func (m *model) selectNextOnScreen() {
+	switch m.screen {
+	case ui.ScreenStacks:
+		m.selectNextStack()
+	case ui.ScreenNamespaces:
+		m.selectNextNamespace()
+	case ui.ScreenDependencies:
+		m.selectNextDependency()
+	}
 }
 
 func (m model) loadStacks() tea.Cmd {
@@ -621,15 +653,7 @@ func (m *model) openEditStackForm() {
 		return
 	}
 
-	m.form = normalizeStackForm(ui.StackForm{
-		Open:    true,
-		Mode:    ui.StackFormModeEdit,
-		StackID: stack.ID,
-		Focus:   ui.StackFormFieldIcon,
-		Icon:    stack.Icon,
-		Color:   stack.Color,
-		Name:    stack.Name,
-	})
+	m.form = editStackForm(stack.ID, stack.Icon, stack.Color, stack.Name)
 }
 
 func (m *model) openDeleteConfirm() {
@@ -638,11 +662,7 @@ func (m *model) openDeleteConfirm() {
 		return
 	}
 
-	m.deleteConfirm = ui.DeleteConfirm{
-		Open:    true,
-		StackID: stack.ID,
-		Name:    stack.Name,
-	}
+	m.deleteConfirm = deleteConfirm(stack.ID, stack.Name)
 }
 
 func (m *model) openEditNamespaceForm() {
@@ -651,15 +671,7 @@ func (m *model) openEditNamespaceForm() {
 		return
 	}
 
-	m.namespaceForm = normalizeStackForm(ui.StackForm{
-		Open:    true,
-		Mode:    ui.StackFormModeEdit,
-		StackID: namespace.ID,
-		Focus:   ui.StackFormFieldIcon,
-		Icon:    namespace.Icon,
-		Color:   namespace.Color,
-		Name:    namespace.Name,
-	})
+	m.namespaceForm = editStackForm(namespace.ID, namespace.Icon, namespace.Color, namespace.Name)
 }
 
 func (m *model) openNamespaceDeleteConfirm() {
@@ -668,11 +680,7 @@ func (m *model) openNamespaceDeleteConfirm() {
 		return
 	}
 
-	m.namespaceDeleteConfirm = ui.DeleteConfirm{
-		Open:    true,
-		StackID: namespace.ID,
-		Name:    namespace.Name,
-	}
+	m.namespaceDeleteConfirm = deleteConfirm(namespace.ID, namespace.Name)
 }
 
 func (m *model) openEditDependencyForm() {
@@ -699,179 +707,79 @@ func (m *model) openDependencyDeleteConfirm() {
 		return
 	}
 
-	m.dependencyDeleteConfirm = ui.DeleteConfirm{
+	m.dependencyDeleteConfirm = deleteConfirm(dependency.ID, dependency.Name)
+}
+
+func editStackForm(id int64, icon string, color string, name string) ui.StackForm {
+	return normalizeStackForm(ui.StackForm{
 		Open:    true,
-		StackID: dependency.ID,
-		Name:    dependency.Name,
+		Mode:    ui.StackFormModeEdit,
+		StackID: id,
+		Focus:   ui.StackFormFieldIcon,
+		Icon:    icon,
+		Color:   color,
+		Name:    name,
+	})
+}
+
+func deleteConfirm(id int64, name string) ui.DeleteConfirm {
+	return ui.DeleteConfirm{
+		Open:    true,
+		StackID: id,
+		Name:    name,
 	}
 }
 
+func stackID(s ui.Stack) int64           { return s.ID }
+func namespaceID(n ui.Namespace) int64   { return n.ID }
+func dependencyID(d ui.Dependency) int64 { return d.ID }
+
 func (m *model) ensureSelectedStack() {
-	if len(m.stacks) == 0 {
-		m.selectedStackID = 0
-		return
-	}
-
-	for _, stack := range m.stacks {
-		if stack.ID == m.selectedStackID {
-			return
-		}
-	}
-
-	m.selectedStackID = m.stacks[0].ID
+	m.selectedStackID = ensureSelected(m.stacks, m.selectedStackID, stackID)
 }
 
 func (m *model) ensureSelectedNamespace() {
-	if len(m.namespaces) == 0 {
-		m.selectedNamespaceID = 0
-		return
-	}
-
-	for _, namespace := range m.namespaces {
-		if namespace.ID == m.selectedNamespaceID {
-			return
-		}
-	}
-
-	m.selectedNamespaceID = m.namespaces[0].ID
+	m.selectedNamespaceID = ensureSelected(m.namespaces, m.selectedNamespaceID, namespaceID)
 }
 
 func (m *model) ensureSelectedDependency() {
-	if len(m.dependencies) == 0 {
-		m.selectedDependencyID = 0
-		return
-	}
-
-	for _, dependency := range m.dependencies {
-		if dependency.ID == m.selectedDependencyID {
-			return
-		}
-	}
-
-	m.selectedDependencyID = m.dependencies[0].ID
+	m.selectedDependencyID = ensureSelected(m.dependencies, m.selectedDependencyID, dependencyID)
 }
 
 func (m *model) selectPreviousStack() {
-	if len(m.stacks) == 0 {
-		return
-	}
-
-	index := m.selectedStackIndex()
-	if index <= 0 {
-		index = len(m.stacks)
-	}
-	m.selectedStackID = m.stacks[index-1].ID
+	m.selectedStackID = selectPrevious(m.stacks, m.selectedStackID, stackID)
 }
 
 func (m *model) selectNextStack() {
-	if len(m.stacks) == 0 {
-		return
-	}
-
-	index := m.selectedStackIndex()
-	m.selectedStackID = m.stacks[(index+1)%len(m.stacks)].ID
+	m.selectedStackID = selectNext(m.stacks, m.selectedStackID, stackID)
 }
 
 func (m *model) selectPreviousNamespace() {
-	if len(m.namespaces) == 0 {
-		return
-	}
-
-	index := m.selectedNamespaceIndex()
-	if index <= 0 {
-		index = len(m.namespaces)
-	}
-	m.selectedNamespaceID = m.namespaces[index-1].ID
+	m.selectedNamespaceID = selectPrevious(m.namespaces, m.selectedNamespaceID, namespaceID)
 }
 
 func (m *model) selectNextNamespace() {
-	if len(m.namespaces) == 0 {
-		return
-	}
-
-	index := m.selectedNamespaceIndex()
-	m.selectedNamespaceID = m.namespaces[(index+1)%len(m.namespaces)].ID
+	m.selectedNamespaceID = selectNext(m.namespaces, m.selectedNamespaceID, namespaceID)
 }
 
 func (m *model) selectPreviousDependency() {
-	if len(m.dependencies) == 0 {
-		return
-	}
-
-	index := m.selectedDependencyIndex()
-	if index <= 0 {
-		index = len(m.dependencies)
-	}
-	m.selectedDependencyID = m.dependencies[index-1].ID
+	m.selectedDependencyID = selectPrevious(m.dependencies, m.selectedDependencyID, dependencyID)
 }
 
 func (m *model) selectNextDependency() {
-	if len(m.dependencies) == 0 {
-		return
-	}
-
-	index := m.selectedDependencyIndex()
-	m.selectedDependencyID = m.dependencies[(index+1)%len(m.dependencies)].ID
+	m.selectedDependencyID = selectNext(m.dependencies, m.selectedDependencyID, dependencyID)
 }
 
 func (m model) selectedStack() (ui.Stack, bool) {
-	for _, stack := range m.stacks {
-		if stack.ID == m.selectedStackID {
-			return stack, true
-		}
-	}
-
-	return ui.Stack{}, false
+	return findByID(m.stacks, m.selectedStackID, stackID)
 }
 
 func (m model) selectedNamespace() (ui.Namespace, bool) {
-	for _, namespace := range m.namespaces {
-		if namespace.ID == m.selectedNamespaceID {
-			return namespace, true
-		}
-	}
-
-	return ui.Namespace{}, false
+	return findByID(m.namespaces, m.selectedNamespaceID, namespaceID)
 }
 
 func (m model) selectedDependency() (ui.Dependency, bool) {
-	for _, dependency := range m.dependencies {
-		if dependency.ID == m.selectedDependencyID {
-			return dependency, true
-		}
-	}
-
-	return ui.Dependency{}, false
-}
-
-func (m model) selectedStackIndex() int {
-	for index, stack := range m.stacks {
-		if stack.ID == m.selectedStackID {
-			return index
-		}
-	}
-
-	return 0
-}
-
-func (m model) selectedNamespaceIndex() int {
-	for index, namespace := range m.namespaces {
-		if namespace.ID == m.selectedNamespaceID {
-			return index
-		}
-	}
-
-	return 0
-}
-
-func (m model) selectedDependencyIndex() int {
-	for index, dependency := range m.dependencies {
-		if dependency.ID == m.selectedDependencyID {
-			return index
-		}
-	}
-
-	return 0
+	return findByID(m.dependencies, m.selectedDependencyID, dependencyID)
 }
 
 func nextStackFormField(field ui.StackFormField) ui.StackFormField {
@@ -988,46 +896,17 @@ func normalizeDependencyForm(form ui.DependencyForm, stacks []ui.Stack) ui.Depen
 	return form
 }
 
-func hasStackID(stacks []ui.Stack, stackID int64) bool {
-	for _, stack := range stacks {
-		if stack.ID == stackID {
-			return true
-		}
-	}
-
-	return false
+func hasStackID(stacks []ui.Stack, id int64) bool {
+	_, ok := findByID(stacks, id, stackID)
+	return ok
 }
 
-func previousStackID(stacks []ui.Stack, stackID int64) int64 {
-	if len(stacks) == 0 {
-		return 0
-	}
-
-	index := stackIndex(stacks, stackID)
-	if index <= 0 {
-		index = len(stacks)
-	}
-
-	return stacks[index-1].ID
+func previousStackID(stacks []ui.Stack, id int64) int64 {
+	return selectPrevious(stacks, id, stackID)
 }
 
-func nextStackID(stacks []ui.Stack, stackID int64) int64 {
-	if len(stacks) == 0 {
-		return 0
-	}
-
-	index := stackIndex(stacks, stackID)
-	return stacks[(index+1)%len(stacks)].ID
-}
-
-func stackIndex(stacks []ui.Stack, stackID int64) int {
-	for index, stack := range stacks {
-		if stack.ID == stackID {
-			return index
-		}
-	}
-
-	return 0
+func nextStackID(stacks []ui.Stack, id int64) int64 {
+	return selectNext(stacks, id, stackID)
 }
 
 func trimLastRune(value string) string {

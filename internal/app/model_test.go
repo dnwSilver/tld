@@ -261,6 +261,25 @@ func TestOpenDeleteConfirm(t *testing.T) {
 	}
 }
 
+func TestDeleteConfirmEscClosesModal(t *testing.T) {
+	m := newModel(nil)
+	m.screen = ui.ScreenStacks
+	m.stacks = []ui.Stack{{ID: 1, Name: "Git"}}
+	m.selectedStackID = 1
+
+	next, _ := m.Update(key("d"))
+	updated := next.(model)
+	if !updated.deleteConfirm.Open {
+		t.Fatal("delete confirm should be open")
+	}
+
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated = next.(model)
+	if updated.deleteConfirm.Open {
+		t.Fatal("delete confirm should be closed")
+	}
+}
+
 func key(value string) tea.KeyMsg {
 	return tea.KeyMsg{
 		Type:  tea.KeyRunes,

@@ -41,3 +41,19 @@ const (
 
 type DependencyForm = uikit.DependencyForm
 type DeleteConfirm = uikit.DeleteConfirm
+
+type Binding = uikit.Binding
+
+var (
+	KeyHome         = uikit.KeyHome
+	KeyStacks       = uikit.KeyStacks
+	KeyNamespaces   = uikit.KeyNamespaces
+	KeyDependencies = uikit.KeyDependencies
+	KeyAdd          = uikit.KeyAdd
+	KeyEdit         = uikit.KeyEdit
+	KeyDelete       = uikit.KeyDelete
+	KeyPrev         = uikit.KeyPrev
+	KeyNext         = uikit.KeyNext
+	KeyStackPick    = uikit.KeyStackPick
+	KeyQuit         = uikit.KeyQuit
+)

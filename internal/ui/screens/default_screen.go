@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dnwSilver/tld/internal/ui/components"
 	"github.com/dnwSilver/tld/internal/ui/uikit"
 )
 
@@ -30,53 +31,31 @@ func (s DefaultScreen) Render(width, height int, stackCount int) string {
 		Width(contentWidth).
 		Height(contentHeight).
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(s.palette.Primary).
+		BorderForeground(s.palette.Hint).
 		Render(content)
 
-	footer := lipgloss.NewStyle().
-		Width(width).
-		Background(s.palette.Background).
-		Foreground(s.palette.Hint).
-		Align(lipgloss.Right).
-		Render(uikit.SymbolCopyright + " Kolosov Aleksandr")
+	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 
 	return lipgloss.JoinVertical(lipgloss.Left, box, footer)
 }
 
 func (s DefaultScreen) renderContent(width, height int, stackCount int) string {
-	title := lipgloss.NewStyle().
-		Background(s.palette.Background).
-		Foreground(s.palette.Warning).
-		Bold(true).
-		Render(uikit.SymbolDashboard + " Team lead dashboard")
+	title := components.ScreenTitle(s.palette, uikit.SymbolDashboard, "Team lead dashboard", nil)
+	counter := uikit.Text(s.palette, s.palette.Primary, "Stacks: "+uikit.FormatInt(stackCount))
 	titleRow := height / 2
-	counter := lipgloss.NewStyle().
-		Background(s.palette.Background).
-		Foreground(s.palette.Primary).
-		Render("Stacks: " + uikit.FormatInt(stackCount))
 	counterRow := uikit.Min(titleRow+2, height-1)
 	lines := make([]string, 0, height)
 
 	for row := 0; row < height; row++ {
-		if row == titleRow {
-			lines = append(lines, s.centerLine(width, title))
-			continue
+		switch row {
+		case titleRow:
+			lines = append(lines, uikit.CenterLine(s.palette, width, title))
+		case counterRow:
+			lines = append(lines, uikit.CenterLine(s.palette, width, counter))
+		default:
+			lines = append(lines, uikit.BackgroundSpaces(s.palette, width))
 		}
-		if row == counterRow {
-			lines = append(lines, s.centerLine(width, counter))
-			continue
-		}
-
-		lines = append(lines, uikit.BackgroundSpaces(s.palette, width))
 	}
 
 	return strings.Join(lines, uikit.SymbolLineBreak)
-}
-
-func (s DefaultScreen) centerLine(width int, content string) string {
-	contentWidth := lipgloss.Width(content)
-	left := uikit.Max((width-contentWidth)/2, 0)
-	right := uikit.Max(width-left-contentWidth, 0)
-
-	return uikit.BackgroundSpaces(s.palette, left) + content + uikit.BackgroundSpaces(s.palette, right)
 }
