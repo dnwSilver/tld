@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 4
+const currentSchemaVersion = 5
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -52,6 +52,11 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 4 {
 		if err := migrateV4(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 5 {
+		if err := migrateV5(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -190,6 +195,35 @@ func migrateV4(ctx context.Context, tx *sql.Tx) error {
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema v4: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV5(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS sources (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				icon TEXT NOT NULL,
+				name TEXT NOT NULL,
+				color TEXT NOT NULL,
+				pat_token TEXT NOT NULL,
+				url TEXT NOT NULL,
+				type TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (name),
+				CHECK (type IN ('gitlab', 'github', 'gitea', 'bitbucket'))
+			)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (5)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v5: %w", err)
 		}
 	}
 

@@ -313,3 +313,68 @@ func TestDependencies(t *testing.T) {
 		t.Fatalf("count = %d, want 0", count)
 	}
 }
+
+func TestSources(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	repository := store.Sources()
+	source, err := repository.Create(ctx, "GitLab", "glpat-secret", "https://gitlab.com", SourceTypeGitLab)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	if source.Icon != "" || source.Color != "FC6D26" || source.PATToken != "glpat-secret" || source.Type != SourceTypeGitLab {
+		t.Fatalf("source = %#v", source)
+	}
+
+	count, err := repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count sources: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	sources, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list sources: %v", err)
+	}
+	if len(sources) != 1 {
+		t.Fatalf("len(sources) = %d, want 1", len(sources))
+	}
+	if sources[0].Name != "GitLab" || sources[0].URL != "https://gitlab.com" {
+		t.Fatalf("sources[0] = %#v", sources[0])
+	}
+
+	if err := repository.Update(ctx, source.ID, "GitHub", "ghp-secret", "https://github.com", SourceTypeGitHub); err != nil {
+		t.Fatalf("update source: %v", err)
+	}
+
+	sources, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list sources after update: %v", err)
+	}
+	if sources[0].Icon != "" || sources[0].Color != "FFFFFF" || sources[0].PATToken != "ghp-secret" || sources[0].Type != SourceTypeGitHub {
+		t.Fatalf("updated source = %#v", sources[0])
+	}
+
+	if err := repository.Delete(ctx, source.ID); err != nil {
+		t.Fatalf("delete source: %v", err)
+	}
+
+	count, err = repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count sources after delete: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count = %d, want 0", count)
+	}
+}

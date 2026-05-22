@@ -9,11 +9,13 @@ const (
 	ScreenStacks       = uikit.ScreenStacks
 	ScreenNamespaces   = uikit.ScreenNamespaces
 	ScreenDependencies = uikit.ScreenDependencies
+	ScreenSources      = uikit.ScreenSources
 )
 
 type Stack = uikit.Stack
 type Namespace = uikit.Namespace
 type Dependency = uikit.Dependency
+type Source = uikit.Source
 type StackFormMode = uikit.StackFormMode
 
 const (
@@ -40,20 +42,32 @@ const (
 )
 
 type DependencyForm = uikit.DependencyForm
+type SourceFormField = uikit.SourceFormField
+
+const (
+	SourceFormFieldName     = uikit.SourceFormFieldName
+	SourceFormFieldURL      = uikit.SourceFormFieldURL
+	SourceFormFieldPATToken = uikit.SourceFormFieldPATToken
+	SourceFormFieldType     = uikit.SourceFormFieldType
+)
+
+type SourceForm = uikit.SourceForm
 type DeleteConfirm = uikit.DeleteConfirm
 
 type Binding = uikit.Binding
 
 var (
-	KeyHome         = uikit.KeyHome
-	KeyStacks       = uikit.KeyStacks
-	KeyNamespaces   = uikit.KeyNamespaces
-	KeyDependencies = uikit.KeyDependencies
-	KeyAdd          = uikit.KeyAdd
-	KeyEdit         = uikit.KeyEdit
-	KeyDelete       = uikit.KeyDelete
-	KeyPrev         = uikit.KeyPrev
-	KeyNext         = uikit.KeyNext
-	KeyStackPick    = uikit.KeyStackPick
-	KeyQuit         = uikit.KeyQuit
+	KeyHome           = uikit.KeyHome
+	KeyStacks         = uikit.KeyStacks
+	KeyNamespaces     = uikit.KeyNamespaces
+	KeyDependencies   = uikit.KeyDependencies
+	KeySources        = uikit.KeySources
+	KeyAdd            = uikit.KeyAdd
+	KeyEdit           = uikit.KeyEdit
+	KeyDelete         = uikit.KeyDelete
+	KeyPrev           = uikit.KeyPrev
+	KeyNext           = uikit.KeyNext
+	KeyStackPick      = uikit.KeyStackPick
+	KeySourceTypePick = uikit.KeySourceTypePick
+	KeyQuit           = uikit.KeyQuit
 )

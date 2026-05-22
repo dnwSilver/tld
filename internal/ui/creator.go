@@ -15,6 +15,7 @@ type Creator struct {
 	stacksScreen       screens.StacksScreen
 	namespacesScreen   screens.StacksScreen
 	dependenciesScreen screens.DependenciesScreen
+	sourcesScreen      screens.SourcesScreen
 }
 
 func NewCreator() Creator {
@@ -28,6 +29,7 @@ func NewCreator() Creator {
 		stacksScreen:       screens.NewStacksScreen(palette),
 		namespacesScreen:   screens.NewNamespacesScreen(palette),
 		dependenciesScreen: screens.NewDependenciesScreen(palette),
+		sourcesScreen:      screens.NewSourcesScreen(palette),
 	}
 }
 
@@ -41,12 +43,16 @@ func (c Creator) Render(
 	selectedNamespaceID int64,
 	dependencies []uikit.Dependency,
 	selectedDependencyID int64,
+	sources []uikit.Source,
+	selectedSourceID int64,
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
 	dependencyForm uikit.DependencyForm,
+	sourceForm uikit.SourceForm,
 	deleteConfirm uikit.DeleteConfirm,
 	namespaceDeleteConfirm uikit.DeleteConfirm,
 	dependencyDeleteConfirm uikit.DeleteConfirm,
+	sourceDeleteConfirm uikit.DeleteConfirm,
 ) string {
 	base := lipgloss.NewStyle().
 		Width(width).
@@ -80,6 +86,16 @@ func (c Creator) Render(
 			stacks,
 			dependencyForm,
 			dependencyDeleteConfirm,
+		)
+	}
+	if screen == uikit.ScreenSources {
+		body = c.sourcesScreen.Render(
+			width,
+			bodyHeight,
+			sources,
+			selectedSourceID,
+			sourceForm,
+			sourceDeleteConfirm,
 		)
 	}
 

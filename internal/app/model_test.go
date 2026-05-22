@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -204,6 +205,83 @@ func TestCreateDependencyFromForm(t *testing.T) {
 	}
 }
 
+func TestCreateSourceFromForm(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	m := newModel(store)
+	m.screen = ui.ScreenSources
+	m.sourceForm = ui.SourceForm{
+		Open:     true,
+		Focus:    ui.SourceFormFieldName,
+		Name:     "GitLab",
+		URL:      "https://gitlab.com",
+		PATToken: "glpat-secret",
+		Type:     storage.SourceTypeGitLab,
+		CanSave:  true,
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := next.(model)
+	if cmd == nil {
+		t.Fatal("expected create command")
+	}
+
+	next, cmd = updated.Update(cmd().(sourceSavedMsg))
+	updated = next.(model)
+	if updated.sourceForm.Open {
+		t.Fatal("source form should be closed after save")
+	}
+	if cmd == nil {
+		t.Fatal("expected reload command")
+	}
+
+	next, _ = updated.Update(cmd().(sourcesLoadedMsg))
+	updated = next.(model)
+	if len(updated.sources) != 1 {
+		t.Fatalf("len(sources) = %d, want 1", len(updated.sources))
+	}
+	if updated.sources[0].Name != "GitLab" || updated.sources[0].Type != storage.SourceTypeGitLab {
+		t.Fatalf("source = %#v", updated.sources[0])
+	}
+	if updated.sources[0].Icon != "" || updated.sources[0].Color != "FC6D26" {
+		t.Fatalf("source appearance = %#v", updated.sources[0])
+	}
+	if updated.selectedSourceID != updated.sources[0].ID {
+		t.Fatalf("selected source = %d, want %d", updated.selectedSourceID, updated.sources[0].ID)
+	}
+}
+
+func TestSourcePATIsMaskedInView(t *testing.T) {
+	m := newModel(nil)
+	m.width = 100
+	m.height = 30
+	m.screen = ui.ScreenSources
+	m.sourceForm = ui.SourceForm{
+		Open:     true,
+		Focus:    ui.SourceFormFieldPATToken,
+		Name:     "GitLab",
+		URL:      "https://gitlab.com",
+		PATToken: "glpat-secret",
+		Type:     storage.SourceTypeGitLab,
+		CanSave:  true,
+	}
+
+	view := m.View()
+	if strings.Contains(view, "glpat-secret") {
+		t.Fatal("view should not contain raw PAT token")
+	}
+	if !strings.Contains(view, "************") {
+		t.Fatal("view should contain masked PAT token")
+	}
+}
+
 func TestStackSelectionNavigation(t *testing.T) {
 	m := newModel(nil)
 	m.screen = ui.ScreenStacks
@@ -219,7 +297,7 @@ func TestStackSelectionNavigation(t *testing.T) {
 		t.Fatalf("selected stack = %d, want 2", updated.selectedStackID)
 	}
 
-	next, _ = updated.Update(key("h"))
+	next, _ = updated.Update(key("k"))
 	updated = next.(model)
 	if updated.selectedStackID != 1 {
 		t.Fatalf("selected stack = %d, want 1", updated.selectedStackID)

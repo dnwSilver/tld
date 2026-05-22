@@ -7,6 +7,7 @@ const (
 	ScreenStacks
 	ScreenNamespaces
 	ScreenDependencies
+	ScreenSources
 )
 
 type Stack struct {
@@ -30,6 +31,16 @@ type Dependency struct {
 	Icon      string
 	Name      string
 	Color     string
+}
+
+type Source struct {
+	ID       int64
+	Icon     string
+	Name     string
+	Color    string
+	PATToken string
+	URL      string
+	Type     string
 }
 
 type StackFormMode int
@@ -79,6 +90,28 @@ type DependencyForm struct {
 	Name         string
 	CanSave      bool
 	Error        string
+}
+
+type SourceFormField int
+
+const (
+	SourceFormFieldName SourceFormField = iota
+	SourceFormFieldURL
+	SourceFormFieldPATToken
+	SourceFormFieldType
+)
+
+type SourceForm struct {
+	Open     bool
+	Mode     StackFormMode
+	SourceID int64
+	Focus    SourceFormField
+	Name     string
+	URL      string
+	PATToken string
+	Type     string
+	CanSave  bool
+	Error    string
 }
 
 type DeleteConfirm struct {
