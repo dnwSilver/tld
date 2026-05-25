@@ -18,6 +18,7 @@ type Creator struct {
 	projectsScreen     screens.ProjectsScreen
 	sourcesScreen      screens.SourcesScreen
 	policiesScreen     screens.PoliciesScreen
+	viewScreen         screens.DependencyViewScreen
 }
 
 func NewCreator() Creator {
@@ -34,6 +35,7 @@ func NewCreator() Creator {
 		projectsScreen:     screens.NewProjectsScreen(palette),
 		sourcesScreen:      screens.NewSourcesScreen(palette),
 		policiesScreen:     screens.NewPoliciesScreen(palette),
+		viewScreen:         screens.NewDependencyViewScreen(palette),
 	}
 }
 
@@ -61,6 +63,9 @@ func (c Creator) Render(
 	policyValues []uikit.PolicyValue,
 	selectedPolicyValueID int64,
 	policyFocus uikit.PolicyPane,
+	dependencyView uikit.DependencyView,
+	selectedViewProjectID int64,
+	viewColumnOffset int,
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
 	dependencyForm uikit.DependencyForm,
@@ -153,6 +158,9 @@ func (c Creator) Render(
 			policyValueForm,
 			policyDeleteConfirm,
 		)
+	}
+	if screen == uikit.ScreenView {
+		body = c.viewScreen.Render(width, bodyHeight, stacks, dependencyView.StackID, dependencyView, selectedViewProjectID, viewColumnOffset)
 	}
 
 	return base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))

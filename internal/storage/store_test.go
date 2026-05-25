@@ -431,6 +431,31 @@ func TestProjects(t *testing.T) {
 	if projects[0].NamespaceName != "Production" || projects[0].SourceName != "GitLab" || projects[0].StackName != "Git" {
 		t.Fatalf("projects[0] = %#v", projects[0])
 	}
+	if projects[0].DependencyCount != 0 {
+		t.Fatalf("dependency count = %d, want 0", projects[0].DependencyCount)
+	}
+
+	now := time.Now().UTC()
+	if _, err := store.ProjectDependencies().ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
+		CommitShortSHA: "abcdef12",
+		CommitSHA:      "abcdef1234567890",
+		Status:         ProjectDependencyRunStatusSuccess,
+		StartedAt:      now,
+		FinishedAt:     &now,
+	}, []ProjectDependency{
+		{Name: "react", Version: "19.2.0", DependencyType: "dependencies", SourceFile: "package.json"},
+		{Name: "typescript", Version: "5.9.3", DependencyType: "devDependencies", SourceFile: "package.json"},
+	}); err != nil {
+		t.Fatalf("replace project dependencies: %v", err)
+	}
+
+	projects, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list projects with dependencies: %v", err)
+	}
+	if projects[0].DependencyCount != 2 {
+		t.Fatalf("dependency count = %d, want 2", projects[0].DependencyCount)
+	}
 
 	if err := repository.Update(ctx, project.ID, "autobase-ui", namespace.ID, source.ID, stack.ID, "󰏖", "TLD UI", "#84BA64"); err != nil {
 		t.Fatalf("update project: %v", err)
@@ -551,6 +576,151 @@ func TestProjectDependenciesReplaceAndSkip(t *testing.T) {
 	}
 	if latestRun.CommitShortSHA != "abcdef12" || latestRun.Status != ProjectDependencyRunStatusSuccess {
 		t.Fatalf("latest run = %#v", latestRun)
+	}
+}
+
+func TestDependencyViewByStack(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stack, err := store.Stacks().Create(ctx, "", "JavaScript", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	policy, err := store.Policies().Create(ctx, "Production policy")
+	if err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	if err := store.Namespaces().SetPolicy(ctx, namespace.ID, policy.ID); err != nil {
+		t.Fatalf("set policy: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "React Native", "#61DAFB")
+	if err != nil {
+		t.Fatalf("create dependency: %v", err)
+	}
+	if _, err := store.Policies().CreateValue(ctx, policy.ID, dependency.ID, "19.2.0"); err != nil {
+		t.Fatalf("create policy value: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if _, err := store.ProjectDependencies().ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
+		CommitShortSHA: "abcdef12",
+		CommitSHA:      "abcdef1234567890",
+		Status:         ProjectDependencyRunStatusSuccess,
+		StartedAt:      now,
+		FinishedAt:     &now,
+	}, []ProjectDependency{
+		{Name: "react-native", Version: "0.82.1", DependencyType: "dependencies", SourceFile: "package.json"},
+	}); err != nil {
+		t.Fatalf("replace project dependencies: %v", err)
+	}
+
+	view, err := store.ProjectDependencies().ViewByStack(ctx, stack.ID)
+	if err != nil {
+		t.Fatalf("view by stack: %v", err)
+	}
+	if view.StackName != "JavaScript" {
+		t.Fatalf("stack name = %q, want JavaScript", view.StackName)
+	}
+	if len(view.Columns) != 1 || view.Columns[0].Name != "React Native" {
+		t.Fatalf("columns = %#v", view.Columns)
+	}
+	if view.Columns[0].PolicyVersion != "19.2.0" {
+		t.Fatalf("policy version = %q, want 19.2.0", view.Columns[0].PolicyVersion)
+	}
+	if len(view.Rows) != 1 || view.Rows[0].ProjectName != "TLD" {
+		t.Fatalf("rows = %#v", view.Rows)
+	}
+	if view.Rows[0].ProjectIcon != "󰏖" || view.Rows[0].ProjectColor != "#EC9706" {
+		t.Fatalf("row project appearance = %#v", view.Rows[0])
+	}
+	if view.Rows[0].Versions[dependency.ID] != "0.82.1" {
+		t.Fatalf("version = %q, want 0.82.1", view.Rows[0].Versions[dependency.ID])
+	}
+}
+
+func TestDependencyViewByStackMatchesScopedJavaScriptPackages(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stack, err := store.Stacks().Create(ctx, "", "JavaScript", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	policy, err := store.Policies().Create(ctx, "Production policy")
+	if err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	if err := store.Namespaces().SetPolicy(ctx, namespace.ID, policy.ID); err != nil {
+		t.Fatalf("set policy: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "Spectrum UI Kit", "#84BA64")
+	if err != nil {
+		t.Fatalf("create dependency: %v", err)
+	}
+	if _, err := store.Policies().CreateValue(ctx, policy.ID, dependency.ID, "1.0.0"); err != nil {
+		t.Fatalf("create policy value: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if _, err := store.ProjectDependencies().ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
+		CommitShortSHA: "abcdef12",
+		CommitSHA:      "abcdef1234567890",
+		Status:         ProjectDependencyRunStatusSuccess,
+		StartedAt:      now,
+		FinishedAt:     &now,
+	}, []ProjectDependency{
+		{Name: "@spectrum/ui-kit", Version: "1.2.3", DependencyType: "dependencies", SourceFile: "package.json"},
+	}); err != nil {
+		t.Fatalf("replace project dependencies: %v", err)
+	}
+
+	view, err := store.ProjectDependencies().ViewByStack(ctx, stack.ID)
+	if err != nil {
+		t.Fatalf("view by stack: %v", err)
+	}
+	if view.Rows[0].Versions[dependency.ID] != "1.2.3" {
+		t.Fatalf("version = %q, want 1.2.3", view.Rows[0].Versions[dependency.ID])
 	}
 }
 

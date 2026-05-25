@@ -14,6 +14,7 @@ const (
 	DependencyTypeDev      = "devDependencies"
 	DependencyTypePeer     = "peerDependencies"
 	DependencyTypeOptional = "optionalDependencies"
+	DependencyTypeEngines  = "engines"
 )
 
 type StackStrategy interface {
@@ -28,6 +29,8 @@ func ResolveStackStrategy(stackName string) (StackStrategy, error) {
 	switch normalized {
 	case "javascript", "js", "node", "nodejs", "node.js":
 		return JavaScriptStrategy{}, nil
+	case "go", "golang":
+		return GoStrategy{}, nil
 	case "swift", "ios":
 		return SwiftStrategy{}, nil
 	default:
@@ -49,6 +52,7 @@ func (JavaScriptStrategy) Parse(path string, content []byte) ([]Dependency, erro
 		DevDependencies      map[string]string `json:"devDependencies"`
 		PeerDependencies     map[string]string `json:"peerDependencies"`
 		OptionalDependencies map[string]string `json:"optionalDependencies"`
+		Engines              map[string]string `json:"engines"`
 	}
 	if err := json.Unmarshal(content, &manifest); err != nil {
 		return nil, fmt.Errorf("parse package.json: %w", err)
@@ -59,6 +63,7 @@ func (JavaScriptStrategy) Parse(path string, content []byte) ([]Dependency, erro
 	dependencies = appendManifestDependencies(dependencies, manifest.DevDependencies, DependencyTypeDev, path)
 	dependencies = appendManifestDependencies(dependencies, manifest.PeerDependencies, DependencyTypePeer, path)
 	dependencies = appendManifestDependencies(dependencies, manifest.OptionalDependencies, DependencyTypeOptional, path)
+	dependencies = appendManifestDependencies(dependencies, manifest.Engines, DependencyTypeEngines, path)
 	sort.Slice(dependencies, func(i, j int) bool {
 		if dependencies[i].DependencyType == dependencies[j].DependencyType {
 			return dependencies[i].Name < dependencies[j].Name

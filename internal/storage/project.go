@@ -13,30 +13,36 @@ type ProjectRepository struct {
 }
 
 type Project struct {
-	ID            int64
-	ProjectID     string
-	NamespaceID   int64
-	NamespaceName string
-	SourceID      int64
-	SourceName    string
-	StackID       int64
-	StackName     string
-	StackIcon     string
-	StackColor    string
-	Icon          string
-	Name          string
-	Color         string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID              int64
+	ProjectID       string
+	NamespaceID     int64
+	NamespaceName   string
+	SourceID        int64
+	SourceName      string
+	StackID         int64
+	StackName       string
+	StackIcon       string
+	StackColor      string
+	Icon            string
+	Name            string
+	Color           string
+	DependencyCount int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT p.id, p.project_id, p.namespace_id, n.name, p.source_id, src.name, p.stack_id, st.name, st.icon, st.color, p.icon, p.name, p.color, p.created_at, p.updated_at
+		SELECT p.id, p.project_id, p.namespace_id, n.name, p.source_id, src.name, p.stack_id, st.name, st.icon, st.color, p.icon, p.name, p.color, COALESCE(pd.dependency_count, 0), p.created_at, p.updated_at
 		FROM projects p
 		JOIN namespaces n ON n.id = p.namespace_id
 		JOIN sources src ON src.id = p.source_id
 		JOIN stacks st ON st.id = p.stack_id
+		LEFT JOIN (
+			SELECT project_id, count(*) AS dependency_count
+			FROM project_dependencies
+			GROUP BY project_id
+		) pd ON pd.project_id = p.id
 		ORDER BY n.name ASC, p.name ASC
 	`)
 	if err != nil {
@@ -65,6 +71,7 @@ func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 			&project.Icon,
 			&project.Name,
 			&project.Color,
+			&project.DependencyCount,
 			&createdAt,
 			&updatedAt,
 		); err != nil {

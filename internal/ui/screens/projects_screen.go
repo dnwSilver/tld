@@ -16,9 +16,11 @@ const (
 	projectFormLabelWidth       = 10
 	projectFormValueWidth       = 24
 	projectIDColumnWidth        = 10
-	projectNameColumnWidth      = 18
-	projectNamespaceColumnWidth = 16
-	projectSourceColumnWidth    = 16
+	projectNameColumnWidth      = 20
+	projectNamespaceColumnWidth = 15
+	projectSourceColumnWidth    = 13
+	projectDepsColumnWidth      = 6
+	projectGapColumnWidth       = 2
 	projectIconSlotWidth        = 2
 	projectIconColumnWidth      = projectIconSlotWidth * 2
 	projectDepVersionWidth      = 12
@@ -114,6 +116,8 @@ func (s ProjectsScreen) tableHeader(width int, iconColumnWidth int) string {
 		{Value: "name", Width: projectNameColumnWidth, Foreground: s.palette.Hint, Bold: true},
 		{Value: "namespace", Width: projectNamespaceColumnWidth, Foreground: s.palette.Hint, Bold: true},
 		{Value: "source", Width: projectSourceColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "deps", Width: projectDepsColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "", Width: projectGapColumnWidth, Foreground: s.palette.Hint},
 		{Value: "project_id", Width: projectIDColumnWidth, Foreground: s.palette.Hint, Bold: true},
 	})
 }
@@ -140,6 +144,8 @@ func (s ProjectsScreen) renderProjectRow(width int, project uikit.Project, selec
 		{Value: project.Name, Width: projectNameColumnWidth, Foreground: s.palette.Text},
 		{Value: project.NamespaceName, Width: projectNamespaceColumnWidth, Foreground: s.palette.Hint},
 		{Value: project.SourceName, Width: projectSourceColumnWidth, Foreground: s.palette.Info},
+		{Value: rightAligned(uikit.FormatInt(project.DependencyCount), projectDepsColumnWidth), Width: projectDepsColumnWidth, Foreground: s.palette.Primary},
+		{Value: "", Width: projectGapColumnWidth, Foreground: s.palette.Hint},
 		{Value: project.ProjectID, Width: projectIDColumnWidth, Foreground: s.palette.Info},
 	})
 }

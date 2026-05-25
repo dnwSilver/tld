@@ -15,7 +15,7 @@ type DependenciesScreen struct {
 const (
 	dependencyFormLabelWidth  = 5
 	dependencyFormValueWidth  = 24
-	dependencyNameColumnWidth = 24
+	dependencyNameColumnWidth = 40
 )
 
 func NewDependenciesScreen(palette uikit.Palette) DependenciesScreen {

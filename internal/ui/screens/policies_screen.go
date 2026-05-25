@@ -16,7 +16,7 @@ const (
 	policyFormLabelWidth   = 9
 	policyFormValueWidth   = 28
 	policyNameColumnWidth  = 22
-	policyDepColumnWidth   = 24
+	policyDepColumnWidth   = 40
 	policyValueColumnWidth = 14
 )
 
@@ -143,9 +143,23 @@ func (s PoliciesScreen) valueRow(width int, value uikit.PolicyValue, selected bo
 	}
 	color := lipgloss.Color(uikit.NormalizeHexColor(value.DependencyColor))
 	return components.RenderTableRow(s.palette, background, width, []components.TableCell{
-		{Value: value.DependencyIcon + " " + value.DependencyName, Width: policyDepColumnWidth, Foreground: color},
+		{Value: s.policyValueDependency(value, background, color), Width: policyDepColumnWidth, Foreground: s.palette.Text},
 		{Value: value.Version, Width: policyValueColumnWidth, Foreground: s.palette.Text},
 	})
+}
+
+func (s PoliciesScreen) policyValueDependency(value uikit.PolicyValue, background lipgloss.Color, iconColor lipgloss.Color) string {
+	icon := lipgloss.NewStyle().
+		Background(background).
+		Foreground(iconColor).
+		Width(2).
+		Render(value.DependencyIcon)
+	name := lipgloss.NewStyle().
+		Background(background).
+		Foreground(s.palette.Text).
+		Render(value.DependencyName)
+
+	return icon + name
 }
 
 func (s PoliciesScreen) policyModal(width int, namespaces []uikit.Namespace, form uikit.PolicyForm) string {

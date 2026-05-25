@@ -208,6 +208,36 @@ func TestCreateDependencyFromForm(t *testing.T) {
 	}
 }
 
+func TestDependencyFormHLInputAndPicker(t *testing.T) {
+	stackA := ui.Stack{ID: 1, Icon: "", Name: "JavaScript", Color: "#84BA64"}
+	stackB := ui.Stack{ID: 2, Icon: "", Name: "Swift", Color: "#F05138"}
+	form := normalizeDependencyForm(ui.DependencyForm{
+		Open:    true,
+		Focus:   ui.DependencyFormFieldName,
+		StackID: stackA.ID,
+		Icon:    "",
+		Color:   "#EC9706",
+	}, []ui.Stack{stackA, stackB})
+
+	form, _ = updateDependencyFormState(key("l"), form, []ui.Stack{stackA, stackB})
+	form, _ = updateDependencyFormState(key("h"), form, []ui.Stack{stackA, stackB})
+	if form.Name != "lh" {
+		t.Fatalf("name = %q, want lh", form.Name)
+	}
+	if form.StackID != stackA.ID {
+		t.Fatalf("stack = %d, want %d", form.StackID, stackA.ID)
+	}
+
+	form.Focus = ui.DependencyFormFieldStack
+	form, _ = updateDependencyFormState(key("l"), form, []ui.Stack{stackA, stackB})
+	if form.StackID != stackB.ID {
+		t.Fatalf("stack = %d, want %d", form.StackID, stackB.ID)
+	}
+	if form.Name != "lh" {
+		t.Fatalf("name = %q, want lh", form.Name)
+	}
+}
+
 func TestCreateSourceFromForm(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
@@ -604,6 +634,155 @@ func TestProjectDependencySelectionDoesNotWrap(t *testing.T) {
 	updated = next.(model)
 	if updated.selectedProjectDepID != 1 {
 		t.Fatalf("selected dep = %d, want 1", updated.selectedProjectDepID)
+	}
+}
+
+func TestViewScreenLoadsAndSwitchesStack(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stackA, err := store.Stacks().Create(ctx, "", "JavaScript", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack A: %v", err)
+	}
+	stackB, err := store.Stacks().Create(ctx, "", "Swift", "#F05138")
+	if err != nil {
+		t.Fatalf("create stack B: %v", err)
+	}
+
+	m := newModel(store)
+	m.stacks = []ui.Stack{
+		{ID: stackA.ID, Icon: stackA.Icon, Name: stackA.Name, Color: stackA.Color},
+		{ID: stackB.ID, Icon: stackB.Icon, Name: stackB.Name, Color: stackB.Color},
+	}
+
+	next, cmd := m.Update(key("7"))
+	updated := next.(model)
+	if updated.screen != ui.ScreenView {
+		t.Fatalf("screen = %v, want view", updated.screen)
+	}
+	if updated.viewStackID != stackA.ID {
+		t.Fatalf("view stack = %d, want %d", updated.viewStackID, stackA.ID)
+	}
+	if cmd == nil {
+		t.Fatal("expected view load command")
+	}
+	next, _ = updated.Update(cmd().(dependencyViewLoadedMsg))
+	updated = next.(model)
+	if updated.dependencyView.StackName != stackA.Name {
+		t.Fatalf("view stack name = %q, want %q", updated.dependencyView.StackName, stackA.Name)
+	}
+
+	next, cmd = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	if updated.viewStackID != stackB.ID {
+		t.Fatalf("view stack = %d, want %d", updated.viewStackID, stackB.ID)
+	}
+	if cmd == nil {
+		t.Fatal("expected view reload command")
+	}
+
+	next, cmd = updated.Update(key("h"))
+	updated = next.(model)
+	if updated.viewStackID != stackA.ID {
+		t.Fatalf("view stack = %d, want %d", updated.viewStackID, stackA.ID)
+	}
+	if cmd == nil {
+		t.Fatal("expected view reload command")
+	}
+
+	next, cmd = updated.Update(key("l"))
+	updated = next.(model)
+	if updated.viewStackID != stackB.ID {
+		t.Fatalf("view stack = %d, want %d", updated.viewStackID, stackB.ID)
+	}
+	if cmd == nil {
+		t.Fatal("expected view reload command")
+	}
+
+	next, cmd = updated.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	updated = next.(model)
+	if updated.viewStackID != stackA.ID {
+		t.Fatalf("view stack = %d, want %d", updated.viewStackID, stackA.ID)
+	}
+	if cmd == nil {
+		t.Fatal("expected view reload command")
+	}
+}
+
+func TestViewScreenScrollsDependencyColumns(t *testing.T) {
+	m := newModel(nil)
+	m.screen = ui.ScreenView
+	m.viewStackID = 1
+	m.dependencyView = ui.DependencyView{
+		StackID: 1,
+		Columns: []ui.DependencyViewColumn{
+			{DependencyID: 1, Name: "A"},
+			{DependencyID: 2, Name: "B"},
+			{DependencyID: 3, Name: "C"},
+		},
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	updated := next.(model)
+	if cmd != nil {
+		t.Fatal("column scroll should not reload view")
+	}
+	if updated.viewColumnOffset != 1 {
+		t.Fatalf("column offset = %d, want 1", updated.viewColumnOffset)
+	}
+	if updated.viewStackID != 1 {
+		t.Fatalf("view stack = %d, want 1", updated.viewStackID)
+	}
+
+	next, cmd = updated.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	updated = next.(model)
+	if cmd != nil {
+		t.Fatal("column scroll should not reload view")
+	}
+	if updated.viewColumnOffset != 0 {
+		t.Fatalf("column offset = %d, want 0", updated.viewColumnOffset)
+	}
+}
+
+func TestViewScreenSelectsProjectRows(t *testing.T) {
+	m := newModel(nil)
+	m.screen = ui.ScreenView
+	m.viewStackID = 1
+	m.dependencyView = ui.DependencyView{
+		StackID: 1,
+		Rows: []ui.DependencyViewRow{
+			{ProjectID: 10, ProjectName: "A"},
+			{ProjectID: 20, ProjectName: "B"},
+		},
+	}
+	m.selectedViewProjectID = 10
+
+	next, cmd := m.Update(key("j"))
+	updated := next.(model)
+	if cmd != nil {
+		t.Fatal("project row navigation should not reload view")
+	}
+	if updated.selectedViewProjectID != 20 {
+		t.Fatalf("selected view project = %d, want 20", updated.selectedViewProjectID)
+	}
+	if updated.viewStackID != 1 {
+		t.Fatalf("view stack = %d, want 1", updated.viewStackID)
+	}
+
+	next, cmd = updated.Update(key("k"))
+	updated = next.(model)
+	if cmd != nil {
+		t.Fatal("project row navigation should not reload view")
+	}
+	if updated.selectedViewProjectID != 10 {
+		t.Fatalf("selected view project = %d, want 10", updated.selectedViewProjectID)
 	}
 }
 

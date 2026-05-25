@@ -11,6 +11,8 @@ type Hints struct {
 	palette uikit.Palette
 }
 
+const maxHintRows = 5
+
 type hintSpec struct {
 	color lipgloss.Color
 	icon  string
@@ -30,11 +32,29 @@ func (h Hints) Render(screen uikit.Screen) string {
 		rows = h.listRows()
 	}
 
-	rowWidth := lipgloss.Width(rows[0])
-	lines := make([]string, 0, len(rows)+1)
-	lines = append(lines, uikit.BackgroundSpaces(h.palette, rowWidth+2))
-	for _, row := range rows {
-		lines = append(lines, uikit.BackgroundSpaces(h.palette, 2)+row)
+	rowWidth := maxRowWidth(rows)
+	columnRows := uikit.Max(maxHintRows-1, 1)
+	columns := make([][]string, 0, (len(rows)+columnRows-1)/columnRows)
+	for start := 0; start < len(rows); start += columnRows {
+		end := uikit.Min(start+columnRows, len(rows))
+		column := []string{uikit.BackgroundSpaces(h.palette, rowWidth+2)}
+		for _, row := range rows[start:end] {
+			column = append(column, h.paddedRow(row, rowWidth))
+		}
+		for len(column) < maxHintRows {
+			column = append(column, uikit.BackgroundSpaces(h.palette, rowWidth+2))
+		}
+		columns = append(columns, column)
+	}
+
+	lines := make([]string, 0, maxHintRows)
+	gap := uikit.BackgroundSpaces(h.palette, 3)
+	for rowIndex := 0; rowIndex < maxHintRows; rowIndex++ {
+		parts := make([]string, 0, len(columns))
+		for _, column := range columns {
+			parts = append(parts, column[rowIndex])
+		}
+		lines = append(lines, strings.Join(parts, gap))
 	}
 
 	return strings.Join(lines, uikit.SymbolLineBreak)
@@ -46,7 +66,8 @@ func isListScreen(screen uikit.Screen) bool {
 		screen == uikit.ScreenDependencies ||
 		screen == uikit.ScreenProjects ||
 		screen == uikit.ScreenSources ||
-		screen == uikit.ScreenPolicies
+		screen == uikit.ScreenPolicies ||
+		screen == uikit.ScreenView
 }
 
 func (h Hints) defaultRows() []string {
@@ -87,6 +108,7 @@ func (h Hints) listRows() []string {
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyProjects, 18), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeySources, 18), hintSpec{h.palette.Hint, "", "", 20}),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPolicies, 18), h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyView, 18), hintSpec{h.palette.Hint, "", "[Tab] stack", 20}),
 	}
 }
 
@@ -101,4 +123,17 @@ func (h Hints) row(specs ...hintSpec) string {
 	}
 
 	return strings.Join(parts, uikit.BackgroundSpaces(h.palette, 3))
+}
+
+func (h Hints) paddedRow(row string, rowWidth int) string {
+	return uikit.BackgroundSpaces(h.palette, 2) + row + uikit.BackgroundSpaces(h.palette, rowWidth-lipgloss.Width(row))
+}
+
+func maxRowWidth(rows []string) int {
+	width := 0
+	for _, row := range rows {
+		width = uikit.Max(width, lipgloss.Width(row))
+	}
+
+	return width
 }

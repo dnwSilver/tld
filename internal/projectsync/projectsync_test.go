@@ -17,21 +17,27 @@ func TestJavaScriptStrategyParsesDependencyGroups(t *testing.T) {
 		"dependencies": {"react": "^19.0.0"},
 		"devDependencies": {"typescript": "^5.0.0"},
 		"peerDependencies": {"next": "^15.0.0"},
-		"optionalDependencies": {"sharp": "^0.33.0"}
+		"optionalDependencies": {"sharp": "^0.33.0"},
+		"engines": {"node": ">=22.0.0"}
 	}`))
 	if err != nil {
 		t.Fatalf("parse package.json: %v", err)
 	}
-	if len(dependencies) != 4 {
-		t.Fatalf("len(dependencies) = %d, want 4", len(dependencies))
+	if len(dependencies) != 5 {
+		t.Fatalf("len(dependencies) = %d, want 5", len(dependencies))
 	}
 
 	types := map[string]string{}
+	versions := map[string]string{}
 	for _, dependency := range dependencies {
 		types[dependency.Name] = dependency.DependencyType
+		versions[dependency.Name] = dependency.Version
 	}
-	if types["react"] != DependencyTypeRuntime || types["typescript"] != DependencyTypeDev || types["next"] != DependencyTypePeer || types["sharp"] != DependencyTypeOptional {
+	if types["react"] != DependencyTypeRuntime || types["typescript"] != DependencyTypeDev || types["next"] != DependencyTypePeer || types["sharp"] != DependencyTypeOptional || types["node"] != DependencyTypeEngines {
 		t.Fatalf("dependency types = %#v", types)
+	}
+	if versions["node"] != ">=22.0.0" {
+		t.Fatalf("node version = %q, want >=22.0.0", versions["node"])
 	}
 
 	lockDependencies, err := strategy.Parse("package-lock.json", []byte(`{"lockfileVersion": 3}`))
@@ -81,6 +87,48 @@ DEPENDENCIES:
 	}
 	if values["Alamofire"] != "5.10.2" || values["Firebase/CoreOnly"] != "11.15.0" || values["FirebaseCore"] != "11.15.0" {
 		t.Fatalf("pod dependencies = %#v", values)
+	}
+}
+
+func TestGoStrategyParsesGoModRequires(t *testing.T) {
+	strategy := GoStrategy{}
+	dependencies, err := strategy.Parse("go.mod", []byte(`module github.com/dnwSilver/tld
+
+go 1.24.1
+
+require github.com/charmbracelet/lipgloss v1.1.0
+
+require (
+	github.com/charmbracelet/bubbletea v1.3.6
+	golang.org/x/term v0.33.0 // indirect
+)
+`))
+	if err != nil {
+		t.Fatalf("parse go.mod: %v", err)
+	}
+	if len(dependencies) != 3 {
+		t.Fatalf("len(dependencies) = %d, want 3", len(dependencies))
+	}
+
+	values := map[string]string{}
+	types := map[string]string{}
+	for _, dependency := range dependencies {
+		values[dependency.Name] = dependency.Version
+		types[dependency.Name] = dependency.DependencyType
+	}
+	if values["github.com/charmbracelet/lipgloss"] != "v1.1.0" || values["github.com/charmbracelet/bubbletea"] != "v1.3.6" || values["golang.org/x/term"] != "v0.33.0" {
+		t.Fatalf("go dependencies = %#v", values)
+	}
+	if types["github.com/charmbracelet/lipgloss"] != DependencyTypeGoModule {
+		t.Fatalf("go dependency types = %#v", types)
+	}
+
+	sumDependencies, err := strategy.Parse("go.sum", []byte(`github.com/charmbracelet/lipgloss v1.1.0 h1:abc`))
+	if err != nil {
+		t.Fatalf("parse go.sum: %v", err)
+	}
+	if len(sumDependencies) != 0 {
+		t.Fatalf("go.sum dependencies = %d, want 0", len(sumDependencies))
 	}
 }
 
@@ -148,6 +196,69 @@ func TestServiceCachesSwiftLocks(t *testing.T) {
 	}
 	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, "github:owner/ios:abcdef12:Podfile.lock"); err != nil {
 		t.Fatalf("get Podfile.lock cache: %v", err)
+	}
+}
+
+func TestServiceCachesGoSum(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "Golang", "#00ADD8")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	sourceEntity, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", storage.SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	projectEntity, err := store.Projects().Create(ctx, "owner/go", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "Go App", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	client := &fakeSourceClient{
+		files: map[string][]byte{
+			"go.mod": []byte(`module github.com/example/app
+
+go 1.24.1
+
+require github.com/charmbracelet/lipgloss v1.1.0
+`),
+			"go.sum": []byte(`github.com/charmbracelet/lipgloss v1.1.0 h1:abc`),
+		},
+	}
+	service := Service{
+		Cache:        store.Cache(),
+		Runs:         store.ProjectDependencies(),
+		SourceClient: client,
+	}
+	result, err := service.Sync(ctx, Source{Type: storage.SourceTypeGitHub}, Project{
+		ID:         projectEntity.ID,
+		ProviderID: projectEntity.ProjectID,
+		Name:       projectEntity.Name,
+		StackName:  stack.Name,
+	}, nil)
+	if err != nil {
+		t.Fatalf("sync go project: %v", err)
+	}
+	if result.Count != 1 {
+		t.Fatalf("count = %d, want 1", result.Count)
+	}
+	if client.fetches["go.mod"] != 1 || client.fetches["go.sum"] != 1 {
+		t.Fatalf("fetches = %#v", client.fetches)
+	}
+	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, "github:owner/go:abcdef12:go.sum"); err != nil {
+		t.Fatalf("get go.sum cache: %v", err)
 	}
 }
 

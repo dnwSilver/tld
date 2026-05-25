@@ -12,6 +12,7 @@ const (
 	ScreenProjects     = uikit.ScreenProjects
 	ScreenSources      = uikit.ScreenSources
 	ScreenPolicies     = uikit.ScreenPolicies
+	ScreenView         = uikit.ScreenView
 )
 
 type Stack = uikit.Stack
@@ -22,6 +23,9 @@ type ProjectDependencyRun = uikit.ProjectDependencyRun
 type ProjectDependency = uikit.ProjectDependency
 type ProjectPane = uikit.ProjectPane
 type ProjectSyncStatus = uikit.ProjectSyncStatus
+type DependencyView = uikit.DependencyView
+type DependencyViewColumn = uikit.DependencyViewColumn
+type DependencyViewRow = uikit.DependencyViewRow
 type Source = uikit.Source
 type Policy = uikit.Policy
 type PolicyValue = uikit.PolicyValue
@@ -115,6 +119,7 @@ var (
 	KeyProjects       = uikit.KeyProjects
 	KeySources        = uikit.KeySources
 	KeyPolicies       = uikit.KeyPolicies
+	KeyView           = uikit.KeyView
 	KeyAdd            = uikit.KeyAdd
 	KeyEdit           = uikit.KeyEdit
 	KeyDelete         = uikit.KeyDelete

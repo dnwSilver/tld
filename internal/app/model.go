@@ -39,6 +39,10 @@ type model struct {
 	policyValues            []ui.PolicyValue
 	selectedPolicyValueID   int64
 	policyFocus             ui.PolicyPane
+	dependencyView          ui.DependencyView
+	viewStackID             int64
+	selectedViewProjectID   int64
+	viewColumnOffset        int
 	form                    ui.StackForm
 	namespaceForm           ui.StackForm
 	dependencyForm          ui.DependencyForm
@@ -101,6 +105,11 @@ type policiesLoadedMsg struct {
 type policyValuesLoadedMsg struct {
 	values []ui.PolicyValue
 	err    error
+}
+
+type dependencyViewLoadedMsg struct {
+	view ui.DependencyView
+	err  error
 }
 
 type stackSavedMsg struct {
@@ -256,6 +265,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = ui.ScreenSources
 		case ui.KeyPolicies.Matches(key):
 			m.screen = ui.ScreenPolicies
+		case ui.KeyView.Matches(key):
+			m.screen = ui.ScreenView
+			m.ensureViewStack()
+			return m, m.loadDependencyView()
 		case ui.KeyAdd.Matches(key):
 			m.openAddForm()
 		case ui.KeyEdit.Matches(key):
@@ -267,6 +280,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.startProjectDependencySync()
 			}
 		case ui.KeyPrev.Matches(key):
+			if m.screen == ui.ScreenView {
+				m.selectPreviousViewProject()
+				return m, nil
+			}
 			m.selectPreviousOnScreen()
 			if m.screen == ui.ScreenPolicies && m.policyFocus == ui.PolicyPanePolicies {
 				return m, m.loadPolicyValues()
@@ -275,6 +292,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.loadProjectDependencies()
 			}
 		case ui.KeyNext.Matches(key):
+			if m.screen == ui.ScreenView {
+				m.selectNextViewProject()
+				return m, nil
+			}
 			m.selectNextOnScreen()
 			if m.screen == ui.ScreenPolicies && m.policyFocus == ui.PolicyPanePolicies {
 				return m, m.loadPolicyValues()
@@ -282,7 +303,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == ui.ScreenProjects {
 				return m, m.loadProjectDependencies()
 			}
+			if m.screen == ui.ScreenView {
+				m.selectNextViewStack()
+				return m, m.loadDependencyView()
+			}
+		case key == "left":
+			if m.screen == ui.ScreenView {
+				m.scrollViewColumnsLeft()
+				return m, nil
+			}
+		case key == "right":
+			if m.screen == ui.ScreenView {
+				m.scrollViewColumnsRight()
+				return m, nil
+			}
+		case isOneOf(msg, "h", "shift+tab"):
+			if m.screen == ui.ScreenView {
+				m.selectPreviousViewStack()
+				return m, m.loadDependencyView()
+			}
+		case isOneOf(msg, "l"):
+			if m.screen == ui.ScreenView {
+				m.selectNextViewStack()
+				return m, m.loadDependencyView()
+			}
 		case key == "tab":
+			if m.screen == ui.ScreenView {
+				m.selectNextViewStack()
+				return m, m.loadDependencyView()
+			}
 			if m.screen == ui.ScreenProjects {
 				m.toggleProjectPane()
 				return m, nil
@@ -341,6 +390,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.policyValues = msg.values
 			m.ensureSelectedPolicyValue()
+		}
+	case dependencyViewLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.dependencyView = msg.view
+			m.ensureSelectedViewProject()
 		}
 	case stackSavedMsg:
 		m.err = msg.err
@@ -525,6 +580,9 @@ func (m model) View() string {
 		m.policyValues,
 		m.selectedPolicyValueID,
 		m.policyFocus,
+		m.dependencyView,
+		m.selectedViewProjectID,
+		m.viewColumnOffset,
 		m.form,
 		m.namespaceForm,
 		m.dependencyForm,
@@ -602,14 +660,10 @@ func updateNamespaceFormState(msg tea.KeyMsg, form ui.StackForm, policies []ui.P
 		form.Focus = nextNamespaceFormField(form.Focus)
 	case isOneOf(msg, "shift+tab", "up"):
 		form.Focus = previousNamespaceFormField(form.Focus)
-	case isOneOf(msg, "left", "h"):
-		if form.Focus == ui.StackFormFieldPolicy {
-			form.PolicyID = previousPolicyID(policies, form.PolicyID)
-		}
-	case isOneOf(msg, "right", "l"):
-		if form.Focus == ui.StackFormFieldPolicy {
-			form.PolicyID = nextPolicyID(policies, form.PolicyID)
-		}
+	case form.Focus == ui.StackFormFieldPolicy && isOneOf(msg, "left", "h"):
+		form.PolicyID = previousPolicyID(policies, form.PolicyID)
+	case form.Focus == ui.StackFormFieldPolicy && isOneOf(msg, "right", "l"):
+		form.PolicyID = nextPolicyID(policies, form.PolicyID)
 	case isBackspaceKey(msg):
 		form = deleteNamespaceFormRune(form)
 	default:
@@ -677,14 +731,10 @@ func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []
 		form.Focus = nextDependencyFormField(form.Focus)
 	case isOneOf(msg, "shift+tab", "up"):
 		form.Focus = previousDependencyFormField(form.Focus)
-	case isOneOf(msg, "left", "h"):
-		if form.Focus == ui.DependencyFormFieldStack {
-			form.StackID = previousStackID(stacks, form.StackID)
-		}
-	case isOneOf(msg, "right", "l"):
-		if form.Focus == ui.DependencyFormFieldStack {
-			form.StackID = nextStackID(stacks, form.StackID)
-		}
+	case form.Focus == ui.DependencyFormFieldStack && isOneOf(msg, "left", "h"):
+		form.StackID = previousStackID(stacks, form.StackID)
+	case form.Focus == ui.DependencyFormFieldStack && isOneOf(msg, "right", "l"):
+		form.StackID = nextStackID(stacks, form.StackID)
 	case isBackspaceKey(msg):
 		form = deleteDependencyFormRune(form)
 	default:
@@ -711,7 +761,7 @@ func updateProjectFormState(msg tea.KeyMsg, form ui.ProjectForm, namespaces []ui
 		form.Focus = nextProjectFormField(form.Focus)
 	case isOneOf(msg, "shift+tab", "up"):
 		form.Focus = previousProjectFormField(form.Focus)
-	case isOneOf(msg, "left", "h"):
+	case isProjectPickerFocused(form.Focus) && isOneOf(msg, "left", "h"):
 		switch form.Focus {
 		case ui.ProjectFormFieldNamespace:
 			form.NamespaceID = previousNamespaceID(namespaces, form.NamespaceID)
@@ -720,7 +770,7 @@ func updateProjectFormState(msg tea.KeyMsg, form ui.ProjectForm, namespaces []ui
 		case ui.ProjectFormFieldStack:
 			form.StackID = previousStackID(stacks, form.StackID)
 		}
-	case isOneOf(msg, "right", "l"):
+	case isProjectPickerFocused(form.Focus) && isOneOf(msg, "right", "l"):
 		switch form.Focus {
 		case ui.ProjectFormFieldNamespace:
 			form.NamespaceID = nextNamespaceID(namespaces, form.NamespaceID)
@@ -755,14 +805,10 @@ func updateSourceFormState(msg tea.KeyMsg, form ui.SourceForm) (ui.SourceForm, s
 		form.Focus = nextSourceFormField(form.Focus)
 	case isOneOf(msg, "shift+tab", "up"):
 		form.Focus = previousSourceFormField(form.Focus)
-	case isOneOf(msg, "left", "h"):
-		if form.Focus == ui.SourceFormFieldType {
-			form.Type = previousSourceType(form.Type)
-		}
-	case isOneOf(msg, "right", "l"):
-		if form.Focus == ui.SourceFormFieldType {
-			form.Type = nextSourceType(form.Type)
-		}
+	case form.Focus == ui.SourceFormFieldType && isOneOf(msg, "left", "h"):
+		form.Type = previousSourceType(form.Type)
+	case form.Focus == ui.SourceFormFieldType && isOneOf(msg, "right", "l"):
+		form.Type = nextSourceType(form.Type)
 	case isBackspaceKey(msg):
 		form = deleteSourceFormRune(form)
 	default:
@@ -789,14 +835,10 @@ func updatePolicyFormState(msg tea.KeyMsg, form ui.PolicyForm, namespaces []ui.N
 		form.Focus = nextPolicyFormField(form.Focus)
 	case isOneOf(msg, "shift+tab", "up"):
 		form.Focus = previousPolicyFormField(form.Focus)
-	case isOneOf(msg, "left", "h"):
-		if form.Focus == ui.PolicyFormFieldNamespace {
-			form.NamespaceID = previousNamespaceID(namespaces, form.NamespaceID)
-		}
-	case isOneOf(msg, "right", "l"):
-		if form.Focus == ui.PolicyFormFieldNamespace {
-			form.NamespaceID = nextNamespaceID(namespaces, form.NamespaceID)
-		}
+	case form.Focus == ui.PolicyFormFieldNamespace && isOneOf(msg, "left", "h"):
+		form.NamespaceID = previousNamespaceID(namespaces, form.NamespaceID)
+	case form.Focus == ui.PolicyFormFieldNamespace && isOneOf(msg, "right", "l"):
+		form.NamespaceID = nextNamespaceID(namespaces, form.NamespaceID)
 	case isBackspaceKey(msg):
 		form = deletePolicyFormRune(form)
 	default:
@@ -823,14 +865,10 @@ func updatePolicyValueFormState(msg tea.KeyMsg, form ui.PolicyValueForm, depende
 		form.Focus = nextPolicyValueFormField(form.Focus)
 	case isOneOf(msg, "shift+tab", "up"):
 		form.Focus = previousPolicyValueFormField(form.Focus)
-	case isOneOf(msg, "left", "h"):
-		if form.Focus == ui.PolicyValueFormFieldDependency {
-			form.DependencyID = previousDependencyID(dependencies, form.DependencyID)
-		}
-	case isOneOf(msg, "right", "l"):
-		if form.Focus == ui.PolicyValueFormFieldDependency {
-			form.DependencyID = nextDependencyID(dependencies, form.DependencyID)
-		}
+	case form.Focus == ui.PolicyValueFormFieldDependency && isOneOf(msg, "left", "h"):
+		form.DependencyID = previousDependencyID(dependencies, form.DependencyID)
+	case form.Focus == ui.PolicyValueFormFieldDependency && isOneOf(msg, "right", "l"):
+		form.DependencyID = nextDependencyID(dependencies, form.DependencyID)
 	case isBackspaceKey(msg):
 		form = deletePolicyValueFormRune(form)
 	default:
@@ -1269,6 +1307,22 @@ func (m model) loadPolicyValues() tea.Cmd {
 	}
 }
 
+func (m model) loadDependencyView() tea.Cmd {
+	stackID := m.viewStackID
+	return func() tea.Msg {
+		if m.store == nil || stackID == 0 {
+			return dependencyViewLoadedMsg{view: ui.DependencyView{StackID: stackID}}
+		}
+
+		view, err := m.store.ProjectDependencies().ViewByStack(context.Background(), stackID)
+		if err != nil {
+			return dependencyViewLoadedMsg{err: err}
+		}
+
+		return dependencyViewLoadedMsg{view: toUIDependencyView(view)}
+	}
+}
+
 func (m model) saveStack() tea.Cmd {
 	form := m.form
 	return func() tea.Msg {
@@ -1550,19 +1604,20 @@ func toUIProjects(projects []storage.Project) []ui.Project {
 	result := make([]ui.Project, 0, len(projects))
 	for _, project := range projects {
 		result = append(result, ui.Project{
-			ID:            project.ID,
-			ProjectID:     project.ProjectID,
-			NamespaceID:   project.NamespaceID,
-			NamespaceName: project.NamespaceName,
-			SourceID:      project.SourceID,
-			SourceName:    project.SourceName,
-			StackID:       project.StackID,
-			StackName:     project.StackName,
-			StackIcon:     project.StackIcon,
-			StackColor:    project.StackColor,
-			Icon:          project.Icon,
-			Name:          project.Name,
-			Color:         project.Color,
+			ID:              project.ID,
+			ProjectID:       project.ProjectID,
+			NamespaceID:     project.NamespaceID,
+			NamespaceName:   project.NamespaceName,
+			SourceID:        project.SourceID,
+			SourceName:      project.SourceName,
+			StackID:         project.StackID,
+			StackName:       project.StackName,
+			StackIcon:       project.StackIcon,
+			StackColor:      project.StackColor,
+			Icon:            project.Icon,
+			Name:            project.Name,
+			Color:           project.Color,
+			DependencyCount: project.DependencyCount,
 		})
 	}
 
@@ -1643,6 +1698,35 @@ func toUIPolicyValues(values []storage.PolicyValue) []ui.PolicyValue {
 			DependencyName:  value.DependencyName,
 			DependencyColor: value.DependencyColor,
 			Version:         value.Version,
+		})
+	}
+
+	return result
+}
+
+func toUIDependencyView(view storage.DependencyView) ui.DependencyView {
+	result := ui.DependencyView{
+		StackID:   view.StackID,
+		StackName: view.StackName,
+		Columns:   make([]ui.DependencyViewColumn, 0, len(view.Columns)),
+		Rows:      make([]ui.DependencyViewRow, 0, len(view.Rows)),
+	}
+	for _, column := range view.Columns {
+		result.Columns = append(result.Columns, ui.DependencyViewColumn{
+			DependencyID:  column.DependencyID,
+			Icon:          column.Icon,
+			Name:          column.Name,
+			Color:         column.Color,
+			PolicyVersion: column.PolicyVersion,
+		})
+	}
+	for _, row := range view.Rows {
+		result.Rows = append(result.Rows, ui.DependencyViewRow{
+			ProjectID:    row.ProjectID,
+			ProjectIcon:  row.ProjectIcon,
+			ProjectName:  row.ProjectName,
+			ProjectColor: row.ProjectColor,
+			Versions:     row.Versions,
 		})
 	}
 
@@ -1931,9 +2015,13 @@ func policyID(p ui.Policy) int64 { return p.ID }
 func policyValueID(v ui.PolicyValue) int64 {
 	return v.ID
 }
+func dependencyViewRowID(r ui.DependencyViewRow) int64 {
+	return r.ProjectID
+}
 
 func (m *model) ensureSelectedStack() {
 	m.selectedStackID = ensureSelected(m.stacks, m.selectedStackID, stackID)
+	m.ensureViewStack()
 }
 
 func (m *model) ensureSelectedNamespace() {
@@ -1950,6 +2038,14 @@ func (m *model) ensureSelectedProject() {
 
 func (m *model) ensureSelectedProjectDependency() {
 	m.selectedProjectDepID = ensureSelected(m.projectDependencies, m.selectedProjectDepID, projectDependencyID)
+}
+
+func (m *model) ensureViewStack() {
+	m.viewStackID = ensureSelected(m.stacks, m.viewStackID, stackID)
+}
+
+func (m *model) ensureSelectedViewProject() {
+	m.selectedViewProjectID = ensureSelected(m.dependencyView.Rows, m.selectedViewProjectID, dependencyViewRowID)
 }
 
 func (m *model) ensureSelectedSource() {
@@ -2007,6 +2103,40 @@ func (m *model) selectNextProject() {
 
 func (m *model) selectNextProjectDependency() {
 	m.selectedProjectDepID = selectNextBounded(m.projectDependencies, m.selectedProjectDepID, projectDependencyID)
+}
+
+func (m *model) selectNextViewStack() {
+	m.viewStackID = selectNext(m.stacks, m.viewStackID, stackID)
+	m.viewColumnOffset = 0
+}
+
+func (m *model) selectPreviousViewStack() {
+	m.viewStackID = selectPrevious(m.stacks, m.viewStackID, stackID)
+	m.viewColumnOffset = 0
+}
+
+func (m *model) selectPreviousViewProject() {
+	m.selectedViewProjectID = selectPreviousBounded(m.dependencyView.Rows, m.selectedViewProjectID, dependencyViewRowID)
+}
+
+func (m *model) selectNextViewProject() {
+	m.selectedViewProjectID = selectNextBounded(m.dependencyView.Rows, m.selectedViewProjectID, dependencyViewRowID)
+}
+
+func (m *model) scrollViewColumnsLeft() {
+	if m.viewColumnOffset > 0 {
+		m.viewColumnOffset--
+	}
+}
+
+func (m *model) scrollViewColumnsRight() {
+	if len(m.dependencyView.Columns) == 0 {
+		m.viewColumnOffset = 0
+		return
+	}
+	if m.viewColumnOffset < len(m.dependencyView.Columns)-1 {
+		m.viewColumnOffset++
+	}
 }
 
 func (m *model) selectPreviousSource() {
@@ -2252,6 +2382,12 @@ func previousProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
 	default:
 		return ui.ProjectFormFieldStack
 	}
+}
+
+func isProjectPickerFocused(field ui.ProjectFormField) bool {
+	return field == ui.ProjectFormFieldNamespace ||
+		field == ui.ProjectFormFieldSource ||
+		field == ui.ProjectFormFieldStack
 }
 
 func nextSourceFormField(field ui.SourceFormField) ui.SourceFormField {

@@ -10,6 +10,7 @@ const (
 	ScreenProjects
 	ScreenSources
 	ScreenPolicies
+	ScreenView
 )
 
 type Stack struct {
@@ -48,19 +49,20 @@ type Source struct {
 }
 
 type Project struct {
-	ID            int64
-	ProjectID     string
-	NamespaceID   int64
-	NamespaceName string
-	SourceID      int64
-	SourceName    string
-	StackID       int64
-	StackName     string
-	StackIcon     string
-	StackColor    string
-	Icon          string
-	Name          string
-	Color         string
+	ID              int64
+	ProjectID       string
+	NamespaceID     int64
+	NamespaceName   string
+	SourceID        int64
+	SourceName      string
+	StackID         int64
+	StackName       string
+	StackIcon       string
+	StackColor      string
+	Icon            string
+	Name            string
+	Color           string
+	DependencyCount int
 }
 
 type ProjectDependencyRun struct {
@@ -91,6 +93,29 @@ type ProjectSyncStatus struct {
 	Message   string
 	Running   bool
 	Error     string
+}
+
+type DependencyView struct {
+	StackID   int64
+	StackName string
+	Columns   []DependencyViewColumn
+	Rows      []DependencyViewRow
+}
+
+type DependencyViewColumn struct {
+	DependencyID  int64
+	Icon          string
+	Name          string
+	Color         string
+	PolicyVersion string
+}
+
+type DependencyViewRow struct {
+	ProjectID    int64
+	ProjectIcon  string
+	ProjectName  string
+	ProjectColor string
+	Versions     map[int64]string
 }
 
 type Policy struct {

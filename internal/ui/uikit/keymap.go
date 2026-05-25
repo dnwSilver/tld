@@ -25,6 +25,7 @@ var (
 	KeySources      = Binding{Keys: []string{"4", "cmd+4", "alt+4"}, Label: "sources", Symbol: SymbolSource, Hint: "4 sources"}
 	KeyProjects     = Binding{Keys: []string{"5", "cmd+5", "alt+5"}, Label: "projects", Symbol: SymbolProject, Hint: "5 projects"}
 	KeyPolicies     = Binding{Keys: []string{"6", "cmd+6", "alt+6"}, Label: "policies", Symbol: SymbolPolicy, Hint: "6 policies"}
+	KeyView         = Binding{Keys: []string{"7", "cmd+7", "alt+7"}, Label: "view", Symbol: SymbolDependency, Hint: "7 view"}
 
 	KeyAdd            = Binding{Keys: []string{"a"}, Label: "add", Symbol: SymbolAdd, Hint: "[a] add"}
 	KeyEdit           = Binding{Keys: []string{"e"}, Label: "edit", Symbol: SymbolEdit, Hint: "[e] edit"}
