@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 10
+const currentSchemaVersion = 11
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -82,6 +82,11 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 10 {
 		if err := migrateV10(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 11 {
+		if err := migrateV11(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -539,6 +544,67 @@ func migrateV10(ctx context.Context, tx *sql.Tx) error {
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema v10: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV11(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS project_dependency_runs (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				project_id INTEGER NOT NULL,
+				commit_short_sha TEXT NOT NULL,
+				commit_sha TEXT NOT NULL,
+				status TEXT NOT NULL,
+				started_at INTEGER NOT NULL,
+				finished_at INTEGER,
+				error TEXT NOT NULL DEFAULT '',
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (project_id, commit_short_sha),
+				FOREIGN KEY (project_id) REFERENCES projects (id) ON UPDATE CASCADE ON DELETE CASCADE
+			)
+		`,
+		`
+			CREATE TABLE IF NOT EXISTS project_dependencies (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				project_id INTEGER NOT NULL,
+				run_id INTEGER NOT NULL,
+				name TEXT NOT NULL,
+				version TEXT NOT NULL,
+				dependency_type TEXT NOT NULL,
+				source_file TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				FOREIGN KEY (project_id) REFERENCES projects (id) ON UPDATE CASCADE ON DELETE CASCADE,
+				FOREIGN KEY (run_id) REFERENCES project_dependency_runs (id) ON UPDATE CASCADE ON DELETE CASCADE
+			)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_project_dependency_runs_project_id
+			ON project_dependency_runs (project_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_project_dependencies_project_id
+			ON project_dependencies (project_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_project_dependencies_run_id
+			ON project_dependencies (run_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_project_dependencies_project_name
+			ON project_dependencies (project_id, name)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (11)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v11: %w", err)
 		}
 	}
 

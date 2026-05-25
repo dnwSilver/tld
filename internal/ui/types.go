@@ -18,10 +18,19 @@ type Stack = uikit.Stack
 type Namespace = uikit.Namespace
 type Dependency = uikit.Dependency
 type Project = uikit.Project
+type ProjectDependencyRun = uikit.ProjectDependencyRun
+type ProjectDependency = uikit.ProjectDependency
+type ProjectPane = uikit.ProjectPane
+type ProjectSyncStatus = uikit.ProjectSyncStatus
 type Source = uikit.Source
 type Policy = uikit.Policy
 type PolicyValue = uikit.PolicyValue
 type PolicyPane = uikit.PolicyPane
+
+const (
+	ProjectPaneProjects     = uikit.ProjectPaneProjects
+	ProjectPaneDependencies = uikit.ProjectPaneDependencies
+)
 
 const (
 	PolicyPanePolicies = uikit.PolicyPanePolicies
@@ -109,6 +118,7 @@ var (
 	KeyAdd            = uikit.KeyAdd
 	KeyEdit           = uikit.KeyEdit
 	KeyDelete         = uikit.KeyDelete
+	KeyRefreshDeps    = uikit.KeyRefreshDeps
 	KeyPrev           = uikit.KeyPrev
 	KeyNext           = uikit.KeyNext
 	KeyStackPick      = uikit.KeyStackPick

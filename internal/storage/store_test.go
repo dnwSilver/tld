@@ -457,6 +457,103 @@ func TestProjects(t *testing.T) {
 	}
 }
 
+func TestProjectDependenciesReplaceAndSkip(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "JavaScript", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	now := time.Now().UTC()
+	repository := store.ProjectDependencies()
+	run, err := repository.ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
+		CommitShortSHA: "abcdef12",
+		CommitSHA:      "abcdef1234567890",
+		Status:         ProjectDependencyRunStatusSuccess,
+		StartedAt:      now,
+		FinishedAt:     &now,
+	}, []ProjectDependency{
+		{Name: "react", Version: "^19.0.0", DependencyType: "dependencies", SourceFile: "package.json"},
+		{Name: "typescript", Version: "^5.0.0", DependencyType: "devDependencies", SourceFile: "package.json"},
+	})
+	if err != nil {
+		t.Fatalf("replace project dependencies: %v", err)
+	}
+	if run.ID == 0 {
+		t.Fatal("run id should be set")
+	}
+
+	hasRun, err := repository.HasSuccessfulRun(ctx, project.ID, "abcdef12")
+	if err != nil {
+		t.Fatalf("has successful run: %v", err)
+	}
+	if !hasRun {
+		t.Fatal("expected successful run")
+	}
+
+	dependencies, err := repository.ListByProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("list project dependencies: %v", err)
+	}
+	if len(dependencies) != 2 {
+		t.Fatalf("len(dependencies) = %d, want 2", len(dependencies))
+	}
+
+	_, err = repository.ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
+		CommitShortSHA: "abcdef12",
+		CommitSHA:      "abcdef1234567890",
+		Status:         ProjectDependencyRunStatusSuccess,
+		StartedAt:      now,
+		FinishedAt:     &now,
+	}, []ProjectDependency{
+		{Name: "react", Version: "^19.1.0", DependencyType: "dependencies", SourceFile: "package.json"},
+	})
+	if err != nil {
+		t.Fatalf("replace project dependencies again: %v", err)
+	}
+
+	dependencies, err = repository.ListByProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("list replaced project dependencies: %v", err)
+	}
+	if len(dependencies) != 1 {
+		t.Fatalf("len(dependencies) = %d, want 1", len(dependencies))
+	}
+	if dependencies[0].Version != "^19.1.0" {
+		t.Fatalf("dependency version = %q, want ^19.1.0", dependencies[0].Version)
+	}
+
+	latestRun, err := repository.LatestRun(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("latest run: %v", err)
+	}
+	if latestRun.CommitShortSHA != "abcdef12" || latestRun.Status != ProjectDependencyRunStatusSuccess {
+		t.Fatalf("latest run = %#v", latestRun)
+	}
+}
+
 func TestPolicies(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "tld.db")

@@ -29,6 +29,7 @@ var (
 	KeyAdd            = Binding{Keys: []string{"a"}, Label: "add", Symbol: SymbolAdd, Hint: "[a] add"}
 	KeyEdit           = Binding{Keys: []string{"e"}, Label: "edit", Symbol: SymbolEdit, Hint: "[e] edit"}
 	KeyDelete         = Binding{Keys: []string{"d"}, Label: "delete", Symbol: SymbolDelete, Hint: "[d] delete"}
+	KeyRefreshDeps    = Binding{Keys: []string{"r"}, Label: "refresh deps", Symbol: SymbolDependency, Hint: "[r] refresh deps"}
 	KeyPrev           = Binding{Keys: []string{"up", "k"}, Label: "prev", Symbol: SymbolSelectPrev, Hint: "[k] prev"}
 	KeyNext           = Binding{Keys: []string{"down", "j"}, Label: "next", Symbol: SymbolSelectNext, Hint: "[j] next"}
 	KeyStackPick      = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "stack", Symbol: SymbolStack, Hint: "[h/l] Stack"}

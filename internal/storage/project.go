@@ -21,6 +21,8 @@ type Project struct {
 	SourceName    string
 	StackID       int64
 	StackName     string
+	StackIcon     string
+	StackColor    string
 	Icon          string
 	Name          string
 	Color         string
@@ -30,7 +32,7 @@ type Project struct {
 
 func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT p.id, p.project_id, p.namespace_id, n.name, p.source_id, src.name, p.stack_id, st.name, p.icon, p.name, p.color, p.created_at, p.updated_at
+		SELECT p.id, p.project_id, p.namespace_id, n.name, p.source_id, src.name, p.stack_id, st.name, st.icon, st.color, p.icon, p.name, p.color, p.created_at, p.updated_at
 		FROM projects p
 		JOIN namespaces n ON n.id = p.namespace_id
 		JOIN sources src ON src.id = p.source_id
@@ -58,6 +60,8 @@ func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 			&project.SourceName,
 			&project.StackID,
 			&project.StackName,
+			&project.StackIcon,
+			&project.StackColor,
 			&project.Icon,
 			&project.Name,
 			&project.Color,

@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -388,6 +391,8 @@ func TestEditProjectCanChangeSelectors(t *testing.T) {
 		SourceName:    sourceA.Name,
 		StackID:       stackA.ID,
 		StackName:     stackA.Name,
+		StackIcon:     stackA.Icon,
+		StackColor:    stackA.Color,
 		Icon:          project.Icon,
 		Name:          project.Name,
 		Color:         project.Color,
@@ -435,6 +440,170 @@ func TestEditProjectCanChangeSelectors(t *testing.T) {
 	updated = next.(model)
 	if updated.projectForm.StackID != stackB.ID {
 		t.Fatalf("stack = %d, want %d", updated.projectForm.StackID, stackB.ID)
+	}
+}
+
+func TestProjectDependencyRefreshLoadsDependencies(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v3/repos/owner/repo":
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case "/api/v3/repos/owner/repo/commits/main":
+			_, _ = w.Write([]byte(`{"sha":"abcdef1234567890"}`))
+		case "/api/v3/repos/owner/repo/contents/package.json":
+			encoded := base64.StdEncoding.EncodeToString([]byte(`{"dependencies":{"react":"^19.0.0"}}`))
+			_, _ = w.Write([]byte(`{"encoding":"base64","content":"` + encoded + `"}`))
+		case "/api/v3/repos/owner/repo/contents/package-lock.json":
+			encoded := base64.StdEncoding.EncodeToString([]byte(`{"lockfileVersion":3}`))
+			_, _ = w.Write([]byte(`{"encoding":"base64","content":"` + encoded + `"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "JavaScript", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", server.URL, storage.SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenProjects
+	m.projects = []ui.Project{{
+		ID:            project.ID,
+		ProjectID:     project.ProjectID,
+		NamespaceID:   namespace.ID,
+		NamespaceName: namespace.Name,
+		SourceID:      source.ID,
+		SourceName:    source.Name,
+		StackID:       stack.ID,
+		StackName:     stack.Name,
+		StackIcon:     stack.Icon,
+		StackColor:    stack.Color,
+		Icon:          project.Icon,
+		Name:          project.Name,
+		Color:         project.Color,
+	}}
+	m.sources = []ui.Source{{ID: source.ID, Icon: source.Icon, Name: source.Name, Color: source.Color, URL: source.URL, PATToken: source.PATToken, Type: source.Type}}
+	m.selectedProjectID = project.ID
+
+	next, cmd := m.Update(key("r"))
+	updated := next.(model)
+	if cmd == nil {
+		t.Fatal("expected refresh command")
+	}
+	if !updated.projectSyncStatus.Running {
+		t.Fatal("sync should be running")
+	}
+
+	batch := cmd().(tea.BatchMsg)
+	if msg := batch[0](); msg != nil {
+		next, _ = updated.Update(msg)
+		updated = next.(model)
+	}
+
+	cmd = batch[1]
+	for range 10 {
+		msg := cmd()
+		next, nextCmd := updated.Update(msg)
+		updated = next.(model)
+		cmd = nextCmd
+		if !updated.projectSyncStatus.Running {
+			break
+		}
+		if cmd == nil {
+			t.Fatal("expected wait command")
+		}
+	}
+	if updated.projectSyncStatus.Running {
+		t.Fatal("sync should be done")
+	}
+	if updated.projectSyncStatus.Error != "" {
+		t.Fatalf("sync error = %q", updated.projectSyncStatus.Error)
+	}
+
+	updated = applyBatch(t, updated, cmd)
+	if len(updated.projectDependencies) != 1 {
+		t.Fatalf("len(projectDependencies) = %d, want 1", len(updated.projectDependencies))
+	}
+	if updated.projectDependencies[0].Name != "react" {
+		t.Fatalf("dependency = %#v", updated.projectDependencies[0])
+	}
+	if updated.projectLatestRun.CommitShortSHA != "abcdef12" {
+		t.Fatalf("latest run = %#v", updated.projectLatestRun)
+	}
+}
+
+func TestProjectPaneCanSelectDependencies(t *testing.T) {
+	m := newModel(nil)
+	m.screen = ui.ScreenProjects
+	m.projectDependencies = []ui.ProjectDependency{
+		{ID: 1, Name: "react", Version: "^19.0.0"},
+		{ID: 2, Name: "next", Version: "^15.0.0"},
+	}
+	m.selectedProjectDepID = 1
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated := next.(model)
+	if updated.projectFocus != ui.ProjectPaneDependencies {
+		t.Fatalf("project focus = %v, want dependencies", updated.projectFocus)
+	}
+
+	next, _ = updated.Update(key("j"))
+	updated = next.(model)
+	if updated.selectedProjectDepID != 2 {
+		t.Fatalf("selected dep = %d, want 2", updated.selectedProjectDepID)
+	}
+
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	if updated.projectFocus != ui.ProjectPaneProjects {
+		t.Fatalf("project focus = %v, want projects", updated.projectFocus)
+	}
+}
+
+func TestProjectDependencySelectionDoesNotWrap(t *testing.T) {
+	m := newModel(nil)
+	m.screen = ui.ScreenProjects
+	m.projectFocus = ui.ProjectPaneDependencies
+	m.projectDependencies = []ui.ProjectDependency{
+		{ID: 1, Name: "react", Version: "^19.0.0"},
+		{ID: 2, Name: "next", Version: "^15.0.0"},
+	}
+	m.selectedProjectDepID = 2
+
+	next, _ := m.Update(key("j"))
+	updated := next.(model)
+	if updated.selectedProjectDepID != 2 {
+		t.Fatalf("selected dep = %d, want 2", updated.selectedProjectDepID)
+	}
+
+	updated.selectedProjectDepID = 1
+	next, _ = updated.Update(key("k"))
+	updated = next.(model)
+	if updated.selectedProjectDepID != 1 {
+		t.Fatalf("selected dep = %d, want 1", updated.selectedProjectDepID)
 	}
 }
 

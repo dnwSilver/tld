@@ -56,9 +56,41 @@ type Project struct {
 	SourceName    string
 	StackID       int64
 	StackName     string
+	StackIcon     string
+	StackColor    string
 	Icon          string
 	Name          string
 	Color         string
+}
+
+type ProjectDependencyRun struct {
+	CommitShortSHA string
+	Status         string
+	UpdatedAt      string
+	Error          string
+	HasValue       bool
+}
+
+type ProjectDependency struct {
+	ID             int64
+	Name           string
+	Version        string
+	DependencyType string
+	SourceFile     string
+}
+
+type ProjectPane int
+
+const (
+	ProjectPaneProjects ProjectPane = iota
+	ProjectPaneDependencies
+)
+
+type ProjectSyncStatus struct {
+	ProjectID int64
+	Message   string
+	Running   bool
+	Error     string
 }
 
 type Policy struct {

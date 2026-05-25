@@ -112,6 +112,10 @@ func (s *Store) Projects() ProjectRepository {
 	return ProjectRepository{db: s.db}
 }
 
+func (s *Store) ProjectDependencies() ProjectDependencyRepository {
+	return ProjectDependencyRepository{db: s.db}
+}
+
 func (s *Store) Policies() PolicyRepository {
 	return PolicyRepository{db: s.db}
 }

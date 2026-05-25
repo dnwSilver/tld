@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dnwSilver/tld/internal/projectsync"
 	"github.com/dnwSilver/tld/internal/storage"
 	"github.com/dnwSilver/tld/internal/ui"
 )
@@ -24,6 +26,12 @@ type model struct {
 	selectedDependencyID    int64
 	projects                []ui.Project
 	selectedProjectID       int64
+	projectDependencies     []ui.ProjectDependency
+	selectedProjectDepID    int64
+	projectLatestRun        ui.ProjectDependencyRun
+	projectSyncStatus       ui.ProjectSyncStatus
+	projectSyncCh           <-chan projectSyncMsg
+	projectFocus            ui.ProjectPane
 	sources                 []ui.Source
 	selectedSourceID        int64
 	policies                []ui.Policy
@@ -65,6 +73,19 @@ type dependenciesLoadedMsg struct {
 type projectsLoadedMsg struct {
 	projects []ui.Project
 	err      error
+}
+
+type projectDependenciesLoadedMsg struct {
+	dependencies []ui.ProjectDependency
+	latestRun    ui.ProjectDependencyRun
+	err          error
+}
+
+type projectSyncMsg struct {
+	projectID int64
+	message   string
+	err       error
+	done      bool
 }
 
 type sourcesLoadedMsg struct {
@@ -161,6 +182,7 @@ func newModel(store *storage.Store) model {
 		namespaces:   []ui.Namespace{},
 		dependencies: []ui.Dependency{},
 		projects:     []ui.Project{},
+		projectFocus: ui.ProjectPaneProjects,
 		sources:      []ui.Source{},
 		policies:     []ui.Policy{},
 		policyValues: []ui.PolicyValue{},
@@ -240,17 +262,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openEditForm()
 		case ui.KeyDelete.Matches(key):
 			m.openDelete()
+		case ui.KeyRefreshDeps.Matches(key):
+			if m.screen == ui.ScreenProjects {
+				return m.startProjectDependencySync()
+			}
 		case ui.KeyPrev.Matches(key):
 			m.selectPreviousOnScreen()
 			if m.screen == ui.ScreenPolicies && m.policyFocus == ui.PolicyPanePolicies {
 				return m, m.loadPolicyValues()
+			}
+			if m.screen == ui.ScreenProjects {
+				return m, m.loadProjectDependencies()
 			}
 		case ui.KeyNext.Matches(key):
 			m.selectNextOnScreen()
 			if m.screen == ui.ScreenPolicies && m.policyFocus == ui.PolicyPanePolicies {
 				return m, m.loadPolicyValues()
 			}
+			if m.screen == ui.ScreenProjects {
+				return m, m.loadProjectDependencies()
+			}
 		case key == "tab":
+			if m.screen == ui.ScreenProjects {
+				m.toggleProjectPane()
+				return m, nil
+			}
 			m.togglePolicyPane()
 		case ui.KeyQuit.Matches(key):
 			return m, tea.Quit
@@ -278,6 +314,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.projects = msg.projects
 			m.ensureSelectedProject()
+			return m, m.loadProjectDependencies()
+		}
+	case projectDependenciesLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.projectDependencies = msg.dependencies
+			m.ensureSelectedProjectDependency()
+			m.projectLatestRun = msg.latestRun
 		}
 	case sourcesLoadedMsg:
 		m.err = msg.err
@@ -426,6 +470,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadPolicyValues()
 		}
 		m.policyDeleteConfirm.Error = msg.err.Error()
+	case projectSyncMsg:
+		if msg.projectID != 0 && msg.projectID != m.selectedProjectID {
+			return m, nil
+		}
+		m.projectSyncStatus.ProjectID = msg.projectID
+		m.projectSyncStatus.Message = msg.message
+		m.projectSyncStatus.Running = !msg.done
+		m.projectSyncStatus.Error = ""
+		if msg.err != nil {
+			m.err = msg.err
+			m.projectSyncStatus.Error = msg.err.Error()
+			m.projectSyncStatus.Running = false
+			return m, m.loadProjectDependencies()
+		}
+		if msg.done {
+			m.projectSyncCh = nil
+			return m, m.loadProjectDependencies()
+		}
+		if m.projectSyncCh != nil {
+			return m, waitProjectSync(m.projectSyncCh)
+		}
 	}
 
 	return m, nil
@@ -448,6 +513,11 @@ func (m model) View() string {
 		m.selectedDependencyID,
 		m.projects,
 		m.selectedProjectID,
+		m.projectDependencies,
+		m.selectedProjectDepID,
+		m.projectLatestRun,
+		m.projectSyncStatus,
+		m.projectFocus,
 		m.sources,
 		m.selectedSourceID,
 		m.policies,
@@ -918,6 +988,10 @@ func (m *model) selectPreviousOnScreen() {
 	case ui.ScreenDependencies:
 		m.selectPreviousDependency()
 	case ui.ScreenProjects:
+		if m.projectFocus == ui.ProjectPaneDependencies {
+			m.selectPreviousProjectDependency()
+			return
+		}
 		m.selectPreviousProject()
 	case ui.ScreenSources:
 		m.selectPreviousSource()
@@ -939,6 +1013,10 @@ func (m *model) selectNextOnScreen() {
 	case ui.ScreenDependencies:
 		m.selectNextDependency()
 	case ui.ScreenProjects:
+		if m.projectFocus == ui.ProjectPaneDependencies {
+			m.selectNextProjectDependency()
+			return
+		}
 		m.selectNextProject()
 	case ui.ScreenSources:
 		m.selectNextSource()
@@ -964,6 +1042,102 @@ func (m *model) togglePolicyPane() {
 		return
 	}
 	m.policyFocus = ui.PolicyPanePolicies
+}
+
+func (m *model) toggleProjectPane() {
+	if m.screen != ui.ScreenProjects {
+		return
+	}
+	if m.projectFocus == ui.ProjectPaneProjects {
+		m.projectFocus = ui.ProjectPaneDependencies
+		m.ensureSelectedProjectDependency()
+		return
+	}
+	m.projectFocus = ui.ProjectPaneProjects
+}
+
+func (m model) startProjectDependencySync() (tea.Model, tea.Cmd) {
+	if m.projectSyncStatus.Running {
+		return m, nil
+	}
+
+	project, ok := m.selectedProject()
+	if !ok {
+		m.projectSyncStatus = ui.ProjectSyncStatus{Error: "project is not selected"}
+		return m, nil
+	}
+	source, ok := findByID(m.sources, project.SourceID, sourceID)
+	if !ok {
+		m.projectSyncStatus = ui.ProjectSyncStatus{ProjectID: project.ID, Error: "project source is not found"}
+		return m, nil
+	}
+
+	ch := make(chan projectSyncMsg, 16)
+	m.projectSyncCh = ch
+	m.projectSyncStatus = ui.ProjectSyncStatus{
+		ProjectID: project.ID,
+		Message:   "Resolving commit...",
+		Running:   true,
+	}
+
+	return m, tea.Batch(runProjectDependencySync(m.store, project, source, ch), waitProjectSync(ch))
+}
+
+func runProjectDependencySync(store *storage.Store, project ui.Project, source ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
+	return func() tea.Msg {
+		defer close(ch)
+		if store == nil {
+			ch <- projectSyncMsg{projectID: project.ID, message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			return nil
+		}
+
+		client, err := projectsync.NewSourceClient(source.Type, nil)
+		if err != nil {
+			ch <- projectSyncMsg{projectID: project.ID, message: err.Error(), err: err, done: true}
+			return nil
+		}
+
+		service := projectsync.Service{
+			Cache:        store.Cache(),
+			Runs:         store.ProjectDependencies(),
+			SourceClient: client,
+		}
+		result, err := service.Sync(context.Background(), projectsync.Source{
+			ID:       source.ID,
+			Type:     source.Type,
+			URL:      source.URL,
+			PATToken: source.PATToken,
+		}, projectsync.Project{
+			ID:         project.ID,
+			ProviderID: project.ProjectID,
+			Name:       project.Name,
+			StackName:  project.StackName,
+		}, func(message string) {
+			ch <- projectSyncMsg{projectID: project.ID, message: message}
+		})
+		if err != nil {
+			ch <- projectSyncMsg{projectID: project.ID, message: err.Error(), err: err, done: true}
+			return nil
+		}
+
+		message := "Saved " + strconv.Itoa(result.Count) + " dependencies"
+		if result.UpToDate {
+			message = "already up to date"
+		}
+		ch <- projectSyncMsg{projectID: project.ID, message: message, done: true}
+		return nil
+	}
+}
+
+func waitProjectSync(ch <-chan projectSyncMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+
+		return msg
+	}
 }
 
 func (m model) loadStacks() tea.Cmd {
@@ -1023,6 +1197,29 @@ func (m model) loadProjects() tea.Cmd {
 		}
 
 		return projectsLoadedMsg{projects: toUIProjects(projects)}
+	}
+}
+
+func (m model) loadProjectDependencies() tea.Cmd {
+	projectID := m.selectedProjectID
+	return func() tea.Msg {
+		if m.store == nil || projectID == 0 {
+			return projectDependenciesLoadedMsg{dependencies: []ui.ProjectDependency{}}
+		}
+
+		dependencies, err := m.store.ProjectDependencies().ListByProject(context.Background(), projectID)
+		if err != nil {
+			return projectDependenciesLoadedMsg{err: err}
+		}
+		latestRun, err := m.store.ProjectDependencies().LatestRun(context.Background(), projectID)
+		if err != nil {
+			return projectDependenciesLoadedMsg{err: err}
+		}
+
+		return projectDependenciesLoadedMsg{
+			dependencies: toUIProjectDependencies(dependencies),
+			latestRun:    toUIProjectDependencyRun(latestRun),
+		}
 	}
 }
 
@@ -1361,6 +1558,8 @@ func toUIProjects(projects []storage.Project) []ui.Project {
 			SourceName:    project.SourceName,
 			StackID:       project.StackID,
 			StackName:     project.StackName,
+			StackIcon:     project.StackIcon,
+			StackColor:    project.StackColor,
 			Icon:          project.Icon,
 			Name:          project.Name,
 			Color:         project.Color,
@@ -1368,6 +1567,39 @@ func toUIProjects(projects []storage.Project) []ui.Project {
 	}
 
 	return result
+}
+
+func toUIProjectDependencies(dependencies []storage.ProjectDependency) []ui.ProjectDependency {
+	result := make([]ui.ProjectDependency, 0, len(dependencies))
+	for _, dependency := range dependencies {
+		result = append(result, ui.ProjectDependency{
+			ID:             dependency.ID,
+			Name:           dependency.Name,
+			Version:        dependency.Version,
+			DependencyType: dependency.DependencyType,
+			SourceFile:     dependency.SourceFile,
+		})
+	}
+
+	return result
+}
+
+func toUIProjectDependencyRun(run storage.ProjectDependencyRun) ui.ProjectDependencyRun {
+	if run.ID == 0 {
+		return ui.ProjectDependencyRun{}
+	}
+	updatedAt := run.UpdatedAt
+	if run.FinishedAt != nil {
+		updatedAt = *run.FinishedAt
+	}
+
+	return ui.ProjectDependencyRun{
+		CommitShortSHA: run.CommitShortSHA,
+		Status:         run.Status,
+		UpdatedAt:      updatedAt.Format("2006-01-02 15:04"),
+		Error:          run.Error,
+		HasValue:       true,
+	}
 }
 
 func toUISources(sources []storage.Source) []ui.Source {
@@ -1691,8 +1923,11 @@ func stackID(s ui.Stack) int64           { return s.ID }
 func namespaceID(n ui.Namespace) int64   { return n.ID }
 func dependencyID(d ui.Dependency) int64 { return d.ID }
 func projectID(p ui.Project) int64       { return p.ID }
-func sourceID(s ui.Source) int64         { return s.ID }
-func policyID(p ui.Policy) int64         { return p.ID }
+func projectDependencyID(d ui.ProjectDependency) int64 {
+	return d.ID
+}
+func sourceID(s ui.Source) int64 { return s.ID }
+func policyID(p ui.Policy) int64 { return p.ID }
 func policyValueID(v ui.PolicyValue) int64 {
 	return v.ID
 }
@@ -1711,6 +1946,10 @@ func (m *model) ensureSelectedDependency() {
 
 func (m *model) ensureSelectedProject() {
 	m.selectedProjectID = ensureSelected(m.projects, m.selectedProjectID, projectID)
+}
+
+func (m *model) ensureSelectedProjectDependency() {
+	m.selectedProjectDepID = ensureSelected(m.projectDependencies, m.selectedProjectDepID, projectDependencyID)
 }
 
 func (m *model) ensureSelectedSource() {
@@ -1754,12 +1993,20 @@ func (m *model) selectPreviousProject() {
 	m.selectedProjectID = selectPrevious(m.projects, m.selectedProjectID, projectID)
 }
 
+func (m *model) selectPreviousProjectDependency() {
+	m.selectedProjectDepID = selectPreviousBounded(m.projectDependencies, m.selectedProjectDepID, projectDependencyID)
+}
+
 func (m *model) selectNextDependency() {
 	m.selectedDependencyID = selectNext(m.dependencies, m.selectedDependencyID, dependencyID)
 }
 
 func (m *model) selectNextProject() {
 	m.selectedProjectID = selectNext(m.projects, m.selectedProjectID, projectID)
+}
+
+func (m *model) selectNextProjectDependency() {
+	m.selectedProjectDepID = selectNextBounded(m.projectDependencies, m.selectedProjectDepID, projectDependencyID)
 }
 
 func (m *model) selectPreviousSource() {

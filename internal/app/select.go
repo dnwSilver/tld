@@ -32,6 +32,32 @@ func selectNext[T any](items []T, currentID int64, idOf func(T) int64) int64 {
 	return idOf(items[(index+1)%len(items)])
 }
 
+func selectPreviousBounded[T any](items []T, currentID int64, idOf func(T) int64) int64 {
+	if len(items) == 0 {
+		return 0
+	}
+
+	index := indexByID(items, currentID, idOf)
+	if index <= 0 {
+		return idOf(items[0])
+	}
+
+	return idOf(items[index-1])
+}
+
+func selectNextBounded[T any](items []T, currentID int64, idOf func(T) int64) int64 {
+	if len(items) == 0 {
+		return 0
+	}
+
+	index := indexByID(items, currentID, idOf)
+	if index >= len(items)-1 {
+		return idOf(items[len(items)-1])
+	}
+
+	return idOf(items[index+1])
+}
+
 func ensureSelected[T any](items []T, currentID int64, idOf func(T) int64) int64 {
 	if len(items) == 0 {
 		return 0
