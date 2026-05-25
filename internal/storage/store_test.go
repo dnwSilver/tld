@@ -379,6 +379,84 @@ func TestSources(t *testing.T) {
 	}
 }
 
+func TestProjects(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitLab", "glpat-secret", "https://gitlab.com", SourceTypeGitLab)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+
+	repository := store.Projects()
+	project, err := repository.Create(ctx, "autobase-main", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if project.ProjectID != "autobase-main" || project.NamespaceID != namespace.ID || project.SourceID != source.ID || project.StackID != stack.ID {
+		t.Fatalf("project = %#v", project)
+	}
+
+	count, err := repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count projects: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	projects, err := repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list projects: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("len(projects) = %d, want 1", len(projects))
+	}
+	if projects[0].NamespaceName != "Production" || projects[0].SourceName != "GitLab" || projects[0].StackName != "Git" {
+		t.Fatalf("projects[0] = %#v", projects[0])
+	}
+
+	if err := repository.Update(ctx, project.ID, "autobase-ui", namespace.ID, source.ID, stack.ID, "󰏖", "TLD UI", "#84BA64"); err != nil {
+		t.Fatalf("update project: %v", err)
+	}
+
+	projects, err = repository.List(ctx)
+	if err != nil {
+		t.Fatalf("list projects after update: %v", err)
+	}
+	if projects[0].ProjectID != "autobase-ui" || projects[0].Name != "TLD UI" || projects[0].Color != "#84BA64" {
+		t.Fatalf("updated project = %#v", projects[0])
+	}
+
+	if err := repository.Delete(ctx, project.ID); err != nil {
+		t.Fatalf("delete project: %v", err)
+	}
+
+	count, err = repository.Count(ctx)
+	if err != nil {
+		t.Fatalf("count projects after delete: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count = %d, want 0", count)
+	}
+}
+
 func TestPolicies(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "tld.db")

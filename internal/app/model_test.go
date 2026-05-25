@@ -242,8 +242,7 @@ func TestCreateSourceFromForm(t *testing.T) {
 		t.Fatal("expected reload command")
 	}
 
-	next, _ = updated.Update(cmd().(sourcesLoadedMsg))
-	updated = next.(model)
+	updated = applyBatch(t, updated, cmd)
 	if len(updated.sources) != 1 {
 		t.Fatalf("len(sources) = %d, want 1", len(updated.sources))
 	}
@@ -255,6 +254,187 @@ func TestCreateSourceFromForm(t *testing.T) {
 	}
 	if updated.selectedSourceID != updated.sources[0].ID {
 		t.Fatalf("selected source = %d, want %d", updated.selectedSourceID, updated.sources[0].ID)
+	}
+}
+
+func TestCreateProjectFromForm(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "Git", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitLab", "glpat-secret", "https://gitlab.com", storage.SourceTypeGitLab)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenProjects
+	m.namespaces = []ui.Namespace{{ID: namespace.ID, Icon: namespace.Icon, Name: namespace.Name, Color: namespace.Color}}
+	m.stacks = []ui.Stack{{ID: stack.ID, Icon: stack.Icon, Name: stack.Name, Color: stack.Color}}
+	m.sources = []ui.Source{{ID: source.ID, Icon: source.Icon, Name: source.Name, Color: source.Color, URL: source.URL, PATToken: source.PATToken, Type: source.Type}}
+	m.projectForm = ui.ProjectForm{
+		Open:        true,
+		Focus:       ui.ProjectFormFieldName,
+		ProjectID:   "autobase-main",
+		NamespaceID: namespace.ID,
+		SourceID:    source.ID,
+		StackID:     stack.ID,
+		Icon:        "󰏖",
+		Color:       "#EC9706",
+		Name:        "TLD",
+		CanSave:     true,
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := next.(model)
+	if cmd == nil {
+		t.Fatal("expected create command")
+	}
+
+	next, cmd = updated.Update(cmd().(projectSavedMsg))
+	updated = next.(model)
+	if updated.projectForm.Open {
+		t.Fatal("project form should be closed after save")
+	}
+	if cmd == nil {
+		t.Fatal("expected reload command")
+	}
+
+	next, _ = updated.Update(cmd().(projectsLoadedMsg))
+	updated = next.(model)
+	if len(updated.projects) != 1 {
+		t.Fatalf("len(projects) = %d, want 1", len(updated.projects))
+	}
+	if updated.projects[0].ProjectID != "autobase-main" || updated.projects[0].Name != "TLD" || updated.projects[0].NamespaceID != namespace.ID || updated.projects[0].SourceID != source.ID || updated.projects[0].StackID != stack.ID {
+		t.Fatalf("project = %#v", updated.projects[0])
+	}
+	if updated.selectedProjectID != updated.projects[0].ID {
+		t.Fatalf("selected project = %d, want %d", updated.selectedProjectID, updated.projects[0].ID)
+	}
+}
+
+func TestEditProjectCanChangeSelectors(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespaceA, err := store.Namespaces().Create(ctx, "󱃾", "A", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace A: %v", err)
+	}
+	namespaceB, err := store.Namespaces().Create(ctx, "󱃾", "B", "#EC9706")
+	if err != nil {
+		t.Fatalf("create namespace B: %v", err)
+	}
+	stackA, err := store.Stacks().Create(ctx, "", "Go", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack A: %v", err)
+	}
+	stackB, err := store.Stacks().Create(ctx, "󰙯", "Rust", "#F74C00")
+	if err != nil {
+		t.Fatalf("create stack B: %v", err)
+	}
+	sourceA, err := store.Sources().Create(ctx, "GitLab", "glpat-secret", "https://gitlab.com", storage.SourceTypeGitLab)
+	if err != nil {
+		t.Fatalf("create source A: %v", err)
+	}
+	sourceB, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", storage.SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source B: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "autobase-main", namespaceA.ID, sourceA.ID, stackA.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenProjects
+	m.namespaces = []ui.Namespace{
+		{ID: namespaceA.ID, Icon: namespaceA.Icon, Name: namespaceA.Name, Color: namespaceA.Color},
+		{ID: namespaceB.ID, Icon: namespaceB.Icon, Name: namespaceB.Name, Color: namespaceB.Color},
+	}
+	m.stacks = []ui.Stack{
+		{ID: stackA.ID, Icon: stackA.Icon, Name: stackA.Name, Color: stackA.Color},
+		{ID: stackB.ID, Icon: stackB.Icon, Name: stackB.Name, Color: stackB.Color},
+	}
+	m.sources = []ui.Source{
+		{ID: sourceA.ID, Icon: sourceA.Icon, Name: sourceA.Name, Color: sourceA.Color, URL: sourceA.URL, PATToken: sourceA.PATToken, Type: sourceA.Type},
+		{ID: sourceB.ID, Icon: sourceB.Icon, Name: sourceB.Name, Color: sourceB.Color, URL: sourceB.URL, PATToken: sourceB.PATToken, Type: sourceB.Type},
+	}
+	m.projects = []ui.Project{{
+		ID:            project.ID,
+		ProjectID:     project.ProjectID,
+		NamespaceID:   namespaceA.ID,
+		NamespaceName: namespaceA.Name,
+		SourceID:      sourceA.ID,
+		SourceName:    sourceA.Name,
+		StackID:       stackA.ID,
+		StackName:     stackA.Name,
+		Icon:          project.Icon,
+		Name:          project.Name,
+		Color:         project.Color,
+	}}
+	m.selectedProjectID = project.ID
+
+	next, _ := m.Update(key("e"))
+	updated := next.(model)
+	if !updated.projectForm.Open {
+		t.Fatal("project edit form should be open")
+	}
+
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	if updated.projectForm.Focus != ui.ProjectFormFieldNamespace {
+		t.Fatalf("focus = %v, want namespace", updated.projectForm.Focus)
+	}
+	next, _ = updated.Update(key("l"))
+	updated = next.(model)
+	if updated.projectForm.NamespaceID != namespaceB.ID {
+		t.Fatalf("namespace = %d, want %d", updated.projectForm.NamespaceID, namespaceB.ID)
+	}
+
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	if updated.projectForm.Focus != ui.ProjectFormFieldSource {
+		t.Fatalf("focus = %v, want source", updated.projectForm.Focus)
+	}
+	next, _ = updated.Update(key("l"))
+	updated = next.(model)
+	if updated.projectForm.SourceID != sourceB.ID {
+		t.Fatalf("source = %d, want %d", updated.projectForm.SourceID, sourceB.ID)
+	}
+
+	next, _ = updated.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated = next.(model)
+	if updated.projectForm.Focus != ui.ProjectFormFieldStack {
+		t.Fatalf("focus = %v, want stack", updated.projectForm.Focus)
+	}
+	next, _ = updated.Update(key("l"))
+	updated = next.(model)
+	if updated.projectForm.StackID != stackB.ID {
+		t.Fatalf("stack = %d, want %d", updated.projectForm.StackID, stackB.ID)
 	}
 }
 

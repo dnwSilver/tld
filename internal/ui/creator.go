@@ -15,6 +15,7 @@ type Creator struct {
 	stacksScreen       screens.StacksScreen
 	namespacesScreen   screens.StacksScreen
 	dependenciesScreen screens.DependenciesScreen
+	projectsScreen     screens.ProjectsScreen
 	sourcesScreen      screens.SourcesScreen
 	policiesScreen     screens.PoliciesScreen
 }
@@ -30,6 +31,7 @@ func NewCreator() Creator {
 		stacksScreen:       screens.NewStacksScreen(palette),
 		namespacesScreen:   screens.NewNamespacesScreen(palette),
 		dependenciesScreen: screens.NewDependenciesScreen(palette),
+		projectsScreen:     screens.NewProjectsScreen(palette),
 		sourcesScreen:      screens.NewSourcesScreen(palette),
 		policiesScreen:     screens.NewPoliciesScreen(palette),
 	}
@@ -45,6 +47,8 @@ func (c Creator) Render(
 	selectedNamespaceID int64,
 	dependencies []uikit.Dependency,
 	selectedDependencyID int64,
+	projects []uikit.Project,
+	selectedProjectID int64,
 	sources []uikit.Source,
 	selectedSourceID int64,
 	policies []uikit.Policy,
@@ -55,12 +59,14 @@ func (c Creator) Render(
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
 	dependencyForm uikit.DependencyForm,
+	projectForm uikit.ProjectForm,
 	sourceForm uikit.SourceForm,
 	policyForm uikit.PolicyForm,
 	policyValueForm uikit.PolicyValueForm,
 	deleteConfirm uikit.DeleteConfirm,
 	namespaceDeleteConfirm uikit.DeleteConfirm,
 	dependencyDeleteConfirm uikit.DeleteConfirm,
+	projectDeleteConfirm uikit.DeleteConfirm,
 	sourceDeleteConfirm uikit.DeleteConfirm,
 	policyDeleteConfirm uikit.DeleteConfirm,
 ) string {
@@ -97,6 +103,19 @@ func (c Creator) Render(
 			stacks,
 			dependencyForm,
 			dependencyDeleteConfirm,
+		)
+	}
+	if screen == uikit.ScreenProjects {
+		body = c.projectsScreen.Render(
+			width,
+			bodyHeight,
+			projects,
+			selectedProjectID,
+			namespaces,
+			sources,
+			stacks,
+			projectForm,
+			projectDeleteConfirm,
 		)
 	}
 	if screen == uikit.ScreenSources {

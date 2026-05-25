@@ -9,6 +9,7 @@ const (
 	ScreenStacks       = uikit.ScreenStacks
 	ScreenNamespaces   = uikit.ScreenNamespaces
 	ScreenDependencies = uikit.ScreenDependencies
+	ScreenProjects     = uikit.ScreenProjects
 	ScreenSources      = uikit.ScreenSources
 	ScreenPolicies     = uikit.ScreenPolicies
 )
@@ -16,6 +17,7 @@ const (
 type Stack = uikit.Stack
 type Namespace = uikit.Namespace
 type Dependency = uikit.Dependency
+type Project = uikit.Project
 type Source = uikit.Source
 type Policy = uikit.Policy
 type PolicyValue = uikit.PolicyValue
@@ -63,6 +65,19 @@ const (
 )
 
 type SourceForm = uikit.SourceForm
+type ProjectFormField = uikit.ProjectFormField
+
+const (
+	ProjectFormFieldIcon      = uikit.ProjectFormFieldIcon
+	ProjectFormFieldColor     = uikit.ProjectFormFieldColor
+	ProjectFormFieldName      = uikit.ProjectFormFieldName
+	ProjectFormFieldProjectID = uikit.ProjectFormFieldProjectID
+	ProjectFormFieldNamespace = uikit.ProjectFormFieldNamespace
+	ProjectFormFieldSource    = uikit.ProjectFormFieldSource
+	ProjectFormFieldStack     = uikit.ProjectFormFieldStack
+)
+
+type ProjectForm = uikit.ProjectForm
 type PolicyFormField = uikit.PolicyFormField
 
 const (
@@ -88,6 +103,7 @@ var (
 	KeyStacks         = uikit.KeyStacks
 	KeyNamespaces     = uikit.KeyNamespaces
 	KeyDependencies   = uikit.KeyDependencies
+	KeyProjects       = uikit.KeyProjects
 	KeySources        = uikit.KeySources
 	KeyPolicies       = uikit.KeyPolicies
 	KeyAdd            = uikit.KeyAdd
@@ -96,6 +112,7 @@ var (
 	KeyPrev           = uikit.KeyPrev
 	KeyNext           = uikit.KeyNext
 	KeyStackPick      = uikit.KeyStackPick
+	KeySourcePick     = uikit.KeySourcePick
 	KeySourceTypePick = uikit.KeySourceTypePick
 	KeyNamespacePick  = uikit.KeyNamespacePick
 	KeyPolicyPick     = uikit.KeyPolicyPick

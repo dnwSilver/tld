@@ -44,6 +44,7 @@ func isListScreen(screen uikit.Screen) bool {
 	return screen == uikit.ScreenStacks ||
 		screen == uikit.ScreenNamespaces ||
 		screen == uikit.ScreenDependencies ||
+		screen == uikit.ScreenProjects ||
 		screen == uikit.ScreenSources ||
 		screen == uikit.ScreenPolicies
 }
@@ -83,7 +84,8 @@ func (h Hints) listRows() []string {
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyStacks, 18), h.fromBinding(h.palette.Info, uikit.KeyEdit, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyNamespaces, 18), h.fromBinding(h.palette.Error, uikit.KeyDelete, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyDependencies, 18), h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeySources, 18), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyProjects, 18), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeySources, 18), hintSpec{h.palette.Hint, "", "", 20}),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPolicies, 18), hintSpec{h.palette.Hint, "", "[Tab] pane", 20}),
 	}
 }

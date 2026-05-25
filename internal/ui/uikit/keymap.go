@@ -23,7 +23,8 @@ var (
 	KeyNamespaces   = Binding{Keys: []string{"2", "cmd+2", "alt+2"}, Label: "namespaces", Symbol: SymbolNamespace, Hint: "2 namespaces"}
 	KeyDependencies = Binding{Keys: []string{"3", "cmd+3", "alt+3"}, Label: "deps", Symbol: SymbolDependency, Hint: "3 deps"}
 	KeySources      = Binding{Keys: []string{"4", "cmd+4", "alt+4"}, Label: "sources", Symbol: SymbolSource, Hint: "4 sources"}
-	KeyPolicies     = Binding{Keys: []string{"5", "cmd+5", "alt+5"}, Label: "policies", Symbol: SymbolPolicy, Hint: "5 policies"}
+	KeyProjects     = Binding{Keys: []string{"5", "cmd+5", "alt+5"}, Label: "projects", Symbol: SymbolProject, Hint: "5 projects"}
+	KeyPolicies     = Binding{Keys: []string{"6", "cmd+6", "alt+6"}, Label: "policies", Symbol: SymbolPolicy, Hint: "6 policies"}
 
 	KeyAdd            = Binding{Keys: []string{"a"}, Label: "add", Symbol: SymbolAdd, Hint: "[a] add"}
 	KeyEdit           = Binding{Keys: []string{"e"}, Label: "edit", Symbol: SymbolEdit, Hint: "[e] edit"}
@@ -31,6 +32,7 @@ var (
 	KeyPrev           = Binding{Keys: []string{"up", "k"}, Label: "prev", Symbol: SymbolSelectPrev, Hint: "[k] prev"}
 	KeyNext           = Binding{Keys: []string{"down", "j"}, Label: "next", Symbol: SymbolSelectNext, Hint: "[j] next"}
 	KeyStackPick      = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "stack", Symbol: SymbolStack, Hint: "[h/l] Stack"}
+	KeySourcePick     = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "source", Symbol: SymbolSource, Hint: "[h/l] Source"}
 	KeySourceTypePick = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "type", Symbol: SymbolSource, Hint: "[h/l] Type"}
 	KeyNamespacePick  = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "namespace", Symbol: SymbolNamespace, Hint: "[h/l] Namespace"}
 	KeyPolicyPick     = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "policy", Symbol: SymbolPolicy, Hint: "[h/l] Policy"}

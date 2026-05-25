@@ -108,6 +108,10 @@ func (s *Store) Sources() SourceRepository {
 	return SourceRepository{db: s.db}
 }
 
+func (s *Store) Projects() ProjectRepository {
+	return ProjectRepository{db: s.db}
+}
+
 func (s *Store) Policies() PolicyRepository {
 	return PolicyRepository{db: s.db}
 }

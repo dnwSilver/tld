@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 7
+const currentSchemaVersion = 10
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -67,6 +67,21 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 7 {
 		if err := migrateV7(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 8 {
+		if err := migrateV8(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 9 {
+		if err := migrateV9(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 10 {
+		if err := migrateV10(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -409,4 +424,123 @@ func hasColumn(ctx context.Context, tx *sql.Tx, table string, column string) (bo
 	}
 
 	return false, nil
+}
+
+func migrateV8(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE IF NOT EXISTS projects (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				namespace_id INTEGER NOT NULL,
+				source_id INTEGER NOT NULL,
+				stack_id INTEGER NOT NULL,
+				icon TEXT NOT NULL,
+				name TEXT NOT NULL,
+				color TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (namespace_id, name),
+				FOREIGN KEY (namespace_id) REFERENCES namespaces (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+				FOREIGN KEY (source_id) REFERENCES sources (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+				FOREIGN KEY (stack_id) REFERENCES stacks (id) ON UPDATE CASCADE ON DELETE RESTRICT
+			)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_projects_namespace_id
+			ON projects (namespace_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_projects_source_id
+			ON projects (source_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_projects_stack_id
+			ON projects (stack_id)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (8)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v8: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateV9(ctx context.Context, tx *sql.Tx) error {
+	hasProjectID, err := hasColumn(ctx, tx, "projects", "project_id")
+	if err != nil {
+		return err
+	}
+	if !hasProjectID {
+		statements := []string{
+			"ALTER TABLE projects ADD COLUMN project_id INTEGER NOT NULL DEFAULT 0",
+			"UPDATE projects SET project_id = id WHERE project_id = 0",
+		}
+
+		for _, statement := range statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply schema v9: %w", err)
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO schema_migrations (version) VALUES (9)"); err != nil {
+		return fmt.Errorf("apply schema v9: %w", err)
+	}
+
+	return nil
+}
+
+func migrateV10(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`
+			CREATE TABLE projects_v10 (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				project_id TEXT NOT NULL,
+				namespace_id INTEGER NOT NULL,
+				source_id INTEGER NOT NULL,
+				stack_id INTEGER NOT NULL,
+				icon TEXT NOT NULL,
+				name TEXT NOT NULL,
+				color TEXT NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+				UNIQUE (namespace_id, name),
+				FOREIGN KEY (namespace_id) REFERENCES namespaces (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+				FOREIGN KEY (source_id) REFERENCES sources (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+				FOREIGN KEY (stack_id) REFERENCES stacks (id) ON UPDATE CASCADE ON DELETE RESTRICT
+			)
+		`,
+		`
+			INSERT INTO projects_v10 (id, project_id, namespace_id, source_id, stack_id, icon, name, color, created_at, updated_at)
+			SELECT id, CAST(project_id AS TEXT), namespace_id, source_id, stack_id, icon, name, color, created_at, updated_at
+			FROM projects
+		`,
+		"DROP TABLE projects",
+		"ALTER TABLE projects_v10 RENAME TO projects",
+		`
+			CREATE INDEX IF NOT EXISTS idx_projects_namespace_id
+			ON projects (namespace_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_projects_source_id
+			ON projects (source_id)
+		`,
+		`
+			CREATE INDEX IF NOT EXISTS idx_projects_stack_id
+			ON projects (stack_id)
+		`,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (10)",
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v10: %w", err)
+		}
+	}
+
+	return nil
 }

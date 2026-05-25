@@ -7,6 +7,7 @@ const (
 	ScreenStacks
 	ScreenNamespaces
 	ScreenDependencies
+	ScreenProjects
 	ScreenSources
 	ScreenPolicies
 )
@@ -44,6 +45,20 @@ type Source struct {
 	PATToken string
 	URL      string
 	Type     string
+}
+
+type Project struct {
+	ID            int64
+	ProjectID     string
+	NamespaceID   int64
+	NamespaceName string
+	SourceID      int64
+	SourceName    string
+	StackID       int64
+	StackName     string
+	Icon          string
+	Name          string
+	Color         string
 }
 
 type Policy struct {
@@ -141,6 +156,34 @@ type SourceForm struct {
 	Type     string
 	CanSave  bool
 	Error    string
+}
+
+type ProjectFormField int
+
+const (
+	ProjectFormFieldIcon ProjectFormField = iota
+	ProjectFormFieldColor
+	ProjectFormFieldName
+	ProjectFormFieldProjectID
+	ProjectFormFieldNamespace
+	ProjectFormFieldSource
+	ProjectFormFieldStack
+)
+
+type ProjectForm struct {
+	Open        bool
+	Mode        StackFormMode
+	ID          int64
+	ProjectID   string
+	NamespaceID int64
+	SourceID    int64
+	StackID     int64
+	Focus       ProjectFormField
+	Icon        string
+	Color       string
+	Name        string
+	CanSave     bool
+	Error       string
 }
 
 type PolicyFormField int

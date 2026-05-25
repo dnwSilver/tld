@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,6 +22,8 @@ type model struct {
 	selectedNamespaceID     int64
 	dependencies            []ui.Dependency
 	selectedDependencyID    int64
+	projects                []ui.Project
+	selectedProjectID       int64
 	sources                 []ui.Source
 	selectedSourceID        int64
 	policies                []ui.Policy
@@ -31,12 +34,14 @@ type model struct {
 	form                    ui.StackForm
 	namespaceForm           ui.StackForm
 	dependencyForm          ui.DependencyForm
+	projectForm             ui.ProjectForm
 	sourceForm              ui.SourceForm
 	policyForm              ui.PolicyForm
 	policyValueForm         ui.PolicyValueForm
 	deleteConfirm           ui.DeleteConfirm
 	namespaceDeleteConfirm  ui.DeleteConfirm
 	dependencyDeleteConfirm ui.DeleteConfirm
+	projectDeleteConfirm    ui.DeleteConfirm
 	sourceDeleteConfirm     ui.DeleteConfirm
 	policyDeleteConfirm     ui.DeleteConfirm
 	err                     error
@@ -55,6 +60,11 @@ type namespacesLoadedMsg struct {
 type dependenciesLoadedMsg struct {
 	dependencies []ui.Dependency
 	err          error
+}
+
+type projectsLoadedMsg struct {
+	projects []ui.Project
+	err      error
 }
 
 type sourcesLoadedMsg struct {
@@ -87,6 +97,11 @@ type dependencySavedMsg struct {
 	err          error
 }
 
+type projectSavedMsg struct {
+	projectID int64
+	err       error
+}
+
 type sourceSavedMsg struct {
 	sourceID int64
 	err      error
@@ -117,6 +132,11 @@ type dependencyDeletedMsg struct {
 	err          error
 }
 
+type projectDeletedMsg struct {
+	projectID int64
+	err       error
+}
+
 type sourceDeletedMsg struct {
 	sourceID int64
 	err      error
@@ -140,6 +160,7 @@ func newModel(store *storage.Store) model {
 		stacks:       []ui.Stack{},
 		namespaces:   []ui.Namespace{},
 		dependencies: []ui.Dependency{},
+		projects:     []ui.Project{},
 		sources:      []ui.Source{},
 		policies:     []ui.Policy{},
 		policyValues: []ui.PolicyValue{},
@@ -148,7 +169,7 @@ func newModel(store *storage.Store) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.loadStacks(), m.loadNamespaces(), m.loadDependencies(), m.loadSources(), m.loadPolicies())
+	return tea.Batch(m.loadStacks(), m.loadNamespaces(), m.loadDependencies(), m.loadProjects(), m.loadSources(), m.loadPolicies())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -166,6 +187,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.dependencyDeleteConfirm.Open {
 			return m.updateDependencyDeleteConfirm(msg)
 		}
+		if m.projectDeleteConfirm.Open {
+			return m.updateProjectDeleteConfirm(msg)
+		}
 		if m.namespaceDeleteConfirm.Open {
 			return m.updateNamespaceDeleteConfirm(msg)
 		}
@@ -174,6 +198,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.dependencyForm.Open {
 			return m.updateDependencyForm(msg)
+		}
+		if m.projectForm.Open {
+			return m.updateProjectForm(msg)
 		}
 		if m.sourceForm.Open {
 			return m.updateSourceForm(msg)
@@ -201,6 +228,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = ui.ScreenNamespaces
 		case ui.KeyDependencies.Matches(key):
 			m.screen = ui.ScreenDependencies
+		case ui.KeyProjects.Matches(key):
+			m.screen = ui.ScreenProjects
 		case ui.KeySources.Matches(key):
 			m.screen = ui.ScreenSources
 		case ui.KeyPolicies.Matches(key):
@@ -244,6 +273,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dependencies = msg.dependencies
 			m.ensureSelectedDependency()
 		}
+	case projectsLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.projects = msg.projects
+			m.ensureSelectedProject()
+		}
 	case sourcesLoadedMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -268,7 +303,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.selectedStackID = msg.stackID
 			m.form = ui.StackForm{}
-			return m, tea.Batch(m.loadStacks(), m.loadDependencies())
+			return m, tea.Batch(m.loadStacks(), m.loadDependencies(), m.loadProjects())
 		}
 		m.form.Error = msg.err.Error()
 	case namespaceSavedMsg:
@@ -276,7 +311,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.selectedNamespaceID = msg.namespaceID
 			m.namespaceForm = ui.StackForm{}
-			return m, tea.Batch(m.loadNamespaces(), m.loadPolicies())
+			return m, tea.Batch(m.loadNamespaces(), m.loadPolicies(), m.loadProjects())
 		}
 		m.namespaceForm.Error = msg.err.Error()
 	case dependencySavedMsg:
@@ -287,12 +322,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadDependencies()
 		}
 		m.dependencyForm.Error = msg.err.Error()
+	case projectSavedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.selectedProjectID = msg.projectID
+			m.projectForm = ui.ProjectForm{}
+			return m, m.loadProjects()
+		}
+		m.projectForm.Error = msg.err.Error()
 	case sourceSavedMsg:
 		m.err = msg.err
 		if msg.err == nil {
 			m.selectedSourceID = msg.sourceID
 			m.sourceForm = ui.SourceForm{}
-			return m, m.loadSources()
+			return m, tea.Batch(m.loadSources(), m.loadProjects())
 		}
 		m.sourceForm.Error = msg.err.Error()
 	case policySavedMsg:
@@ -341,6 +384,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadDependencies()
 		}
 		m.dependencyDeleteConfirm.Error = msg.err.Error()
+	case projectDeletedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			if m.selectedProjectID == msg.projectID {
+				m.selectedProjectID = 0
+			}
+			m.projectDeleteConfirm = ui.DeleteConfirm{}
+			return m, m.loadProjects()
+		}
+		m.projectDeleteConfirm.Error = msg.err.Error()
 	case sourceDeletedMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -393,6 +446,8 @@ func (m model) View() string {
 		m.selectedNamespaceID,
 		m.dependencies,
 		m.selectedDependencyID,
+		m.projects,
+		m.selectedProjectID,
 		m.sources,
 		m.selectedSourceID,
 		m.policies,
@@ -403,12 +458,14 @@ func (m model) View() string {
 		m.form,
 		m.namespaceForm,
 		m.dependencyForm,
+		m.projectForm,
 		m.sourceForm,
 		m.policyForm,
 		m.policyValueForm,
 		m.deleteConfirm,
 		m.namespaceDeleteConfirm,
 		m.dependencyDeleteConfirm,
+		m.projectDeleteConfirm,
 		m.sourceDeleteConfirm,
 		m.policyDeleteConfirm,
 	)
@@ -511,6 +568,12 @@ func (m model) updateDependencyForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.finishStackFormAction(action, m.saveDependency)
 }
 
+func (m model) updateProjectForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var action stackFormAction
+	m.projectForm, action = updateProjectFormState(msg, m.projectForm, m.namespaces, m.sources, m.stacks)
+	return m.finishStackFormAction(action, m.saveProject)
+}
+
 func (m model) updateSourceForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action stackFormAction
 	m.sourceForm, action = updateSourceFormState(msg, m.sourceForm)
@@ -561,6 +624,50 @@ func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []
 	}
 
 	return normalizeDependencyForm(form, stacks), stackFormActionNone
+}
+
+func updateProjectFormState(msg tea.KeyMsg, form ui.ProjectForm, namespaces []ui.Namespace, sources []ui.Source, stacks []ui.Stack) (ui.ProjectForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.ProjectForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanSave {
+			return form, stackFormActionNone
+		}
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextProjectFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousProjectFormField(form.Focus)
+	case isOneOf(msg, "left", "h"):
+		switch form.Focus {
+		case ui.ProjectFormFieldNamespace:
+			form.NamespaceID = previousNamespaceID(namespaces, form.NamespaceID)
+		case ui.ProjectFormFieldSource:
+			form.SourceID = previousSourceID(sources, form.SourceID)
+		case ui.ProjectFormFieldStack:
+			form.StackID = previousStackID(stacks, form.StackID)
+		}
+	case isOneOf(msg, "right", "l"):
+		switch form.Focus {
+		case ui.ProjectFormFieldNamespace:
+			form.NamespaceID = nextNamespaceID(namespaces, form.NamespaceID)
+		case ui.ProjectFormFieldSource:
+			form.SourceID = nextSourceID(sources, form.SourceID)
+		case ui.ProjectFormFieldStack:
+			form.StackID = nextStackID(stacks, form.StackID)
+		}
+	case isBackspaceKey(msg):
+		form = deleteProjectFormRune(form)
+	default:
+		if msg.Type == tea.KeyRunes {
+			form = appendProjectFormRunes(form, msg.Runes)
+		}
+	}
+
+	return normalizeProjectForm(form, namespaces, sources, stacks), stackFormActionNone
 }
 
 func updateSourceFormState(msg tea.KeyMsg, form ui.SourceForm) (ui.SourceForm, stackFormAction) {
@@ -683,6 +790,12 @@ func (m model) updateDependencyDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	return m.finishDeleteConfirmAction(action, m.deleteDependency)
 }
 
+func (m model) updateProjectDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var action deleteConfirmAction
+	m.projectDeleteConfirm, action = updateDeleteConfirmState(msg, m.projectDeleteConfirm)
+	return m.finishDeleteConfirmAction(action, m.deleteProject)
+}
+
 func (m model) updateSourceDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action deleteConfirmAction
 	m.sourceDeleteConfirm, action = updateDeleteConfirmState(msg, m.sourceDeleteConfirm)
@@ -738,6 +851,8 @@ func (m *model) openAddForm() {
 		m.namespaceForm = newNamespaceForm(m.policies)
 	case ui.ScreenDependencies:
 		m.dependencyForm = newDependencyForm(m.stacks)
+	case ui.ScreenProjects:
+		m.projectForm = newProjectForm(m.namespaces, m.sources, m.stacks)
 	case ui.ScreenSources:
 		m.sourceForm = newSourceForm()
 	case ui.ScreenPolicies:
@@ -760,6 +875,8 @@ func (m *model) openEditForm() {
 		m.openEditNamespaceForm()
 	case ui.ScreenDependencies:
 		m.openEditDependencyForm()
+	case ui.ScreenProjects:
+		m.openEditProjectForm()
 	case ui.ScreenSources:
 		m.openEditSourceForm()
 	case ui.ScreenPolicies:
@@ -779,6 +896,8 @@ func (m *model) openDelete() {
 		m.openNamespaceDeleteConfirm()
 	case ui.ScreenDependencies:
 		m.openDependencyDeleteConfirm()
+	case ui.ScreenProjects:
+		m.openProjectDeleteConfirm()
 	case ui.ScreenSources:
 		m.openSourceDeleteConfirm()
 	case ui.ScreenPolicies:
@@ -798,6 +917,8 @@ func (m *model) selectPreviousOnScreen() {
 		m.selectPreviousNamespace()
 	case ui.ScreenDependencies:
 		m.selectPreviousDependency()
+	case ui.ScreenProjects:
+		m.selectPreviousProject()
 	case ui.ScreenSources:
 		m.selectPreviousSource()
 	case ui.ScreenPolicies:
@@ -817,6 +938,8 @@ func (m *model) selectNextOnScreen() {
 		m.selectNextNamespace()
 	case ui.ScreenDependencies:
 		m.selectNextDependency()
+	case ui.ScreenProjects:
+		m.selectNextProject()
 	case ui.ScreenSources:
 		m.selectNextSource()
 	case ui.ScreenPolicies:
@@ -885,6 +1008,21 @@ func (m model) loadDependencies() tea.Cmd {
 		}
 
 		return dependenciesLoadedMsg{dependencies: toUIDependencies(dependencies)}
+	}
+}
+
+func (m model) loadProjects() tea.Cmd {
+	return func() tea.Msg {
+		if m.store == nil {
+			return projectsLoadedMsg{projects: []ui.Project{}}
+		}
+
+		projects, err := m.store.Projects().List(context.Background())
+		if err != nil {
+			return projectsLoadedMsg{err: err}
+		}
+
+		return projectsLoadedMsg{projects: toUIProjects(projects)}
 	}
 }
 
@@ -1001,6 +1139,30 @@ func (m model) saveDependency() tea.Cmd {
 	}
 }
 
+func (m model) saveProject() tea.Cmd {
+	form := m.projectForm
+	return func() tea.Msg {
+		if m.store == nil {
+			return projectSavedMsg{projectID: form.ID}
+		}
+
+		icon := strings.TrimSpace(form.Icon)
+		name := strings.TrimSpace(form.Name)
+		color := strings.TrimSpace(form.Color)
+		projectID := strings.TrimSpace(form.ProjectID)
+		if projectID == "" {
+			return projectSavedMsg{projectID: form.ID, err: errors.New("project PROJECT_ID is empty")}
+		}
+		if form.Mode == ui.StackFormModeEdit {
+			err := m.store.Projects().Update(context.Background(), form.ID, projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color)
+			return projectSavedMsg{projectID: form.ID, err: err}
+		}
+
+		project, err := m.store.Projects().Create(context.Background(), projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color)
+		return projectSavedMsg{projectID: project.ID, err: err}
+	}
+}
+
 func (m model) saveSource() tea.Cmd {
 	form := m.sourceForm
 	return func() tea.Msg {
@@ -1094,6 +1256,18 @@ func (m model) deleteDependency() tea.Cmd {
 	}
 }
 
+func (m model) deleteProject() tea.Cmd {
+	confirm := m.projectDeleteConfirm
+	return func() tea.Msg {
+		if m.store == nil {
+			return projectDeletedMsg{projectID: confirm.StackID}
+		}
+
+		err := m.store.Projects().Delete(context.Background(), confirm.StackID)
+		return projectDeletedMsg{projectID: confirm.StackID, err: err}
+	}
+}
+
 func (m model) deleteSource() tea.Cmd {
 	confirm := m.sourceDeleteConfirm
 	return func() tea.Msg {
@@ -1175,6 +1349,27 @@ func toUIDependencies(dependencies []storage.Dependency) []ui.Dependency {
 	return result
 }
 
+func toUIProjects(projects []storage.Project) []ui.Project {
+	result := make([]ui.Project, 0, len(projects))
+	for _, project := range projects {
+		result = append(result, ui.Project{
+			ID:            project.ID,
+			ProjectID:     project.ProjectID,
+			NamespaceID:   project.NamespaceID,
+			NamespaceName: project.NamespaceName,
+			SourceID:      project.SourceID,
+			SourceName:    project.SourceName,
+			StackID:       project.StackID,
+			StackName:     project.StackName,
+			Icon:          project.Icon,
+			Name:          project.Name,
+			Color:         project.Color,
+		})
+	}
+
+	return result
+}
+
 func toUISources(sources []storage.Source) []ui.Source {
 	result := make([]ui.Source, 0, len(sources))
 	for _, source := range sources {
@@ -1249,6 +1444,25 @@ func newDependencyForm(stacks []ui.Stack) ui.DependencyForm {
 	}
 
 	return normalizeDependencyForm(form, stacks)
+}
+
+func newProjectForm(namespaces []ui.Namespace, sources []ui.Source, stacks []ui.Stack) ui.ProjectForm {
+	form := ui.ProjectForm{
+		Open:  true,
+		Mode:  ui.StackFormModeCreate,
+		Focus: ui.ProjectFormFieldIcon,
+	}
+	if len(namespaces) > 0 {
+		form.NamespaceID = namespaces[0].ID
+	}
+	if len(sources) > 0 {
+		form.SourceID = sources[0].ID
+	}
+	if len(stacks) > 0 {
+		form.StackID = stacks[0].ID
+	}
+
+	return normalizeProjectForm(form, namespaces, sources, stacks)
 }
 
 func newSourceForm() ui.SourceForm {
@@ -1337,6 +1551,27 @@ func (m *model) openEditDependencyForm() {
 	}, m.stacks)
 }
 
+func (m *model) openEditProjectForm() {
+	project, ok := m.selectedProject()
+	if !ok {
+		return
+	}
+
+	m.projectForm = normalizeProjectForm(ui.ProjectForm{
+		Open:        true,
+		Mode:        ui.StackFormModeEdit,
+		ID:          project.ID,
+		ProjectID:   project.ProjectID,
+		NamespaceID: project.NamespaceID,
+		SourceID:    project.SourceID,
+		StackID:     project.StackID,
+		Focus:       ui.ProjectFormFieldIcon,
+		Icon:        project.Icon,
+		Color:       project.Color,
+		Name:        project.Name,
+	}, m.namespaces, m.sources, m.stacks)
+}
+
 func (m *model) openDependencyDeleteConfirm() {
 	dependency, ok := m.selectedDependency()
 	if !ok {
@@ -1344,6 +1579,15 @@ func (m *model) openDependencyDeleteConfirm() {
 	}
 
 	m.dependencyDeleteConfirm = deleteConfirm(dependency.ID, dependency.Name)
+}
+
+func (m *model) openProjectDeleteConfirm() {
+	project, ok := m.selectedProject()
+	if !ok {
+		return
+	}
+
+	m.projectDeleteConfirm = deleteConfirm(project.ID, project.Name)
 }
 
 func (m *model) openEditSourceForm() {
@@ -1446,6 +1690,7 @@ func deleteConfirm(id int64, name string) ui.DeleteConfirm {
 func stackID(s ui.Stack) int64           { return s.ID }
 func namespaceID(n ui.Namespace) int64   { return n.ID }
 func dependencyID(d ui.Dependency) int64 { return d.ID }
+func projectID(p ui.Project) int64       { return p.ID }
 func sourceID(s ui.Source) int64         { return s.ID }
 func policyID(p ui.Policy) int64         { return p.ID }
 func policyValueID(v ui.PolicyValue) int64 {
@@ -1462,6 +1707,10 @@ func (m *model) ensureSelectedNamespace() {
 
 func (m *model) ensureSelectedDependency() {
 	m.selectedDependencyID = ensureSelected(m.dependencies, m.selectedDependencyID, dependencyID)
+}
+
+func (m *model) ensureSelectedProject() {
+	m.selectedProjectID = ensureSelected(m.projects, m.selectedProjectID, projectID)
 }
 
 func (m *model) ensureSelectedSource() {
@@ -1501,8 +1750,16 @@ func (m *model) selectPreviousDependency() {
 	m.selectedDependencyID = selectPrevious(m.dependencies, m.selectedDependencyID, dependencyID)
 }
 
+func (m *model) selectPreviousProject() {
+	m.selectedProjectID = selectPrevious(m.projects, m.selectedProjectID, projectID)
+}
+
 func (m *model) selectNextDependency() {
 	m.selectedDependencyID = selectNext(m.dependencies, m.selectedDependencyID, dependencyID)
+}
+
+func (m *model) selectNextProject() {
+	m.selectedProjectID = selectNext(m.projects, m.selectedProjectID, projectID)
 }
 
 func (m *model) selectPreviousSource() {
@@ -1549,6 +1806,10 @@ func (m model) selectedNamespace() (ui.Namespace, bool) {
 
 func (m model) selectedDependency() (ui.Dependency, bool) {
 	return findByID(m.dependencies, m.selectedDependencyID, dependencyID)
+}
+
+func (m model) selectedProject() (ui.Project, bool) {
+	return findByID(m.projects, m.selectedProjectID, projectID)
 }
 
 func (m model) selectedSource() (ui.Source, bool) {
@@ -1708,6 +1969,44 @@ func previousDependencyFormField(field ui.DependencyFormField) ui.DependencyForm
 	return field - 1
 }
 
+func nextProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
+	switch field {
+	case ui.ProjectFormFieldIcon:
+		return ui.ProjectFormFieldColor
+	case ui.ProjectFormFieldColor:
+		return ui.ProjectFormFieldName
+	case ui.ProjectFormFieldName:
+		return ui.ProjectFormFieldNamespace
+	case ui.ProjectFormFieldNamespace:
+		return ui.ProjectFormFieldSource
+	case ui.ProjectFormFieldSource:
+		return ui.ProjectFormFieldStack
+	case ui.ProjectFormFieldStack:
+		return ui.ProjectFormFieldProjectID
+	default:
+		return ui.ProjectFormFieldIcon
+	}
+}
+
+func previousProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
+	switch field {
+	case ui.ProjectFormFieldIcon:
+		return ui.ProjectFormFieldProjectID
+	case ui.ProjectFormFieldColor:
+		return ui.ProjectFormFieldIcon
+	case ui.ProjectFormFieldName:
+		return ui.ProjectFormFieldColor
+	case ui.ProjectFormFieldNamespace:
+		return ui.ProjectFormFieldName
+	case ui.ProjectFormFieldSource:
+		return ui.ProjectFormFieldNamespace
+	case ui.ProjectFormFieldStack:
+		return ui.ProjectFormFieldSource
+	default:
+		return ui.ProjectFormFieldStack
+	}
+}
+
 func nextSourceFormField(field ui.SourceFormField) ui.SourceFormField {
 	if field == ui.SourceFormFieldType {
 		return ui.SourceFormFieldName
@@ -1763,6 +2062,23 @@ func appendDependencyFormRunes(form ui.DependencyForm, runes []rune) ui.Dependen
 	return form
 }
 
+func appendProjectFormRunes(form ui.ProjectForm, runes []rune) ui.ProjectForm {
+	value := string(runes)
+	switch form.Focus {
+	case ui.ProjectFormFieldIcon:
+		form.Icon += value
+	case ui.ProjectFormFieldColor:
+		form.Color += value
+	case ui.ProjectFormFieldName:
+		form.Name += value
+	case ui.ProjectFormFieldProjectID:
+		form.ProjectID += value
+	case ui.ProjectFormFieldNamespace, ui.ProjectFormFieldSource, ui.ProjectFormFieldStack:
+	}
+
+	return form
+}
+
 func deleteDependencyFormRune(form ui.DependencyForm) ui.DependencyForm {
 	switch form.Focus {
 	case ui.DependencyFormFieldIcon:
@@ -1772,6 +2088,22 @@ func deleteDependencyFormRune(form ui.DependencyForm) ui.DependencyForm {
 	case ui.DependencyFormFieldName:
 		form.Name = trimLastRune(form.Name)
 	case ui.DependencyFormFieldStack:
+	}
+
+	return form
+}
+
+func deleteProjectFormRune(form ui.ProjectForm) ui.ProjectForm {
+	switch form.Focus {
+	case ui.ProjectFormFieldIcon:
+		form.Icon = trimLastRune(form.Icon)
+	case ui.ProjectFormFieldColor:
+		form.Color = trimLastRune(form.Color)
+	case ui.ProjectFormFieldName:
+		form.Name = trimLastRune(form.Name)
+	case ui.ProjectFormFieldProjectID:
+		form.ProjectID = trimLastRune(form.ProjectID)
+	case ui.ProjectFormFieldNamespace, ui.ProjectFormFieldSource, ui.ProjectFormFieldStack:
 	}
 
 	return form
@@ -1853,6 +2185,30 @@ func normalizeDependencyForm(form ui.DependencyForm, stacks []ui.Stack) ui.Depen
 	return form
 }
 
+func normalizeProjectForm(form ui.ProjectForm, namespaces []ui.Namespace, sources []ui.Source, stacks []ui.Stack) ui.ProjectForm {
+	if !hasNamespaceID(namespaces, form.NamespaceID) && len(namespaces) > 0 {
+		form.NamespaceID = namespaces[0].ID
+	}
+	if !hasSourceID(sources, form.SourceID) && len(sources) > 0 {
+		form.SourceID = sources[0].ID
+	}
+	if !hasStackID(stacks, form.StackID) && len(stacks) > 0 {
+		form.StackID = stacks[0].ID
+	}
+	form.CanSave = strings.TrimSpace(form.Icon) != "" &&
+		strings.TrimSpace(form.Color) != "" &&
+		strings.TrimSpace(form.Name) != "" &&
+		strings.TrimSpace(form.ProjectID) != "" &&
+		hasNamespaceID(namespaces, form.NamespaceID) &&
+		hasSourceID(sources, form.SourceID) &&
+		hasStackID(stacks, form.StackID)
+	if form.CanSave {
+		form.Error = ""
+	}
+
+	return form
+}
+
 func normalizeSourceForm(form ui.SourceForm) ui.SourceForm {
 	if !hasSourceType(form.Type) {
 		form.Type = storage.SourceTypeGitLab
@@ -1906,6 +2262,11 @@ func hasPolicyID(policies []ui.Policy, id int64) bool {
 	return ok
 }
 
+func hasSourceID(sources []ui.Source, id int64) bool {
+	_, ok := findByID(sources, id, sourceID)
+	return ok
+}
+
 func hasDependencyID(dependencies []ui.Dependency, id int64) bool {
 	_, ok := findByID(dependencies, id, dependencyID)
 	return ok
@@ -1925,6 +2286,14 @@ func previousNamespaceID(namespaces []ui.Namespace, id int64) int64 {
 
 func nextNamespaceID(namespaces []ui.Namespace, id int64) int64 {
 	return selectNext(namespaces, id, namespaceID)
+}
+
+func previousSourceID(sources []ui.Source, id int64) int64 {
+	return selectPrevious(sources, id, sourceID)
+}
+
+func nextSourceID(sources []ui.Source, id int64) int64 {
+	return selectNext(sources, id, sourceID)
 }
 
 func previousPolicyID(policies []ui.Policy, id int64) int64 {
