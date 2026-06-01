@@ -224,17 +224,7 @@ func (s ProjectsScreen) dependencyPanelTitle(width int, count int, latestRun uik
 }
 
 func (s ProjectsScreen) progressLine(width int, status uikit.ProjectSyncStatus) string {
-	message := status.Message
-	color := s.palette.Info
-	if status.Error != "" {
-		message = status.Error
-		color = s.palette.Error
-	}
-	if status.Running {
-		message = uikit.SymbolDependency + " " + message
-	}
-
-	return uikit.CenterLine(s.palette, width, uikit.Text(s.palette, color, message))
+	return components.RenderProgress(s.palette, width, uikit.SymbolDependency, status.Message, status.Error, status.Running, status.Current, status.Total)
 }
 
 func (s ProjectsScreen) renderModal(lines []string, width, height int, namespaces []uikit.Namespace, sources []uikit.Source, stacks []uikit.Stack, form uikit.ProjectForm) []string {

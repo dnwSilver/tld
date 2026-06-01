@@ -10,10 +10,13 @@ import (
 	"github.com/dnwSilver/tld/internal/storage"
 )
 
+var ErrFileNotFound = errors.New("file not found")
+
 type Service struct {
 	Cache        storage.CacheRepository
 	Runs         storage.ProjectDependencyRepository
 	SourceClient SourceClient
+	Force        bool
 }
 
 type Result struct {
@@ -52,7 +55,7 @@ func (s Service) Sync(ctx context.Context, source Source, project Project, progr
 	if err != nil {
 		return Result{}, err
 	}
-	if hasRun {
+	if hasRun && !s.Force {
 		report(progress, "already up to date")
 		dependencies, err := s.Runs.ListByProject(ctx, project.ID)
 		if err != nil {
@@ -69,6 +72,10 @@ func (s Service) Sync(ctx context.Context, source Source, project Project, progr
 	files := make([]File, 0, len(strategy.Files()))
 	for _, path := range strategy.Files() {
 		content, err := s.fetchCachedFile(ctx, source, project, commit, path, progress)
+		if errors.Is(err, ErrFileNotFound) {
+			report(progress, fmt.Sprintf("Skipping missing %s", path))
+			continue
+		}
 		if err != nil {
 			return Result{}, err
 		}

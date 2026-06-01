@@ -33,6 +33,8 @@ func ResolveStackStrategy(stackName string) (StackStrategy, error) {
 		return GoStrategy{}, nil
 	case "swift", "ios":
 		return SwiftStrategy{}, nil
+	case "kotlin", "android":
+		return KotlinStrategy{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported stack %q", stackName)
 	}

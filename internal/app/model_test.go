@@ -8,11 +8,81 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dnwSilver/tld/internal/storage"
 	"github.com/dnwSilver/tld/internal/ui"
 )
+
+func TestBuildReleaseMonthsPlacesRocketsInQuarters(t *testing.T) {
+	now := time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
+	dates := []time.Time{
+		time.Date(2026, time.June, 3, 0, 0, 0, 0, time.UTC),    // current month, slot 0
+		time.Date(2026, time.June, 27, 0, 0, 0, 0, time.UTC),   // current month, slot 3
+		time.Date(2025, time.July, 10, 0, 0, 0, 0, time.UTC),   // oldest month, slot 1
+		time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC), // out of window
+	}
+
+	months := buildReleaseMonths(now, dates, ui.ReleasePeriodYear)
+	if len(months) != 12 {
+		t.Fatalf("len(months) = %d, want 12", len(months))
+	}
+
+	current := months[len(months)-1]
+	if !current.Marks[0] || !current.Marks[3] {
+		t.Fatalf("current month marks = %v, want slots 0 and 3", current.Marks)
+	}
+	if current.Marks[1] || current.Marks[2] {
+		t.Fatalf("current month marks = %v, unexpected slots set", current.Marks)
+	}
+
+	oldest := months[0]
+	if !oldest.Marks[1] {
+		t.Fatalf("oldest month marks = %v, want slot 1", oldest.Marks)
+	}
+}
+
+func TestBuildReleaseMonthsQuarterUsesDaySlots(t *testing.T) {
+	now := time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
+	dates := []time.Time{
+		time.Date(2026, time.June, 15, 0, 0, 0, 0, time.UTC),
+	}
+
+	months := buildReleaseMonths(now, dates, ui.ReleasePeriodQuarter)
+	if len(months) != 3 {
+		t.Fatalf("len(months) = %d, want 3", len(months))
+	}
+	current := months[len(months)-1]
+	if current.SlotCount != 30 {
+		t.Fatalf("june slot count = %d, want 30", current.SlotCount)
+	}
+	if !current.Marks[14] {
+		t.Fatalf("expected mark at day 15 (index 14), got %v", current.Marks)
+	}
+}
+
+func TestBuildReleaseMonthsEmptyHasNoMarks(t *testing.T) {
+	now := time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
+	months := buildReleaseMonths(now, nil, ui.ReleasePeriodYear)
+	for index := range months {
+		for slot, mark := range months[index].Marks {
+			if mark {
+				t.Fatalf("month %d slot %d should be empty", index, slot)
+			}
+		}
+	}
+}
+
+func TestReleasesScreenNavigation(t *testing.T) {
+	m := newModel(nil)
+
+	next, _ := m.Update(key("9"))
+	updated := next.(model)
+	if updated.screen != ui.ScreenReleases {
+		t.Fatalf("screen = %v, want %v", updated.screen, ui.ScreenReleases)
+	}
+}
 
 func TestScreenNavigation(t *testing.T) {
 	m := newModel(nil)
@@ -473,6 +543,77 @@ func TestEditProjectCanChangeSelectors(t *testing.T) {
 	}
 }
 
+func TestProjectCloneFormOpensWithSelectedData(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	stack, err := store.Stacks().Create(ctx, "", "Go", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", storage.SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	m := newModel(store)
+	m.screen = ui.ScreenProjects
+	m.namespaces = []ui.Namespace{{ID: namespace.ID, Icon: namespace.Icon, Name: namespace.Name, Color: namespace.Color}}
+	m.stacks = []ui.Stack{{ID: stack.ID, Icon: stack.Icon, Name: stack.Name, Color: stack.Color}}
+	m.sources = []ui.Source{{ID: source.ID, Icon: source.Icon, Name: source.Name, Color: source.Color, URL: source.URL, PATToken: source.PATToken, Type: source.Type}}
+	m.projects = []ui.Project{{
+		ID:            project.ID,
+		ProjectID:     project.ProjectID,
+		NamespaceID:   namespace.ID,
+		NamespaceName: namespace.Name,
+		SourceID:      source.ID,
+		SourceName:    source.Name,
+		StackID:       stack.ID,
+		StackName:     stack.Name,
+		StackIcon:     stack.Icon,
+		StackColor:    stack.Color,
+		Icon:          project.Icon,
+		Name:          project.Name,
+		Color:         project.Color,
+	}}
+	m.selectedProjectID = project.ID
+
+	next, _ := m.Update(key("c"))
+	updated := next.(model)
+	if !updated.projectForm.Open {
+		t.Fatal("project clone form should be open")
+	}
+	if updated.projectForm.Mode != ui.StackFormModeCreate {
+		t.Fatalf("mode = %v, want create", updated.projectForm.Mode)
+	}
+	if updated.projectForm.ID != 0 {
+		t.Fatalf("id = %d, want 0", updated.projectForm.ID)
+	}
+	if updated.projectForm.ProjectID != project.ProjectID ||
+		updated.projectForm.Name != project.Name ||
+		updated.projectForm.Icon != project.Icon ||
+		updated.projectForm.Color != project.Color ||
+		updated.projectForm.NamespaceID != namespace.ID ||
+		updated.projectForm.SourceID != source.ID ||
+		updated.projectForm.StackID != stack.ID {
+		t.Fatalf("clone form = %#v, want selected project values", updated.projectForm)
+	}
+}
+
 func TestProjectDependencyRefreshLoadsDependencies(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -573,7 +714,12 @@ func TestProjectDependencyRefreshLoadsDependencies(t *testing.T) {
 		t.Fatalf("sync error = %q", updated.projectSyncStatus.Error)
 	}
 
-	updated = applyBatch(t, updated, cmd)
+	next, chainCmd := updated.Update(cmd())
+	updated = next.(model)
+	if chainCmd == nil {
+		t.Fatal("expected dependencies reload command")
+	}
+	updated = applyBatch(t, updated, chainCmd)
 	if len(updated.projectDependencies) != 1 {
 		t.Fatalf("len(projectDependencies) = %d, want 1", len(updated.projectDependencies))
 	}

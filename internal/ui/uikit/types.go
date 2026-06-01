@@ -11,6 +11,8 @@ const (
 	ScreenSources
 	ScreenPolicies
 	ScreenView
+	ScreenSettings
+	ScreenReleases
 )
 
 type Stack struct {
@@ -93,6 +95,8 @@ type ProjectSyncStatus struct {
 	Message   string
 	Running   bool
 	Error     string
+	Current   int
+	Total     int
 }
 
 type DependencyView struct {
@@ -285,4 +289,89 @@ type DeleteConfirm struct {
 	StackID int64
 	Name    string
 	Error   string
+}
+
+type ProjectCheck struct {
+	ID    string
+	Title string
+}
+
+type CheckState string
+
+const (
+	CheckStateUnknown CheckState = "unknown"
+	CheckStatePass    CheckState = "pass"
+	CheckStateFail    CheckState = "fail"
+)
+
+type ProjectCheckRow struct {
+	ProjectID    int64
+	ProjectIcon  string
+	ProjectName  string
+	ProjectColor string
+	Results      map[string]CheckState
+}
+
+type SettingsStatus struct {
+	Message string
+	Running bool
+	Error   string
+	Current int
+	Total   int
+}
+
+type ReleasePeriod int
+
+const (
+	ReleasePeriodYear ReleasePeriod = iota
+	ReleasePeriodHalf
+	ReleasePeriodQuarter
+)
+
+func (p ReleasePeriod) Months() int {
+	switch p {
+	case ReleasePeriodHalf:
+		return 6
+	case ReleasePeriodQuarter:
+		return 3
+	default:
+		return 12
+	}
+}
+
+func (p ReleasePeriod) Title() string {
+	switch p {
+	case ReleasePeriodHalf:
+		return "6 months"
+	case ReleasePeriodQuarter:
+		return "3 months"
+	default:
+		return "year"
+	}
+}
+
+func (p ReleasePeriod) Next() ReleasePeriod {
+	switch p {
+	case ReleasePeriodYear:
+		return ReleasePeriodHalf
+	case ReleasePeriodHalf:
+		return ReleasePeriodQuarter
+	default:
+		return ReleasePeriodYear
+	}
+}
+
+type ReleaseMonth struct {
+	Label     string
+	SlotCount int
+	Marks     []bool
+}
+
+type ReleaseRow struct {
+	ProjectID    int64
+	ProjectIcon  string
+	ProjectName  string
+	ProjectColor string
+	HasReleases  bool
+	Months       []ReleaseMonth
 }

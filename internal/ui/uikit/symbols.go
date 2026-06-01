@@ -36,4 +36,13 @@ const (
 	SymbolSource         = ""
 	SymbolProject        = "󰏖"
 	SymbolPolicy         = "󰯄"
+	SymbolSettings       = "󰒓"
+	SymbolCheckPass      = ""
+	SymbolCheckFail      = "󰅙"
+	SymbolCheckUnknown   = ""
+)
+
+const (
+	SymbolReleases = ""
+	SymbolRocket   = ""
 )

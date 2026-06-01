@@ -13,50 +13,60 @@ import (
 )
 
 type model struct {
-	width                   int
-	height                  int
-	creator                 ui.Creator
-	store                   *storage.Store
-	screen                  ui.Screen
-	stacks                  []ui.Stack
-	selectedStackID         int64
-	namespaces              []ui.Namespace
-	selectedNamespaceID     int64
-	dependencies            []ui.Dependency
-	selectedDependencyID    int64
-	projects                []ui.Project
-	selectedProjectID       int64
-	projectDependencies     []ui.ProjectDependency
-	selectedProjectDepID    int64
-	projectLatestRun        ui.ProjectDependencyRun
-	projectSyncStatus       ui.ProjectSyncStatus
-	projectSyncCh           <-chan projectSyncMsg
-	projectFocus            ui.ProjectPane
-	sources                 []ui.Source
-	selectedSourceID        int64
-	policies                []ui.Policy
-	selectedPolicyID        int64
-	policyValues            []ui.PolicyValue
-	selectedPolicyValueID   int64
-	policyFocus             ui.PolicyPane
-	dependencyView          ui.DependencyView
-	viewStackID             int64
-	selectedViewProjectID   int64
-	viewColumnOffset        int
-	form                    ui.StackForm
-	namespaceForm           ui.StackForm
-	dependencyForm          ui.DependencyForm
-	projectForm             ui.ProjectForm
-	sourceForm              ui.SourceForm
-	policyForm              ui.PolicyForm
-	policyValueForm         ui.PolicyValueForm
-	deleteConfirm           ui.DeleteConfirm
-	namespaceDeleteConfirm  ui.DeleteConfirm
-	dependencyDeleteConfirm ui.DeleteConfirm
-	projectDeleteConfirm    ui.DeleteConfirm
-	sourceDeleteConfirm     ui.DeleteConfirm
-	policyDeleteConfirm     ui.DeleteConfirm
-	err                     error
+	width                    int
+	height                   int
+	creator                  ui.Creator
+	store                    *storage.Store
+	screen                   ui.Screen
+	stacks                   []ui.Stack
+	selectedStackID          int64
+	namespaces               []ui.Namespace
+	selectedNamespaceID      int64
+	dependencies             []ui.Dependency
+	selectedDependencyID     int64
+	projects                 []ui.Project
+	selectedProjectID        int64
+	projectDependencies      []ui.ProjectDependency
+	selectedProjectDepID     int64
+	projectLatestRun         ui.ProjectDependencyRun
+	projectSyncStatus        ui.ProjectSyncStatus
+	projectSyncCh            <-chan projectSyncMsg
+	projectFocus             ui.ProjectPane
+	sources                  []ui.Source
+	selectedSourceID         int64
+	policies                 []ui.Policy
+	selectedPolicyID         int64
+	policyValues             []ui.PolicyValue
+	selectedPolicyValueID    int64
+	policyFocus              ui.PolicyPane
+	dependencyView           ui.DependencyView
+	viewStackID              int64
+	selectedViewProjectID    int64
+	viewColumnOffset         int
+	form                     ui.StackForm
+	namespaceForm            ui.StackForm
+	dependencyForm           ui.DependencyForm
+	projectForm              ui.ProjectForm
+	sourceForm               ui.SourceForm
+	policyForm               ui.PolicyForm
+	policyValueForm          ui.PolicyValueForm
+	deleteConfirm            ui.DeleteConfirm
+	namespaceDeleteConfirm   ui.DeleteConfirm
+	dependencyDeleteConfirm  ui.DeleteConfirm
+	projectDeleteConfirm     ui.DeleteConfirm
+	sourceDeleteConfirm      ui.DeleteConfirm
+	policyDeleteConfirm      ui.DeleteConfirm
+	checkColumns             []ui.ProjectCheck
+	projectCheckRows         []ui.ProjectCheckRow
+	selectedCheckProjectID   int64
+	checksStatus             ui.SettingsStatus
+	checksSyncCh             <-chan checkSyncMsg
+	releaseRows              []ui.ReleaseRow
+	selectedReleaseProjectID int64
+	releasePeriod            ui.ReleasePeriod
+	releasesStatus           ui.SettingsStatus
+	releasesSyncCh           <-chan releaseSyncMsg
+	err                      error
 }
 
 type stacksLoadedMsg struct {
@@ -90,6 +100,9 @@ type projectSyncMsg struct {
 	message   string
 	err       error
 	done      bool
+	step      bool
+	current   int
+	total     int
 }
 
 type sourcesLoadedMsg struct {
@@ -196,6 +209,7 @@ func newModel(store *storage.Store) model {
 		policies:     []ui.Policy{},
 		policyValues: []ui.PolicyValue{},
 		policyFocus:  ui.PolicyPanePolicies,
+		checkColumns: defaultCheckColumns(),
 	}
 }
 
@@ -269,15 +283,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = ui.ScreenView
 			m.ensureViewStack()
 			return m, m.loadDependencyView()
+		case ui.KeySettings.Matches(key):
+			m.screen = ui.ScreenSettings
+			return m, m.loadProjectChecks()
+		case ui.KeyReleases.Matches(key):
+			m.screen = ui.ScreenReleases
+			return m, m.loadReleases()
 		case ui.KeyAdd.Matches(key):
 			m.openAddForm()
 		case ui.KeyEdit.Matches(key):
 			m.openEditForm()
+		case ui.KeyClone.Matches(key):
+			if m.screen == ui.ScreenProjects {
+				m.openCloneProjectForm()
+			}
 		case ui.KeyDelete.Matches(key):
 			m.openDelete()
 		case ui.KeyRefreshDeps.Matches(key):
-			if m.screen == ui.ScreenProjects {
+			switch m.screen {
+			case ui.ScreenProjects:
 				return m.startProjectDependencySync()
+			case ui.ScreenView:
+				return m.startViewDependencySync(false)
+			case ui.ScreenSettings:
+				return m.startProjectChecksRefresh(m.selectedCheckProjects())
+			case ui.ScreenReleases:
+				return m.startReleasesRefresh(m.selectedReleaseProjects())
+			}
+		case ui.KeyRefreshAll.Matches(key):
+			switch m.screen {
+			case ui.ScreenProjects:
+				return m.startAllProjectsDependencySync()
+			case ui.ScreenView:
+				return m.startViewDependencySync(true)
+			case ui.ScreenSettings:
+				return m.startProjectChecksRefresh(m.projects)
+			case ui.ScreenReleases:
+				return m.startReleasesRefresh(m.projects)
 			}
 		case ui.KeyPrev.Matches(key):
 			if m.screen == ui.ScreenView {
@@ -336,6 +378,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toggleProjectPane()
 				return m, nil
 			}
+			if m.screen == ui.ScreenReleases {
+				m.releasePeriod = m.releasePeriod.Next()
+				return m, m.loadReleases()
+			}
 			m.togglePolicyPane()
 		case ui.KeyQuit.Matches(key):
 			return m, tea.Quit
@@ -363,6 +409,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.projects = msg.projects
 			m.ensureSelectedProject()
+			if m.screen == ui.ScreenSettings {
+				return m, tea.Batch(m.loadProjectDependencies(), m.loadProjectChecks())
+			}
 			return m, m.loadProjectDependencies()
 		}
 	case projectDependenciesLoadedMsg:
@@ -525,6 +574,66 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadPolicyValues()
 		}
 		m.policyDeleteConfirm.Error = msg.err.Error()
+	case projectChecksLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.projectCheckRows = msg.rows
+			m.ensureSelectedCheckProject()
+		}
+	case checkSyncMsg:
+		m.checksStatus.Message = msg.message
+		m.checksStatus.Running = !msg.done
+		m.checksStatus.Error = ""
+		if msg.total > 0 {
+			m.checksStatus.Current = msg.current
+			m.checksStatus.Total = msg.total
+		}
+		if msg.err != nil {
+			m.err = msg.err
+			m.checksStatus.Error = msg.err.Error()
+			m.checksStatus.Running = false
+			return m, m.loadProjectChecks()
+		}
+		if msg.done {
+			m.checksSyncCh = nil
+			return m, m.loadProjectChecks()
+		}
+		if msg.step && m.checksSyncCh != nil {
+			return m, tea.Batch(m.loadProjectChecks(), waitCheckSync(m.checksSyncCh))
+		}
+		if m.checksSyncCh != nil {
+			return m, waitCheckSync(m.checksSyncCh)
+		}
+	case releasesLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.releaseRows = msg.rows
+			m.ensureSelectedReleaseProject()
+		}
+	case releaseSyncMsg:
+		m.releasesStatus.Message = msg.message
+		m.releasesStatus.Running = !msg.done
+		m.releasesStatus.Error = ""
+		if msg.total > 0 {
+			m.releasesStatus.Current = msg.current
+			m.releasesStatus.Total = msg.total
+		}
+		if msg.err != nil {
+			m.err = msg.err
+			m.releasesStatus.Error = msg.err.Error()
+			m.releasesStatus.Running = false
+			return m, m.loadReleases()
+		}
+		if msg.done {
+			m.releasesSyncCh = nil
+			return m, m.loadReleases()
+		}
+		if msg.step && m.releasesSyncCh != nil {
+			return m, tea.Batch(m.loadReleases(), waitReleaseSync(m.releasesSyncCh))
+		}
+		if m.releasesSyncCh != nil {
+			return m, waitReleaseSync(m.releasesSyncCh)
+		}
 	case projectSyncMsg:
 		if msg.projectID != 0 && msg.projectID != m.selectedProjectID {
 			return m, nil
@@ -533,6 +642,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projectSyncStatus.Message = msg.message
 		m.projectSyncStatus.Running = !msg.done
 		m.projectSyncStatus.Error = ""
+		if msg.total > 0 {
+			m.projectSyncStatus.Current = msg.current
+			m.projectSyncStatus.Total = msg.total
+		}
 		if msg.err != nil {
 			m.err = msg.err
 			m.projectSyncStatus.Error = msg.err.Error()
@@ -541,7 +654,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.done {
 			m.projectSyncCh = nil
-			return m, m.loadProjectDependencies()
+			return m, m.reloadAfterProjectSync()
+		}
+		if msg.step && m.projectSyncCh != nil {
+			return m, tea.Batch(m.reloadAfterProjectSync(), waitProjectSync(m.projectSyncCh))
 		}
 		if m.projectSyncCh != nil {
 			return m, waitProjectSync(m.projectSyncCh)
@@ -583,6 +699,14 @@ func (m model) View() string {
 		m.dependencyView,
 		m.selectedViewProjectID,
 		m.viewColumnOffset,
+		m.checkColumns,
+		m.projectCheckRows,
+		m.selectedCheckProjectID,
+		m.checksStatus,
+		m.releaseRows,
+		m.selectedReleaseProjectID,
+		m.releasePeriod,
+		m.releasesStatus,
 		m.form,
 		m.namespaceForm,
 		m.dependencyForm,
@@ -1039,6 +1163,10 @@ func (m *model) selectPreviousOnScreen() {
 			return
 		}
 		m.selectPreviousPolicy()
+	case ui.ScreenSettings:
+		m.selectPreviousCheckProject()
+	case ui.ScreenReleases:
+		m.selectPreviousReleaseProject()
 	}
 }
 
@@ -1064,6 +1192,10 @@ func (m *model) selectNextOnScreen() {
 			return
 		}
 		m.selectNextPolicy()
+	case ui.ScreenSettings:
+		m.selectNextCheckProject()
+	case ui.ScreenReleases:
+		m.selectNextReleaseProject()
 	}
 }
 
@@ -1139,6 +1271,7 @@ func runProjectDependencySync(store *storage.Store, project ui.Project, source u
 			Cache:        store.Cache(),
 			Runs:         store.ProjectDependencies(),
 			SourceClient: client,
+			Force:        true,
 		}
 		result, err := service.Sync(context.Background(), projectsync.Source{
 			ID:       source.ID,
@@ -1175,6 +1308,118 @@ func waitProjectSync(ch <-chan projectSyncMsg) tea.Cmd {
 		}
 
 		return msg
+	}
+}
+
+func (m model) reloadAfterProjectSync() tea.Cmd {
+	if m.screen == ui.ScreenView {
+		return tea.Batch(m.loadProjects(), m.loadDependencyView())
+	}
+
+	return m.loadProjects()
+}
+
+func (m model) startAllProjectsDependencySync() (tea.Model, tea.Cmd) {
+	return m.startProjectsDependencySync(m.projects, "Syncing all projects...")
+}
+
+func (m model) startViewDependencySync(all bool) (tea.Model, tea.Cmd) {
+	message := "Syncing project..."
+	if all {
+		message = "Syncing all projects..."
+	}
+
+	return m.startProjectsDependencySync(m.viewProjects(all), message)
+}
+
+func (m model) startProjectsDependencySync(projects []ui.Project, message string) (tea.Model, tea.Cmd) {
+	if m.projectSyncStatus.Running {
+		return m, nil
+	}
+	if len(projects) == 0 {
+		m.projectSyncStatus = ui.ProjectSyncStatus{Error: "project is not selected"}
+		return m, nil
+	}
+
+	ch := make(chan projectSyncMsg, 16)
+	m.projectSyncCh = ch
+	m.projectSyncStatus = ui.ProjectSyncStatus{
+		Message: message,
+		Running: true,
+	}
+
+	return m, tea.Batch(runProjectsDependencySync(m.store, projects, m.sources, ch), waitProjectSync(ch))
+}
+
+func (m model) viewProjects(all bool) []ui.Project {
+	if all {
+		projects := make([]ui.Project, 0, len(m.dependencyView.Rows))
+		for _, row := range m.dependencyView.Rows {
+			if project, ok := findByID(m.projects, row.ProjectID, projectID); ok {
+				projects = append(projects, project)
+			}
+		}
+
+		return projects
+	}
+	if project, ok := findByID(m.projects, m.selectedViewProjectID, projectID); ok {
+		return []ui.Project{project}
+	}
+
+	return nil
+}
+
+func runProjectsDependencySync(store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
+	return func() tea.Msg {
+		defer close(ch)
+		if store == nil {
+			ch <- projectSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			return nil
+		}
+
+		total := len(projects)
+		for index, project := range projects {
+			source, ok := findByID(sources, project.SourceID, sourceID)
+			if !ok {
+				ch <- projectSyncMsg{message: "Skipping " + project.Name + ": source not found", current: index, total: total}
+				continue
+			}
+
+			client, err := projectsync.NewSourceClient(source.Type, nil)
+			if err != nil {
+				ch <- projectSyncMsg{message: err.Error(), err: err, done: true}
+				return nil
+			}
+
+			service := projectsync.Service{
+				Cache:        store.Cache(),
+				Runs:         store.ProjectDependencies(),
+				SourceClient: client,
+				Force:        true,
+			}
+			_, err = service.Sync(context.Background(), projectsync.Source{
+				ID:       source.ID,
+				Type:     source.Type,
+				URL:      source.URL,
+				PATToken: source.PATToken,
+			}, projectsync.Project{
+				ID:         project.ID,
+				ProviderID: project.ProjectID,
+				Name:       project.Name,
+				StackName:  project.StackName,
+			}, func(message string) {
+				ch <- projectSyncMsg{message: project.Name + ": " + message, current: index, total: total}
+			})
+			if err != nil {
+				ch <- projectSyncMsg{message: err.Error(), err: err, done: true}
+				return nil
+			}
+
+			ch <- projectSyncMsg{message: project.Name, step: true, current: index + 1, total: total}
+		}
+
+		ch <- projectSyncMsg{message: "Sync complete", done: true, current: total, total: total}
+		return nil
 	}
 }
 
@@ -1877,6 +2122,26 @@ func (m *model) openEditProjectForm() {
 		Open:        true,
 		Mode:        ui.StackFormModeEdit,
 		ID:          project.ID,
+		ProjectID:   project.ProjectID,
+		NamespaceID: project.NamespaceID,
+		SourceID:    project.SourceID,
+		StackID:     project.StackID,
+		Focus:       ui.ProjectFormFieldIcon,
+		Icon:        project.Icon,
+		Color:       project.Color,
+		Name:        project.Name,
+	}, m.namespaces, m.sources, m.stacks)
+}
+
+func (m *model) openCloneProjectForm() {
+	project, ok := m.selectedProject()
+	if !ok {
+		return
+	}
+
+	m.projectForm = normalizeProjectForm(ui.ProjectForm{
+		Open:        true,
+		Mode:        ui.StackFormModeCreate,
 		ProjectID:   project.ProjectID,
 		NamespaceID: project.NamespaceID,
 		SourceID:    project.SourceID,

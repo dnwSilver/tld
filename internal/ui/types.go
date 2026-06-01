@@ -13,6 +13,8 @@ const (
 	ScreenSources      = uikit.ScreenSources
 	ScreenPolicies     = uikit.ScreenPolicies
 	ScreenView         = uikit.ScreenView
+	ScreenSettings     = uikit.ScreenSettings
+	ScreenReleases     = uikit.ScreenReleases
 )
 
 type Stack = uikit.Stack
@@ -108,6 +110,25 @@ const (
 
 type PolicyValueForm = uikit.PolicyValueForm
 type DeleteConfirm = uikit.DeleteConfirm
+type ProjectCheck = uikit.ProjectCheck
+type CheckState = uikit.CheckState
+type ProjectCheckRow = uikit.ProjectCheckRow
+type SettingsStatus = uikit.SettingsStatus
+type ReleaseRow = uikit.ReleaseRow
+type ReleaseMonth = uikit.ReleaseMonth
+type ReleasePeriod = uikit.ReleasePeriod
+
+const (
+	ReleasePeriodYear    = uikit.ReleasePeriodYear
+	ReleasePeriodHalf    = uikit.ReleasePeriodHalf
+	ReleasePeriodQuarter = uikit.ReleasePeriodQuarter
+)
+
+const (
+	CheckStateUnknown = uikit.CheckStateUnknown
+	CheckStatePass    = uikit.CheckStatePass
+	CheckStateFail    = uikit.CheckStateFail
+)
 
 type Binding = uikit.Binding
 
@@ -120,10 +141,14 @@ var (
 	KeySources        = uikit.KeySources
 	KeyPolicies       = uikit.KeyPolicies
 	KeyView           = uikit.KeyView
+	KeySettings       = uikit.KeySettings
+	KeyReleases       = uikit.KeyReleases
 	KeyAdd            = uikit.KeyAdd
 	KeyEdit           = uikit.KeyEdit
+	KeyClone          = uikit.KeyClone
 	KeyDelete         = uikit.KeyDelete
 	KeyRefreshDeps    = uikit.KeyRefreshDeps
+	KeyRefreshAll     = uikit.KeyRefreshAll
 	KeyPrev           = uikit.KeyPrev
 	KeyNext           = uikit.KeyNext
 	KeyStackPick      = uikit.KeyStackPick

@@ -90,6 +90,138 @@ DEPENDENCIES:
 	}
 }
 
+func TestKotlinStrategyParsesVersionCatalog(t *testing.T) {
+	strategy := KotlinStrategy{}
+	dependencies, err := strategy.Parse("gradle/libs.versions.toml", []byte(`[versions]
+coreKtx = "1.15.0"
+okhttp = "4.12.0"
+agp = "8.6.1"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+agcp = { module = "com.huawei.agconnect:agcp", version = "1.9.1.301" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+`))
+	if err != nil {
+		t.Fatalf("parse libs.versions.toml: %v", err)
+	}
+	if len(dependencies) != 4 {
+		t.Fatalf("len(dependencies) = %d, want 4", len(dependencies))
+	}
+
+	versions := map[string]string{}
+	types := map[string]string{}
+	for _, dependency := range dependencies {
+		versions[dependency.Name] = dependency.Version
+		types[dependency.Name] = dependency.DependencyType
+	}
+	if versions["androidx.core:core-ktx"] != "1.15.0" {
+		t.Fatalf("core-ktx version = %q, want 1.15.0", versions["androidx.core:core-ktx"])
+	}
+	if versions["com.huawei.agconnect:agcp"] != "1.9.1.301" {
+		t.Fatalf("agcp version = %q, want 1.9.1.301", versions["com.huawei.agconnect:agcp"])
+	}
+	if versions["androidx.compose.ui:ui"] != "" {
+		t.Fatalf("compose ui version = %q, want empty", versions["androidx.compose.ui:ui"])
+	}
+	if types["androidx.core:core-ktx"] != DependencyTypeGradleLibrary {
+		t.Fatalf("core-ktx type = %q, want %q", types["androidx.core:core-ktx"], DependencyTypeGradleLibrary)
+	}
+	if types["com.android.application"] != DependencyTypeGradlePlugin || versions["com.android.application"] != "8.6.1" {
+		t.Fatalf("plugin = %q %q", types["com.android.application"], versions["com.android.application"])
+	}
+}
+
+func TestKotlinStrategyParsesInlineGradleDependencies(t *testing.T) {
+	strategy := KotlinStrategy{}
+	dependencies, err := strategy.Parse("app/build.gradle.kts", []byte(`val composeVersion = "1.6.8"
+
+dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation("androidx.compose.ui:ui:$composeVersion")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
+    "huaweiImplementation"("com.huawei.hms:push:6.11.0.300")
+    testImplementation("junit:junit:4.13.2")
+}
+`))
+	if err != nil {
+		t.Fatalf("parse build.gradle.kts: %v", err)
+	}
+
+	versions := map[string]string{}
+	types := map[string]string{}
+	for _, dependency := range dependencies {
+		versions[dependency.Name] = dependency.Version
+		types[dependency.Name] = dependency.DependencyType
+	}
+	if versions["androidx.core:core-ktx"] != "1.13.1" {
+		t.Fatalf("core-ktx version = %q, want 1.13.1", versions["androidx.core:core-ktx"])
+	}
+	if versions["androidx.compose:compose-bom"] != "2024.06.00" {
+		t.Fatalf("compose-bom version = %q", versions["androidx.compose:compose-bom"])
+	}
+	if versions["androidx.compose.ui:ui"] != "1.6.8" {
+		t.Fatalf("compose ui version = %q, want 1.6.8 (resolved val)", versions["androidx.compose.ui:ui"])
+	}
+	if _, ok := versions["com.google.firebase:firebase-messaging-ktx"]; ok {
+		t.Fatal("BOM-managed dependency without version must be skipped")
+	}
+	if types["com.huawei.hms:push"] != "huaweiImplementation" {
+		t.Fatalf("hms push type = %q", types["com.huawei.hms:push"])
+	}
+	if types["junit:junit"] != "testImplementation" || versions["junit:junit"] != "4.13.2" {
+		t.Fatalf("junit = %q %q", types["junit:junit"], versions["junit:junit"])
+	}
+}
+
+func TestKotlinStrategyParsesGroovyGradleDependencies(t *testing.T) {
+	strategy := KotlinStrategy{}
+	dependencies, err := strategy.Parse("app/build.gradle", []byte(`dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation platform('androidx.compose:compose-bom:2022.10.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    implementation("com.jakewharton.timber:timber:5.0.1")
+    testImplementation 'junit:junit:4.13.2'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+}
+`))
+	if err != nil {
+		t.Fatalf("parse build.gradle: %v", err)
+	}
+
+	versions := map[string]string{}
+	types := map[string]string{}
+	for _, dependency := range dependencies {
+		versions[dependency.Name] = dependency.Version
+		types[dependency.Name] = dependency.DependencyType
+	}
+	if versions["androidx.core:core-ktx"] != "1.12.0" {
+		t.Fatalf("core-ktx version = %q, want 1.12.0", versions["androidx.core:core-ktx"])
+	}
+	if versions["androidx.compose:compose-bom"] != "2022.10.00" {
+		t.Fatalf("compose-bom version = %q", versions["androidx.compose:compose-bom"])
+	}
+	if versions["androidx.appcompat:appcompat"] != "1.6.1" {
+		t.Fatalf("appcompat version = %q, want 1.6.1", versions["androidx.appcompat:appcompat"])
+	}
+	if _, ok := versions["androidx.compose.ui:ui"]; ok {
+		t.Fatal("BOM-managed dependency without version must be skipped")
+	}
+	if types["junit:junit"] != "testImplementation" || versions["junit:junit"] != "4.13.2" {
+		t.Fatalf("junit = %q %q", types["junit:junit"], versions["junit:junit"])
+	}
+	if types["com.jakewharton.timber:timber"] != "implementation" {
+		t.Fatalf("timber type = %q", types["com.jakewharton.timber:timber"])
+	}
+}
+
 func TestGoStrategyParsesGoModRequires(t *testing.T) {
 	strategy := GoStrategy{}
 	dependencies, err := strategy.Parse("go.mod", []byte(`module github.com/dnwSilver/tld
@@ -377,6 +509,117 @@ func TestGitHubClientUsesInjectedHTTPClient(t *testing.T) {
 	}
 }
 
+func TestGitHubClientHasBranchAndDefaultBranch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v3/repos/owner/repo":
+			_, _ = w.Write([]byte(`{"default_branch":"dev"}`))
+		case "/api/v3/repos/owner/repo/branches/master":
+			_, _ = w.Write([]byte(`{"name":"master"}`))
+		case "/api/v3/repos/owner/repo/branches/dev":
+			_, _ = w.Write([]byte(`{"name":"dev"}`))
+		case "/api/v3/repos/owner/repo/branches/missing":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := GitHubClient{HTTPClient: server.Client()}
+	source := Source{Type: storage.SourceTypeGitHub, URL: server.URL, PATToken: "secret"}
+	project := Project{ProviderID: "owner/repo"}
+
+	defaultBranch, err := client.DefaultBranch(context.Background(), source, project)
+	if err != nil {
+		t.Fatalf("default branch: %v", err)
+	}
+	if defaultBranch != "dev" {
+		t.Fatalf("default branch = %q, want dev", defaultBranch)
+	}
+
+	hasMaster, err := client.HasBranch(context.Background(), source, project, "master")
+	if err != nil || !hasMaster {
+		t.Fatalf("has master = %v, err = %v, want true", hasMaster, err)
+	}
+	hasMissing, err := client.HasBranch(context.Background(), source, project, "missing")
+	if err != nil || hasMissing {
+		t.Fatalf("has missing = %v, err = %v, want false", hasMissing, err)
+	}
+}
+
+func TestGitLabClientHasBranchAndDefaultBranch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/api/v4/projects/group%2Frepo":
+			_, _ = w.Write([]byte(`{"default_branch":"dev"}`))
+		case "/api/v4/projects/group%2Frepo/repository/branches/master":
+			_, _ = w.Write([]byte(`{"name":"master"}`))
+		case "/api/v4/projects/group%2Frepo/repository/branches/missing":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := GitLabClient{HTTPClient: server.Client()}
+	source := Source{Type: storage.SourceTypeGitLab, URL: server.URL, PATToken: "secret"}
+	project := Project{ProviderID: "group/repo"}
+
+	defaultBranch, err := client.DefaultBranch(context.Background(), source, project)
+	if err != nil {
+		t.Fatalf("default branch: %v", err)
+	}
+	if defaultBranch != "dev" {
+		t.Fatalf("default branch = %q, want dev", defaultBranch)
+	}
+
+	hasMaster, err := client.HasBranch(context.Background(), source, project, "master")
+	if err != nil || !hasMaster {
+		t.Fatalf("has master = %v, err = %v, want true", hasMaster, err)
+	}
+	hasMissing, err := client.HasBranch(context.Background(), source, project, "missing")
+	if err != nil || hasMissing {
+		t.Fatalf("has missing = %v, err = %v, want false", hasMissing, err)
+	}
+}
+
+func TestCheckServiceCachesResults(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	client := &fakeSourceClient{}
+	service := CheckService{
+		Cache:        store.Cache(),
+		SourceClient: client,
+	}
+	source := Source{Type: storage.SourceTypeGitHub}
+	project := Project{ID: 1, ProviderID: "owner/repo", Name: "Repo"}
+
+	results, err := service.RunProject(ctx, source, project, nil)
+	if err != nil {
+		t.Fatalf("run project checks: %v", err)
+	}
+	if results["master"] != CheckStatePass || results["dev"] != CheckStatePass || results["default"] != CheckStatePass {
+		t.Fatalf("results = %#v", results)
+	}
+
+	loaded, err := service.LoadProject(ctx, source, project)
+	if err != nil {
+		t.Fatalf("load project checks: %v", err)
+	}
+	if loaded["master"] != CheckStatePass || loaded["dev"] != CheckStatePass || loaded["default"] != CheckStatePass {
+		t.Fatalf("loaded = %#v", loaded)
+	}
+}
+
 func TestGitLabClientUsesInjectedHTTPClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.EscapedPath() {
@@ -431,4 +674,20 @@ func (c *fakeSourceClient) FetchFile(_ context.Context, _ Source, _ Project, _ s
 	c.fetches[path]++
 
 	return c.files[path], nil
+}
+
+func (c *fakeSourceClient) HasBranch(_ context.Context, _ Source, _ Project, branch string) (bool, error) {
+	return branch == "main" || branch == "master" || branch == "dev", nil
+}
+
+func (c *fakeSourceClient) DefaultBranch(_ context.Context, _ Source, _ Project) (string, error) {
+	return "dev", nil
+}
+
+func (c *fakeSourceClient) ProtectedBranches(_ context.Context, _ Source, _ Project) ([]ProtectedBranch, error) {
+	return nil, nil
+}
+
+func (c *fakeSourceClient) Tags(_ context.Context, _ Source, _ Project) ([]Tag, error) {
+	return nil, nil
 }

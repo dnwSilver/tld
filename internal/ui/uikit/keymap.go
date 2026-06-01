@@ -26,11 +26,15 @@ var (
 	KeyProjects     = Binding{Keys: []string{"5", "cmd+5", "alt+5"}, Label: "projects", Symbol: SymbolProject, Hint: "5 projects"}
 	KeyPolicies     = Binding{Keys: []string{"6", "cmd+6", "alt+6"}, Label: "policies", Symbol: SymbolPolicy, Hint: "6 policies"}
 	KeyView         = Binding{Keys: []string{"7", "cmd+7", "alt+7"}, Label: "view", Symbol: SymbolDependency, Hint: "7 view"}
+	KeySettings     = Binding{Keys: []string{"8", "cmd+8", "alt+8"}, Label: "settings", Symbol: SymbolSettings, Hint: "8 settings"}
+	KeyReleases     = Binding{Keys: []string{"9", "cmd+9", "alt+9"}, Label: "releases", Symbol: SymbolReleases, Hint: "9 releases"}
 
 	KeyAdd            = Binding{Keys: []string{"a"}, Label: "add", Symbol: SymbolAdd, Hint: "[a] add"}
 	KeyEdit           = Binding{Keys: []string{"e"}, Label: "edit", Symbol: SymbolEdit, Hint: "[e] edit"}
+	KeyClone          = Binding{Keys: []string{"c"}, Label: "clone", Symbol: SymbolAdd, Hint: "[c] clone"}
 	KeyDelete         = Binding{Keys: []string{"d"}, Label: "delete", Symbol: SymbolDelete, Hint: "[d] delete"}
-	KeyRefreshDeps    = Binding{Keys: []string{"r"}, Label: "refresh deps", Symbol: SymbolDependency, Hint: "[r] refresh deps"}
+	KeyRefreshDeps    = Binding{Keys: []string{"r"}, Label: "refresh deps", Symbol: SymbolDependency, Hint: "[r] refresh row"}
+	KeyRefreshAll     = Binding{Keys: []string{"R", "shift+r"}, Label: "refresh all", Symbol: SymbolDependency, Hint: "[R] refresh all"}
 	KeyPrev           = Binding{Keys: []string{"up", "k"}, Label: "prev", Symbol: SymbolSelectPrev, Hint: "[k] prev"}
 	KeyNext           = Binding{Keys: []string{"down", "j"}, Label: "next", Symbol: SymbolSelectNext, Hint: "[j] next"}
 	KeyStackPick      = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "stack", Symbol: SymbolStack, Hint: "[h/l] Stack"}

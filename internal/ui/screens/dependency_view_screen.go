@@ -26,7 +26,7 @@ func NewDependencyViewScreen(palette uikit.Palette) DependencyViewScreen {
 	return DependencyViewScreen{palette: palette}
 }
 
-func (s DependencyViewScreen) Render(width int, height int, stacks []uikit.Stack, activeStackID int64, view uikit.DependencyView, selectedProjectID int64, columnOffset int) string {
+func (s DependencyViewScreen) Render(width int, height int, stacks []uikit.Stack, activeStackID int64, view uikit.DependencyView, selectedProjectID int64, columnOffset int, syncStatus uikit.ProjectSyncStatus) string {
 	boxWidth := uikit.Max(width, 2)
 	boxHeight := uikit.Max(height-1, 3)
 	contentWidth := uikit.Max(boxWidth-2, 1)
@@ -36,8 +36,15 @@ func (s DependencyViewScreen) Render(width int, height int, stacks []uikit.Stack
 	content := s.renderContent(contentWidth, contentHeight, view, selectedProjectID, columnOffset)
 	box := components.NewTabbedPanel(s.palette, s.palette.Primary).Render(contentWidth, contentHeight, title, stackTabs(stacks, activeStackID), content)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
+	if syncStatus.Message != "" || syncStatus.Error != "" {
+		footer = s.progressLine(width, syncStatus)
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, box, footer)
+}
+
+func (s DependencyViewScreen) progressLine(width int, status uikit.ProjectSyncStatus) string {
+	return components.RenderProgress(s.palette, width, uikit.SymbolDependency, status.Message, status.Error, status.Running, status.Current, status.Total)
 }
 
 func (s DependencyViewScreen) renderContent(width int, height int, view uikit.DependencyView, selectedProjectID int64, columnOffset int) string {

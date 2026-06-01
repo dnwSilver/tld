@@ -67,7 +67,9 @@ func isListScreen(screen uikit.Screen) bool {
 		screen == uikit.ScreenProjects ||
 		screen == uikit.ScreenSources ||
 		screen == uikit.ScreenPolicies ||
-		screen == uikit.ScreenView
+		screen == uikit.ScreenView ||
+		screen == uikit.ScreenSettings ||
+		screen == uikit.ScreenReleases
 }
 
 func (h Hints) defaultRows() []string {
@@ -105,10 +107,12 @@ func (h Hints) listRows() []string {
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyStacks, 18), h.fromBinding(h.palette.Info, uikit.KeyEdit, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyNamespaces, 18), h.fromBinding(h.palette.Error, uikit.KeyDelete, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyDependencies, 18), h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyProjects, 18), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyProjects, 18), h.fromBinding(h.palette.Info, uikit.KeyClone, 20)),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeySources, 18), hintSpec{h.palette.Hint, "", "", 20}),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPolicies, 18), h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyView, 18), hintSpec{h.palette.Hint, "", "[Tab] stack", 20}),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyView, 18), h.fromBinding(h.palette.Primary, uikit.KeyRefreshAll, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeySettings, 18), hintSpec{h.palette.Hint, "", "[Tab] stack", 20}),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyReleases, 18), hintSpec{h.palette.Hint, "", "[Tab] period", 20}),
 	}
 }
 

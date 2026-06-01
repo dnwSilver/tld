@@ -19,6 +19,8 @@ type Creator struct {
 	sourcesScreen      screens.SourcesScreen
 	policiesScreen     screens.PoliciesScreen
 	viewScreen         screens.DependencyViewScreen
+	settingsScreen     screens.SettingsScreen
+	releasesScreen     screens.ReleasesScreen
 }
 
 func NewCreator() Creator {
@@ -36,6 +38,8 @@ func NewCreator() Creator {
 		sourcesScreen:      screens.NewSourcesScreen(palette),
 		policiesScreen:     screens.NewPoliciesScreen(palette),
 		viewScreen:         screens.NewDependencyViewScreen(palette),
+		settingsScreen:     screens.NewSettingsScreen(palette),
+		releasesScreen:     screens.NewReleasesScreen(palette),
 	}
 }
 
@@ -66,6 +70,14 @@ func (c Creator) Render(
 	dependencyView uikit.DependencyView,
 	selectedViewProjectID int64,
 	viewColumnOffset int,
+	checkColumns []uikit.ProjectCheck,
+	projectCheckRows []uikit.ProjectCheckRow,
+	selectedCheckProjectID int64,
+	settingsStatus uikit.SettingsStatus,
+	releaseRows []uikit.ReleaseRow,
+	selectedReleaseProjectID int64,
+	releasePeriod uikit.ReleasePeriod,
+	releasesStatus uikit.SettingsStatus,
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
 	dependencyForm uikit.DependencyForm,
@@ -160,7 +172,13 @@ func (c Creator) Render(
 		)
 	}
 	if screen == uikit.ScreenView {
-		body = c.viewScreen.Render(width, bodyHeight, stacks, dependencyView.StackID, dependencyView, selectedViewProjectID, viewColumnOffset)
+		body = c.viewScreen.Render(width, bodyHeight, stacks, dependencyView.StackID, dependencyView, selectedViewProjectID, viewColumnOffset, projectSyncStatus)
+	}
+	if screen == uikit.ScreenSettings {
+		body = c.settingsScreen.Render(width, bodyHeight, checkColumns, projectCheckRows, selectedCheckProjectID, settingsStatus)
+	}
+	if screen == uikit.ScreenReleases {
+		body = c.releasesScreen.Render(width, bodyHeight, releaseRows, selectedReleaseProjectID, releasePeriod, releasesStatus)
 	}
 
 	return base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
