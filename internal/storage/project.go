@@ -26,6 +26,8 @@ type Project struct {
 	Icon            string
 	Name            string
 	Color           string
+	Freezing        bool
+	EndOfLife       bool
 	DependencyCount int
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -33,7 +35,7 @@ type Project struct {
 
 func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT p.id, p.project_id, p.namespace_id, n.name, p.source_id, src.name, p.stack_id, st.name, st.icon, st.color, p.icon, p.name, p.color, COALESCE(pd.dependency_count, 0), p.created_at, p.updated_at
+		SELECT p.id, p.project_id, p.namespace_id, n.name, p.source_id, src.name, p.stack_id, st.name, st.icon, st.color, p.icon, p.name, p.color, p.freezing, p.endoflife, COALESCE(pd.dependency_count, 0), p.created_at, p.updated_at
 		FROM projects p
 		JOIN namespaces n ON n.id = p.namespace_id
 		JOIN sources src ON src.id = p.source_id
@@ -57,6 +59,8 @@ func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 		var project Project
 		var createdAt int64
 		var updatedAt int64
+		var freezing int
+		var endOfLife int
 		if err := rows.Scan(
 			&project.ID,
 			&project.ProjectID,
@@ -71,12 +75,16 @@ func (r ProjectRepository) List(ctx context.Context) ([]Project, error) {
 			&project.Icon,
 			&project.Name,
 			&project.Color,
+			&freezing,
+			&endOfLife,
 			&project.DependencyCount,
 			&createdAt,
 			&updatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
+		project.Freezing = freezing != 0
+		project.EndOfLife = endOfLife != 0
 		project.CreatedAt = time.Unix(createdAt, 0).UTC()
 		project.UpdatedAt = time.Unix(updatedAt, 0).UTC()
 		projects = append(projects, project)
@@ -97,7 +105,7 @@ func (r ProjectRepository) Count(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func (r ProjectRepository) Create(ctx context.Context, projectID string, namespaceID int64, sourceID int64, stackID int64, icon string, name string, color string) (Project, error) {
+func (r ProjectRepository) Create(ctx context.Context, projectID string, namespaceID int64, sourceID int64, stackID int64, icon string, name string, color string, freezing bool, endOfLife bool) (Project, error) {
 	if projectID == "" {
 		return Project{}, errors.New("project PROJECT_ID is empty")
 	}
@@ -122,9 +130,9 @@ func (r ProjectRepository) Create(ctx context.Context, projectID string, namespa
 
 	now := time.Now().Unix()
 	result, err := r.db.ExecContext(ctx, `
-		INSERT INTO projects (project_id, namespace_id, source_id, stack_id, icon, name, color, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, projectID, namespaceID, sourceID, stackID, icon, name, color, now, now)
+		INSERT INTO projects (project_id, namespace_id, source_id, stack_id, icon, name, color, freezing, endoflife, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, projectID, namespaceID, sourceID, stackID, icon, name, color, boolToInt(freezing), boolToInt(endOfLife), now, now)
 	if err != nil {
 		return Project{}, fmt.Errorf("create project: %w", err)
 	}
@@ -143,12 +151,14 @@ func (r ProjectRepository) Create(ctx context.Context, projectID string, namespa
 		Icon:        icon,
 		Name:        name,
 		Color:       color,
+		Freezing:    freezing,
+		EndOfLife:   endOfLife,
 		CreatedAt:   time.Unix(now, 0).UTC(),
 		UpdatedAt:   time.Unix(now, 0).UTC(),
 	}, nil
 }
 
-func (r ProjectRepository) Update(ctx context.Context, id int64, projectID string, namespaceID int64, sourceID int64, stackID int64, icon string, name string, color string) error {
+func (r ProjectRepository) Update(ctx context.Context, id int64, projectID string, namespaceID int64, sourceID int64, stackID int64, icon string, name string, color string, freezing bool, endOfLife bool) error {
 	if id == 0 {
 		return errors.New("project id is empty")
 	}
@@ -176,9 +186,9 @@ func (r ProjectRepository) Update(ctx context.Context, id int64, projectID strin
 
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE projects
-		SET project_id = ?, namespace_id = ?, source_id = ?, stack_id = ?, icon = ?, name = ?, color = ?, updated_at = ?
+		SET project_id = ?, namespace_id = ?, source_id = ?, stack_id = ?, icon = ?, name = ?, color = ?, freezing = ?, endoflife = ?, updated_at = ?
 		WHERE id = ?
-	`, projectID, namespaceID, sourceID, stackID, icon, name, color, time.Now().Unix(), id)
+	`, projectID, namespaceID, sourceID, stackID, icon, name, color, boolToInt(freezing), boolToInt(endOfLife), time.Now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("update project: %w", err)
 	}
@@ -213,4 +223,11 @@ func (r ProjectRepository) Delete(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }

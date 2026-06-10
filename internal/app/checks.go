@@ -34,7 +34,7 @@ func defaultCheckColumns() []ui.ProjectCheck {
 }
 
 func (m model) loadProjectChecks() tea.Cmd {
-	projects := m.projects
+	projects := activeProjects(m.projects)
 	sources := m.sources
 	return func() tea.Msg {
 		if m.store == nil {
@@ -45,11 +45,13 @@ func (m model) loadProjectChecks() tea.Cmd {
 		rows := make([]ui.ProjectCheckRow, 0, len(projects))
 		for _, project := range projects {
 			row := ui.ProjectCheckRow{
-				ProjectID:    project.ID,
-				ProjectIcon:  project.Icon,
-				ProjectName:  project.Name,
-				ProjectColor: project.Color,
-				Results:      make(map[string]ui.CheckState, len(projectsync.ProjectChecks)),
+				ProjectID:        project.ID,
+				ProjectIcon:      project.Icon,
+				ProjectName:      project.Name,
+				ProjectColor:     project.Color,
+				ProjectFreezing:  project.Freezing,
+				ProjectEndOfLife: project.EndOfLife,
+				Results:          make(map[string]ui.CheckState, len(projectsync.ProjectChecks)),
 			}
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
@@ -91,7 +93,7 @@ func (m model) startProjectChecksRefresh(projects []ui.Project) (tea.Model, tea.
 }
 
 func (m model) selectedCheckProjects() []ui.Project {
-	if project, ok := findByID(m.projects, m.selectedCheckProjectID, projectID); ok {
+	if project, ok := findByID(m.projects, m.selectedCheckProjectID, projectID); ok && !project.EndOfLife {
 		return []ui.Project{project}
 	}
 

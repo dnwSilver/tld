@@ -12,6 +12,7 @@ type Palette struct {
 	Error      lipgloss.Color
 	Warning    lipgloss.Color
 	Info       lipgloss.Color
+	Critical   lipgloss.Color
 }
 
 func NewPalette() Palette {
@@ -25,5 +26,6 @@ func NewPalette() Palette {
 		Error:      lipgloss.Color("#CA3433"),
 		Warning:    lipgloss.Color("#EC9706"),
 		Info:       lipgloss.Color("#25799F"),
+		Critical:   lipgloss.Color("#D946EF"),
 	}
 }

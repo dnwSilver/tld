@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 11
+const currentSchemaVersion = 12
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -87,6 +87,11 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 11 {
 		if err := migrateV11(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 12 {
+		if err := migrateV12(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -606,6 +611,30 @@ func migrateV11(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema v11: %w", err)
 		}
+	}
+
+	return nil
+}
+
+func migrateV12(ctx context.Context, tx *sql.Tx) error {
+	hasFreezing, err := hasColumn(ctx, tx, "projects", "freezing")
+	if err != nil {
+		return err
+	}
+	if !hasFreezing {
+		statements := []string{
+			"ALTER TABLE projects ADD COLUMN freezing INTEGER NOT NULL DEFAULT 0",
+			"ALTER TABLE projects ADD COLUMN endoflife INTEGER NOT NULL DEFAULT 0",
+		}
+		for _, statement := range statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply schema v12: %w", err)
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO schema_migrations (version) VALUES (12)"); err != nil {
+		return fmt.Errorf("apply schema v12: %w", err)
 	}
 
 	return nil

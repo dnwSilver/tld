@@ -14,7 +14,8 @@ const (
 	ScreenPolicies     = uikit.ScreenPolicies
 	ScreenView         = uikit.ScreenView
 	ScreenSettings     = uikit.ScreenSettings
-	ScreenReleases     = uikit.ScreenReleases
+	ScreenReleases          = uikit.ScreenReleases
+	ScreenVulnerabilities   = uikit.ScreenVulnerabilities
 )
 
 type Stack = uikit.Stack
@@ -90,6 +91,8 @@ const (
 	ProjectFormFieldNamespace = uikit.ProjectFormFieldNamespace
 	ProjectFormFieldSource    = uikit.ProjectFormFieldSource
 	ProjectFormFieldStack     = uikit.ProjectFormFieldStack
+	ProjectFormFieldFreezing  = uikit.ProjectFormFieldFreezing
+	ProjectFormFieldEndOfLife = uikit.ProjectFormFieldEndOfLife
 )
 
 type ProjectForm = uikit.ProjectForm
@@ -117,6 +120,15 @@ type SettingsStatus = uikit.SettingsStatus
 type ReleaseRow = uikit.ReleaseRow
 type ReleaseMonth = uikit.ReleaseMonth
 type ReleasePeriod = uikit.ReleasePeriod
+type VulnCounts = uikit.VulnCounts
+type VulnerabilityItem = uikit.VulnerabilityItem
+type VulnProjectRow = uikit.VulnProjectRow
+type VulnPane = uikit.VulnPane
+
+const (
+	VulnPaneProjects = uikit.VulnPaneProjects
+	VulnPaneDetails  = uikit.VulnPaneDetails
+)
 
 const (
 	ReleasePeriodYear    = uikit.ReleasePeriodYear
@@ -142,7 +154,8 @@ var (
 	KeyPolicies       = uikit.KeyPolicies
 	KeyView           = uikit.KeyView
 	KeySettings       = uikit.KeySettings
-	KeyReleases       = uikit.KeyReleases
+	KeyReleases          = uikit.KeyReleases
+	KeyVulnerabilities   = uikit.KeyVulnerabilities
 	KeyAdd            = uikit.KeyAdd
 	KeyEdit           = uikit.KeyEdit
 	KeyClone          = uikit.KeyClone
@@ -157,5 +170,14 @@ var (
 	KeyNamespacePick  = uikit.KeyNamespacePick
 	KeyPolicyPick     = uikit.KeyPolicyPick
 	KeyDependencyPick = uikit.KeyDependencyPick
-	KeyQuit           = uikit.KeyQuit
+	KeyToggleHead = uikit.KeyToggleHead
+	KeyQuit       = uikit.KeyQuit
 )
+
+type NavSection = uikit.NavSection
+
+var NavSections = uikit.NavSections
+
+func NavSectionIndex(screen Screen) int {
+	return uikit.NavSectionIndex(screen)
+}

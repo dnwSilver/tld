@@ -91,6 +91,7 @@ func (s Service) Sync(ctx context.Context, source Source, project Project, progr
 		}
 		dependencies = append(dependencies, parsed...)
 	}
+	dependencies = preferNodeFromNvmrc(dependencies)
 
 	report(progress, "Saving dependencies...")
 	now := time.Now().UTC()
@@ -157,4 +158,27 @@ func report(progress ProgressFunc, message string) {
 	if progress != nil {
 		progress(message)
 	}
+}
+
+func preferNodeFromNvmrc(dependencies []storage.ProjectDependency) []storage.ProjectDependency {
+	hasNvmrcNode := false
+	for _, dependency := range dependencies {
+		if strings.EqualFold(strings.TrimSpace(dependency.Name), "node") && dependency.SourceFile == ".nvmrc" {
+			hasNvmrcNode = true
+			break
+		}
+	}
+	if !hasNvmrcNode {
+		return dependencies
+	}
+
+	filtered := make([]storage.ProjectDependency, 0, len(dependencies))
+	for _, dependency := range dependencies {
+		if strings.EqualFold(strings.TrimSpace(dependency.Name), "node") && dependency.SourceFile != ".nvmrc" {
+			continue
+		}
+		filtered = append(filtered, dependency)
+	}
+
+	return filtered
 }

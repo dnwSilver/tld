@@ -2,6 +2,7 @@ package screens
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dnwSilver/tld/internal/ui/components"
@@ -15,16 +16,74 @@ type ProjectsScreen struct {
 const (
 	projectFormLabelWidth       = 10
 	projectFormValueWidth       = 24
-	projectIDColumnWidth        = 10
-	projectNameColumnWidth      = 20
-	projectNamespaceColumnWidth = 15
-	projectSourceColumnWidth    = 13
-	projectDepsColumnWidth      = 6
-	projectGapColumnWidth       = 2
+	projectNameColumnMinWidth   = 8
+	projectNamespaceColumnMin   = 8
+	projectSourceColumnMin      = 6
+	projectTailColumnWidth      = 5
 	projectIconSlotWidth        = 2
 	projectIconColumnWidth      = projectIconSlotWidth * 2
 	projectDepVersionWidth      = 12
 )
+
+type projectTableColumns struct {
+	name      int
+	namespace int
+	source    int
+}
+
+func projectTableColumnsFor(width, iconColumnWidth int, projects []uikit.Project) projectTableColumns {
+	fixed := iconColumnWidth + projectTailColumnWidth*4
+	remaining := uikit.Max(width-fixed, projectNameColumnMinWidth+projectNamespaceColumnMin+projectSourceColumnMin)
+
+	nameNeed := uikit.Max(components.ColumnWidth(projects, func(project uikit.Project) string { return project.Name }, projectNameColumnMinWidth), projectNameColumnMinWidth)
+	nsNeed := uikit.Max(components.ColumnWidth(projects, func(project uikit.Project) string { return project.NamespaceName }, projectNamespaceColumnMin), projectNamespaceColumnMin)
+	srcNeed := uikit.Max(components.ColumnWidth(projects, func(project uikit.Project) string { return project.SourceName }, projectSourceColumnMin), projectSourceColumnMin)
+	totalNeed := nameNeed + nsNeed + srcNeed
+
+	cols := projectTableColumns{}
+	if totalNeed <= remaining {
+		cols.name = nameNeed
+		cols.namespace = nsNeed
+		cols.source = srcNeed
+	} else {
+		cols.name = uikit.Max(remaining*2/5, projectNameColumnMinWidth)
+		cols.namespace = uikit.Max(remaining*2/5, projectNamespaceColumnMin)
+		cols.source = uikit.Max(remaining-cols.name-cols.namespace, projectSourceColumnMin)
+	}
+
+	total := iconColumnWidth + cols.name + cols.namespace + cols.source + projectTailColumnWidth*4
+	if total > width {
+		overflow := total - width
+		if cols.source > projectSourceColumnMin {
+			shrink := uikit.Min(overflow, cols.source-projectSourceColumnMin)
+			cols.source -= shrink
+			overflow -= shrink
+		}
+		if overflow > 0 && cols.namespace > projectNamespaceColumnMin {
+			shrink := uikit.Min(overflow, cols.namespace-projectNamespaceColumnMin)
+			cols.namespace -= shrink
+			overflow -= shrink
+		}
+		if overflow > 0 && cols.name > projectNameColumnMinWidth {
+			shrink := uikit.Min(overflow, cols.name-projectNameColumnMinWidth)
+			cols.name -= shrink
+		}
+	}
+
+	return cols
+}
+
+func alignColumn(value string, width int) string {
+	for lipgloss.Width(value) > width {
+		_, size := utf8.DecodeRuneInString(value)
+		if size == 0 {
+			break
+		}
+		value = value[size:]
+	}
+
+	return rightAligned(value, width)
+}
 
 func NewProjectsScreen(palette uikit.Palette) ProjectsScreen {
 	return ProjectsScreen{palette: palette}
@@ -96,33 +155,35 @@ func (s ProjectsScreen) renderProjectsContent(
 ) string {
 	lines := make([]string, 0, height)
 	iconColumnWidth := components.ColumnWidth(projects, projectIcons, projectIconColumnWidth)
-	lines = append(lines, s.tableHeader(width, iconColumnWidth))
+	columns := projectTableColumnsFor(width, iconColumnWidth, projects)
+	lines = append(lines, s.tableHeader(width, iconColumnWidth, columns))
 
 	if len(projects) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No projects yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
 		for _, project := range projects {
-			lines = append(lines, s.renderProjectRow(width, project, project.ID == selectedProjectID, iconColumnWidth))
+			lines = append(lines, s.renderProjectRow(width, project, project.ID == selectedProjectID, iconColumnWidth, columns))
 		}
 	}
 
 	return fillLines(s.palette, lines, width, height)
 }
 
-func (s ProjectsScreen) tableHeader(width int, iconColumnWidth int) string {
+func (s ProjectsScreen) tableHeader(width int, iconColumnWidth int, columns projectTableColumns) string {
 	return components.RenderTableRow(s.palette, s.palette.Background, width, []components.TableCell{
 		{Value: "", Width: iconColumnWidth, Foreground: s.palette.Hint},
-		{Value: "name", Width: projectNameColumnWidth, Foreground: s.palette.Hint, Bold: true},
-		{Value: "namespace", Width: projectNamespaceColumnWidth, Foreground: s.palette.Hint, Bold: true},
-		{Value: "source", Width: projectSourceColumnWidth, Foreground: s.palette.Hint, Bold: true},
-		{Value: "deps", Width: projectDepsColumnWidth, Foreground: s.palette.Hint, Bold: true},
-		{Value: "", Width: projectGapColumnWidth, Foreground: s.palette.Hint},
-		{Value: "project_id", Width: projectIDColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "name", Width: columns.name, Foreground: s.palette.Hint, Bold: true},
+		{Value: "namespace", Width: columns.namespace, Foreground: s.palette.Hint, Bold: true},
+		{Value: "source", Width: columns.source, Foreground: s.palette.Hint, Bold: true},
+		{Value: alignColumn("deps", projectTailColumnWidth), Width: projectTailColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: alignColumn("pid", projectTailColumnWidth), Width: projectTailColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: alignColumn("frz", projectTailColumnWidth), Width: projectTailColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: alignColumn("eol", projectTailColumnWidth), Width: projectTailColumnWidth, Foreground: s.palette.Hint, Bold: true},
 	})
 }
 
-func (s ProjectsScreen) renderProjectRow(width int, project uikit.Project, selected bool, iconColumnWidth int) string {
+func (s ProjectsScreen) renderProjectRow(width int, project uikit.Project, selected bool, iconColumnWidth int, columns projectTableColumns) string {
 	background := s.palette.Background
 	if selected {
 		background = s.palette.Hover
@@ -141,13 +202,26 @@ func (s ProjectsScreen) renderProjectRow(width int, project uikit.Project, selec
 
 	return components.RenderTableRow(s.palette, background, width, []components.TableCell{
 		{Value: iconCell, Width: iconColumnWidth, Foreground: s.palette.Text},
-		{Value: project.Name, Width: projectNameColumnWidth, Foreground: s.palette.Text},
-		{Value: project.NamespaceName, Width: projectNamespaceColumnWidth, Foreground: s.palette.Hint},
-		{Value: project.SourceName, Width: projectSourceColumnWidth, Foreground: s.palette.Info},
-		{Value: rightAligned(uikit.FormatInt(project.DependencyCount), projectDepsColumnWidth), Width: projectDepsColumnWidth, Foreground: s.palette.Primary},
-		{Value: "", Width: projectGapColumnWidth, Foreground: s.palette.Hint},
-		{Value: project.ProjectID, Width: projectIDColumnWidth, Foreground: s.palette.Info},
+		{Value: uikit.RenderProjectName(s.palette, project.Name, project.Freezing, project.EndOfLife, background, s.palette.Text, columns.name), Width: columns.name, Foreground: s.palette.Text},
+		{Value: project.NamespaceName, Width: columns.namespace, Foreground: s.palette.Hint},
+		{Value: project.SourceName, Width: columns.source, Foreground: s.palette.Info},
+		{Value: alignColumn(uikit.FormatInt(project.DependencyCount), projectTailColumnWidth), Width: projectTailColumnWidth, Foreground: s.palette.Primary},
+		{Value: alignColumn(project.ProjectID, projectTailColumnWidth), Width: projectTailColumnWidth, Foreground: s.palette.Info},
+		{Value: s.projectFlag(project.Freezing, uikit.SymbolProjectFreeze, s.palette.Info, background), Width: projectTailColumnWidth, Foreground: s.palette.Info},
+		{Value: s.projectFlag(project.EndOfLife, uikit.SymbolProjectEOL, s.palette.Hint, background), Width: projectTailColumnWidth, Foreground: s.palette.Hint},
 	})
+}
+
+func (s ProjectsScreen) projectFlag(active bool, symbol string, color lipgloss.Color, background lipgloss.Color) string {
+	value := ""
+	if active {
+		value = symbol
+	}
+
+	return lipgloss.NewStyle().
+		Background(background).
+		Foreground(color).
+		Render(alignColumn(value, projectTailColumnWidth))
 }
 
 func projectIcons(project uikit.Project) string {
@@ -251,11 +325,21 @@ func (s ProjectsScreen) modal(width int, namespaces []uikit.Namespace, sources [
 		modal.CenterLine(contentWidth, s.inputLine("Source", s.sourceName(sources, form.SourceID), form.Focus == uikit.ProjectFormFieldSource)),
 		modal.CenterLine(contentWidth, s.inputLine("Stack", s.stackName(stacks, form.StackID), form.Focus == uikit.ProjectFormFieldStack)),
 		modal.CenterLine(contentWidth, s.inputLine("Project ID", form.ProjectID, form.Focus == uikit.ProjectFormFieldProjectID)),
+		modal.CenterLine(contentWidth, s.inputLine("Freezing", s.boolLabel(form.Freezing), form.Focus == uikit.ProjectFormFieldFreezing)),
+		modal.CenterLine(contentWidth, s.inputLine("EOL", s.boolLabel(form.EndOfLife), form.Focus == uikit.ProjectFormFieldEndOfLife)),
 		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
 		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, form.Focus)),
 	}
 
 	return modal.Render(contentWidth, title, rows)
+}
+
+func (s ProjectsScreen) boolLabel(value bool) string {
+	if value {
+		return "yes"
+	}
+
+	return "no"
 }
 
 func (s ProjectsScreen) inputLine(label, value string, focused bool) string {

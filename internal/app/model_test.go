@@ -463,7 +463,7 @@ func TestEditProjectCanChangeSelectors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source B: %v", err)
 	}
-	project, err := store.Projects().Create(ctx, "autobase-main", namespaceA.ID, sourceA.ID, stackA.ID, "󰏖", "TLD", "#EC9706")
+	project, err := store.Projects().Create(ctx, "autobase-main", namespaceA.ID, sourceA.ID, stackA.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -565,7 +565,7 @@ func TestProjectCloneFormOpensWithSelectedData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestProjectDependencyRefreshLoadsDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}

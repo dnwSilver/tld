@@ -49,6 +49,54 @@ func TestJavaScriptStrategyParsesDependencyGroups(t *testing.T) {
 	}
 }
 
+func TestJavaScriptStrategyParsesNvmrc(t *testing.T) {
+	strategy := JavaScriptStrategy{}
+
+	dependencies, err := strategy.Parse(".nvmrc", []byte("22.11.0\n"))
+	if err != nil {
+		t.Fatalf("parse .nvmrc: %v", err)
+	}
+	if len(dependencies) != 1 {
+		t.Fatalf("len(dependencies) = %d, want 1", len(dependencies))
+	}
+	if dependencies[0].Name != "node" || dependencies[0].Version != "22.11.0" || dependencies[0].DependencyType != DependencyTypeNvmrc {
+		t.Fatalf("dependency = %#v", dependencies[0])
+	}
+
+	dependencies, err = strategy.Parse(".nvmrc", []byte("# comment\nv20.18.0\n"))
+	if err != nil {
+		t.Fatalf("parse .nvmrc with prefix: %v", err)
+	}
+	if len(dependencies) != 1 || dependencies[0].Version != "20.18.0" {
+		t.Fatalf("dependency = %#v", dependencies)
+	}
+
+	dependencies, err = strategy.Parse(".nvmrc", []byte("# only comment\n"))
+	if err != nil {
+		t.Fatalf("parse empty .nvmrc: %v", err)
+	}
+	if len(dependencies) != 0 {
+		t.Fatalf("len(dependencies) = %d, want 0", len(dependencies))
+	}
+}
+
+func TestPreferNodeFromNvmrc(t *testing.T) {
+	dependencies := preferNodeFromNvmrc([]storage.ProjectDependency{
+		{Name: "node", Version: ">=22.0.0", DependencyType: DependencyTypeEngines, SourceFile: "package.json"},
+		{Name: "node", Version: "22.11.0", DependencyType: DependencyTypeNvmrc, SourceFile: ".nvmrc"},
+		{Name: "react", Version: "^19.0.0", DependencyType: DependencyTypeRuntime, SourceFile: "package.json"},
+	})
+	if len(dependencies) != 2 {
+		t.Fatalf("len(dependencies) = %d, want 2", len(dependencies))
+	}
+	if dependencies[0].Name != "node" || dependencies[0].Version != "22.11.0" || dependencies[0].SourceFile != ".nvmrc" {
+		t.Fatalf("node dependency = %#v", dependencies[0])
+	}
+	if dependencies[1].Name != "react" {
+		t.Fatalf("react dependency = %#v", dependencies[1])
+	}
+}
+
 func TestSwiftStrategyParsesLockedVersions(t *testing.T) {
 	strategy := SwiftStrategy{}
 	gems, err := strategy.Parse("Gemfile.lock", []byte(`GEM
@@ -286,7 +334,7 @@ func TestServiceCachesSwiftLocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	projectEntity, err := store.Projects().Create(ctx, "owner/ios", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "iOS", "#EC9706")
+	projectEntity, err := store.Projects().Create(ctx, "owner/ios", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "iOS", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -353,7 +401,7 @@ func TestServiceCachesGoSum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	projectEntity, err := store.Projects().Create(ctx, "owner/go", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "Go App", "#EC9706")
+	projectEntity, err := store.Projects().Create(ctx, "owner/go", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "Go App", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -416,7 +464,7 @@ func TestServiceCachesPackageLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	projectEntity, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	projectEntity, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, sourceEntity.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -673,7 +721,12 @@ func (c *fakeSourceClient) FetchFile(_ context.Context, _ Source, _ Project, _ s
 	}
 	c.fetches[path]++
 
-	return c.files[path], nil
+	content, ok := c.files[path]
+	if !ok {
+		return nil, ErrFileNotFound
+	}
+
+	return content, nil
 }
 
 func (c *fakeSourceClient) HasBranch(_ context.Context, _ Source, _ Project, branch string) (bool, error) {

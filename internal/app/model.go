@@ -66,6 +66,15 @@ type model struct {
 	releasePeriod            ui.ReleasePeriod
 	releasesStatus           ui.SettingsStatus
 	releasesSyncCh           <-chan releaseSyncMsg
+	vulnRows                 []ui.VulnProjectRow
+	vulnItems                []ui.VulnerabilityItem
+	selectedVulnProjectID    int64
+	selectedVulnItemIndex    int
+	vulnFocus                ui.VulnPane
+	vulnsStatus              ui.SettingsStatus
+	vulnsSyncCh              <-chan vulnSyncMsg
+	navModalOpen             bool
+	navModalIndex            int
 	err                      error
 }
 
@@ -210,6 +219,7 @@ func newModel(store *storage.Store) model {
 		policyValues: []ui.PolicyValue{},
 		policyFocus:  ui.PolicyPanePolicies,
 		checkColumns: defaultCheckColumns(),
+		vulnFocus:    ui.VulnPaneProjects,
 	}
 }
 
@@ -262,33 +272,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.form.Open {
 			return m.updateStackForm(msg)
 		}
+		if m.navModalOpen {
+			return m.updateNavModal(msg)
+		}
 
 		key := msg.String()
 		switch {
+		case ui.KeyToggleHead.Matches(key):
+			m = m.openNavModal()
 		case ui.KeyHome.Matches(key):
-			m.screen = ui.ScreenDefault
+			return m.switchToScreen(ui.ScreenDefault)
 		case ui.KeyStacks.Matches(key):
-			m.screen = ui.ScreenStacks
+			return m.switchToScreen(ui.ScreenStacks)
 		case ui.KeyNamespaces.Matches(key):
-			m.screen = ui.ScreenNamespaces
+			return m.switchToScreen(ui.ScreenNamespaces)
 		case ui.KeyDependencies.Matches(key):
-			m.screen = ui.ScreenDependencies
+			return m.switchToScreen(ui.ScreenDependencies)
 		case ui.KeyProjects.Matches(key):
-			m.screen = ui.ScreenProjects
+			return m.switchToScreen(ui.ScreenProjects)
 		case ui.KeySources.Matches(key):
-			m.screen = ui.ScreenSources
+			return m.switchToScreen(ui.ScreenSources)
 		case ui.KeyPolicies.Matches(key):
-			m.screen = ui.ScreenPolicies
+			return m.switchToScreen(ui.ScreenPolicies)
 		case ui.KeyView.Matches(key):
-			m.screen = ui.ScreenView
-			m.ensureViewStack()
-			return m, m.loadDependencyView()
+			return m.switchToScreen(ui.ScreenView)
 		case ui.KeySettings.Matches(key):
-			m.screen = ui.ScreenSettings
-			return m, m.loadProjectChecks()
+			return m.switchToScreen(ui.ScreenSettings)
 		case ui.KeyReleases.Matches(key):
-			m.screen = ui.ScreenReleases
-			return m, m.loadReleases()
+			return m.switchToScreen(ui.ScreenReleases)
+		case ui.KeyVulnerabilities.Matches(key):
+			return m.switchToScreen(ui.ScreenVulnerabilities)
 		case ui.KeyAdd.Matches(key):
 			m.openAddForm()
 		case ui.KeyEdit.Matches(key):
@@ -309,6 +322,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.startProjectChecksRefresh(m.selectedCheckProjects())
 			case ui.ScreenReleases:
 				return m.startReleasesRefresh(m.selectedReleaseProjects())
+			case ui.ScreenVulnerabilities:
+				return m.startVulnsRefresh(m.selectedVulnProjects())
 			}
 		case ui.KeyRefreshAll.Matches(key):
 			switch m.screen {
@@ -317,9 +332,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case ui.ScreenView:
 				return m.startViewDependencySync(true)
 			case ui.ScreenSettings:
-				return m.startProjectChecksRefresh(m.projects)
+				return m.startProjectChecksRefresh(activeProjects(m.projects))
 			case ui.ScreenReleases:
-				return m.startReleasesRefresh(m.projects)
+				return m.startReleasesRefresh(activeProjects(m.projects))
+			case ui.ScreenVulnerabilities:
+				return m.startVulnsRefresh(activeProjects(m.projects))
 			}
 		case ui.KeyPrev.Matches(key):
 			if m.screen == ui.ScreenView {
@@ -333,6 +350,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == ui.ScreenProjects {
 				return m, m.loadProjectDependencies()
 			}
+			if m.screen == ui.ScreenVulnerabilities && m.vulnFocus == ui.VulnPaneProjects {
+				return m, m.loadVulnerabilities()
+			}
 		case ui.KeyNext.Matches(key):
 			if m.screen == ui.ScreenView {
 				m.selectNextViewProject()
@@ -344,6 +364,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.screen == ui.ScreenProjects {
 				return m, m.loadProjectDependencies()
+			}
+			if m.screen == ui.ScreenVulnerabilities && m.vulnFocus == ui.VulnPaneProjects {
+				return m, m.loadVulnerabilities()
 			}
 			if m.screen == ui.ScreenView {
 				m.selectNextViewStack()
@@ -381,6 +404,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == ui.ScreenReleases {
 				m.releasePeriod = m.releasePeriod.Next()
 				return m, m.loadReleases()
+			}
+			if m.screen == ui.ScreenVulnerabilities {
+				m.toggleVulnPane()
+				return m, nil
 			}
 			m.togglePolicyPane()
 		case ui.KeyQuit.Matches(key):
@@ -634,6 +661,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.releasesSyncCh != nil {
 			return m, waitReleaseSync(m.releasesSyncCh)
 		}
+	case vulnsLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.vulnRows = msg.rows
+			m.vulnItems = msg.items
+			m.ensureSelectedVulnProject()
+			if m.selectedVulnItemIndex >= len(m.vulnItems) {
+				m.selectedVulnItemIndex = 0
+			}
+		}
+	case vulnSyncMsg:
+		m.vulnsStatus.Message = msg.message
+		m.vulnsStatus.Running = !msg.done
+		m.vulnsStatus.Error = ""
+		if msg.total > 0 {
+			m.vulnsStatus.Current = msg.current
+			m.vulnsStatus.Total = msg.total
+		}
+		if msg.err != nil {
+			m.err = msg.err
+			m.vulnsStatus.Error = msg.err.Error()
+			m.vulnsStatus.Running = false
+			return m, m.loadVulnerabilities()
+		}
+		if msg.done {
+			m.vulnsSyncCh = nil
+			return m, m.loadVulnerabilities()
+		}
+		if msg.step && m.vulnsSyncCh != nil {
+			return m, tea.Batch(m.loadVulnerabilities(), waitVulnSync(m.vulnsSyncCh))
+		}
+		if m.vulnsSyncCh != nil {
+			return m, waitVulnSync(m.vulnsSyncCh)
+		}
 	case projectSyncMsg:
 		if msg.projectID != 0 && msg.projectID != m.selectedProjectID {
 			return m, nil
@@ -707,6 +768,12 @@ func (m model) View() string {
 		m.selectedReleaseProjectID,
 		m.releasePeriod,
 		m.releasesStatus,
+		m.vulnRows,
+		m.selectedVulnProjectID,
+		m.vulnItems,
+		m.selectedVulnItemIndex,
+		m.vulnFocus,
+		m.vulnsStatus,
 		m.form,
 		m.namespaceForm,
 		m.dependencyForm,
@@ -720,6 +787,8 @@ func (m model) View() string {
 		m.projectDeleteConfirm,
 		m.sourceDeleteConfirm,
 		m.policyDeleteConfirm,
+		m.navModalOpen,
+		m.navModalIndex,
 	)
 }
 
@@ -902,6 +971,13 @@ func updateProjectFormState(msg tea.KeyMsg, form ui.ProjectForm, namespaces []ui
 			form.SourceID = nextSourceID(sources, form.SourceID)
 		case ui.ProjectFormFieldStack:
 			form.StackID = nextStackID(stacks, form.StackID)
+		}
+	case isOneOf(msg, " ", "space"):
+		switch form.Focus {
+		case ui.ProjectFormFieldFreezing:
+			form.Freezing = !form.Freezing
+		case ui.ProjectFormFieldEndOfLife:
+			form.EndOfLife = !form.EndOfLife
 		}
 	case isBackspaceKey(msg):
 		form = deleteProjectFormRune(form)
@@ -1167,6 +1243,12 @@ func (m *model) selectPreviousOnScreen() {
 		m.selectPreviousCheckProject()
 	case ui.ScreenReleases:
 		m.selectPreviousReleaseProject()
+	case ui.ScreenVulnerabilities:
+		if m.vulnFocus == ui.VulnPaneDetails {
+			m.selectPreviousVulnItem()
+			return
+		}
+		m.selectPreviousVulnProject()
 	}
 }
 
@@ -1196,6 +1278,12 @@ func (m *model) selectNextOnScreen() {
 		m.selectNextCheckProject()
 	case ui.ScreenReleases:
 		m.selectNextReleaseProject()
+	case ui.ScreenVulnerabilities:
+		if m.vulnFocus == ui.VulnPaneDetails {
+			m.selectNextVulnItem()
+			return
+		}
+		m.selectNextVulnProject()
 	}
 }
 
@@ -1320,7 +1408,7 @@ func (m model) reloadAfterProjectSync() tea.Cmd {
 }
 
 func (m model) startAllProjectsDependencySync() (tea.Model, tea.Cmd) {
-	return m.startProjectsDependencySync(m.projects, "Syncing all projects...")
+	return m.startProjectsDependencySync(activeProjects(m.projects), "Syncing all projects...")
 }
 
 func (m model) startViewDependencySync(all bool) (tea.Model, tea.Cmd) {
@@ -1362,11 +1450,22 @@ func (m model) viewProjects(all bool) []ui.Project {
 
 		return projects
 	}
-	if project, ok := findByID(m.projects, m.selectedViewProjectID, projectID); ok {
+	if project, ok := findByID(m.projects, m.selectedViewProjectID, projectID); ok && !project.EndOfLife {
 		return []ui.Project{project}
 	}
 
 	return nil
+}
+
+func activeProjects(projects []ui.Project) []ui.Project {
+	result := make([]ui.Project, 0, len(projects))
+	for _, project := range projects {
+		if !project.EndOfLife {
+			result = append(result, project)
+		}
+	}
+
+	return result
 }
 
 func runProjectsDependencySync(store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
@@ -1650,11 +1749,11 @@ func (m model) saveProject() tea.Cmd {
 			return projectSavedMsg{projectID: form.ID, err: errors.New("project PROJECT_ID is empty")}
 		}
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Projects().Update(context.Background(), form.ID, projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color)
+			err := m.store.Projects().Update(context.Background(), form.ID, projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color, form.Freezing, form.EndOfLife)
 			return projectSavedMsg{projectID: form.ID, err: err}
 		}
 
-		project, err := m.store.Projects().Create(context.Background(), projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color)
+		project, err := m.store.Projects().Create(context.Background(), projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color, form.Freezing, form.EndOfLife)
 		return projectSavedMsg{projectID: project.ID, err: err}
 	}
 }
@@ -1862,6 +1961,8 @@ func toUIProjects(projects []storage.Project) []ui.Project {
 			Icon:            project.Icon,
 			Name:            project.Name,
 			Color:           project.Color,
+			Freezing:        project.Freezing,
+			EndOfLife:       project.EndOfLife,
 			DependencyCount: project.DependencyCount,
 		})
 	}
@@ -1967,11 +2068,13 @@ func toUIDependencyView(view storage.DependencyView) ui.DependencyView {
 	}
 	for _, row := range view.Rows {
 		result.Rows = append(result.Rows, ui.DependencyViewRow{
-			ProjectID:    row.ProjectID,
-			ProjectIcon:  row.ProjectIcon,
-			ProjectName:  row.ProjectName,
-			ProjectColor: row.ProjectColor,
-			Versions:     row.Versions,
+			ProjectID:        row.ProjectID,
+			ProjectIcon:      row.ProjectIcon,
+			ProjectName:      row.ProjectName,
+			ProjectColor:     row.ProjectColor,
+			ProjectFreezing:  row.ProjectFreezing,
+			ProjectEndOfLife: row.ProjectEndOfLife,
+			Versions:         row.Versions,
 		})
 	}
 
@@ -2130,6 +2233,8 @@ func (m *model) openEditProjectForm() {
 		Icon:        project.Icon,
 		Color:       project.Color,
 		Name:        project.Name,
+		Freezing:    project.Freezing,
+		EndOfLife:   project.EndOfLife,
 	}, m.namespaces, m.sources, m.stacks)
 }
 
@@ -2625,6 +2730,10 @@ func nextProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
 		return ui.ProjectFormFieldStack
 	case ui.ProjectFormFieldStack:
 		return ui.ProjectFormFieldProjectID
+	case ui.ProjectFormFieldProjectID:
+		return ui.ProjectFormFieldFreezing
+	case ui.ProjectFormFieldFreezing:
+		return ui.ProjectFormFieldEndOfLife
 	default:
 		return ui.ProjectFormFieldIcon
 	}
@@ -2633,7 +2742,7 @@ func nextProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
 func previousProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
 	switch field {
 	case ui.ProjectFormFieldIcon:
-		return ui.ProjectFormFieldProjectID
+		return ui.ProjectFormFieldEndOfLife
 	case ui.ProjectFormFieldColor:
 		return ui.ProjectFormFieldIcon
 	case ui.ProjectFormFieldName:
@@ -2644,8 +2753,12 @@ func previousProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
 		return ui.ProjectFormFieldNamespace
 	case ui.ProjectFormFieldStack:
 		return ui.ProjectFormFieldSource
-	default:
+	case ui.ProjectFormFieldProjectID:
 		return ui.ProjectFormFieldStack
+	case ui.ProjectFormFieldFreezing:
+		return ui.ProjectFormFieldProjectID
+	default:
+		return ui.ProjectFormFieldFreezing
 	}
 }
 
@@ -2721,7 +2834,7 @@ func appendProjectFormRunes(form ui.ProjectForm, runes []rune) ui.ProjectForm {
 		form.Name += value
 	case ui.ProjectFormFieldProjectID:
 		form.ProjectID += value
-	case ui.ProjectFormFieldNamespace, ui.ProjectFormFieldSource, ui.ProjectFormFieldStack:
+	case ui.ProjectFormFieldNamespace, ui.ProjectFormFieldSource, ui.ProjectFormFieldStack, ui.ProjectFormFieldFreezing, ui.ProjectFormFieldEndOfLife:
 	}
 
 	return form
@@ -2751,7 +2864,7 @@ func deleteProjectFormRune(form ui.ProjectForm) ui.ProjectForm {
 		form.Name = trimLastRune(form.Name)
 	case ui.ProjectFormFieldProjectID:
 		form.ProjectID = trimLastRune(form.ProjectID)
-	case ui.ProjectFormFieldNamespace, ui.ProjectFormFieldSource, ui.ProjectFormFieldStack:
+	case ui.ProjectFormFieldNamespace, ui.ProjectFormFieldSource, ui.ProjectFormFieldStack, ui.ProjectFormFieldFreezing, ui.ProjectFormFieldEndOfLife:
 	}
 
 	return form

@@ -405,7 +405,7 @@ func TestProjects(t *testing.T) {
 	}
 
 	repository := store.Projects()
-	project, err := repository.Create(ctx, "autobase-main", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	project, err := repository.Create(ctx, "autobase-main", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestProjects(t *testing.T) {
 		t.Fatalf("dependency count = %d, want 2", projects[0].DependencyCount)
 	}
 
-	if err := repository.Update(ctx, project.ID, "autobase-ui", namespace.ID, source.ID, stack.ID, "󰏖", "TLD UI", "#84BA64"); err != nil {
+	if err := repository.Update(ctx, project.ID, "autobase-ui", namespace.ID, source.ID, stack.ID, "󰏖", "TLD UI", "#84BA64", false, false); err != nil {
 		t.Fatalf("update project: %v", err)
 	}
 
@@ -506,7 +506,7 @@ func TestProjectDependenciesReplaceAndSkip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -610,7 +610,7 @@ func TestDependencyViewByStack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -690,7 +690,7 @@ func TestDependencyViewByStackMatchesScopedJavaScriptPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706")
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -721,6 +721,71 @@ func TestDependencyViewByStackMatchesScopedJavaScriptPackages(t *testing.T) {
 	}
 	if view.Rows[0].Versions[dependency.ID] != "1.2.3" {
 		t.Fatalf("version = %q, want 1.2.3", view.Rows[0].Versions[dependency.ID])
+	}
+}
+
+func TestDependencyViewByStackMatchesNodeFromNvmrc(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tld.db")
+
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	stack, err := store.Stacks().Create(ctx, "", "JavaScript", "#84BA64")
+	if err != nil {
+		t.Fatalf("create stack: %v", err)
+	}
+	namespace, err := store.Namespaces().Create(ctx, "󱃾", "Production", "#25799F")
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+	policy, err := store.Policies().Create(ctx, "Production policy")
+	if err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	if err := store.Namespaces().SetPolicy(ctx, namespace.ID, policy.ID); err != nil {
+		t.Fatalf("set policy: %v", err)
+	}
+	source, err := store.Sources().Create(ctx, "GitHub", "ghp-secret", "https://github.com", SourceTypeGitHub)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	project, err := store.Projects().Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "󰏖", "TLD", "#EC9706", false, false)
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "Node.js", "#339933")
+	if err != nil {
+		t.Fatalf("create dependency: %v", err)
+	}
+	if _, err := store.Policies().CreateValue(ctx, policy.ID, dependency.ID, "24.11.1"); err != nil {
+		t.Fatalf("create policy value: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if _, err := store.ProjectDependencies().ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
+		CommitShortSHA: "abcdef12",
+		CommitSHA:      "abcdef1234567890",
+		Status:         ProjectDependencyRunStatusSuccess,
+		StartedAt:      now,
+		FinishedAt:     &now,
+	}, []ProjectDependency{
+		{Name: "node", Version: "24.11.1", DependencyType: "nvmrc", SourceFile: ".nvmrc"},
+	}); err != nil {
+		t.Fatalf("replace project dependencies: %v", err)
+	}
+
+	view, err := store.ProjectDependencies().ViewByStack(ctx, stack.ID)
+	if err != nil {
+		t.Fatalf("view by stack: %v", err)
+	}
+	if view.Rows[0].Versions[dependency.ID] != "24.11.1" {
+		t.Fatalf("version = %q, want 24.11.1", view.Rows[0].Versions[dependency.ID])
 	}
 }
 

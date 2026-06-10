@@ -22,11 +22,13 @@ type DependencyViewColumn struct {
 }
 
 type DependencyViewRow struct {
-	ProjectID    int64
-	ProjectIcon  string
-	ProjectName  string
-	ProjectColor string
-	Versions     map[int64]string
+	ProjectID        int64
+	ProjectIcon      string
+	ProjectName      string
+	ProjectColor     string
+	ProjectFreezing  bool
+	ProjectEndOfLife bool
+	Versions         map[int64]string
 }
 
 func (r ProjectDependencyRepository) ViewByStack(ctx context.Context, stackID int64) (DependencyView, error) {
@@ -71,7 +73,7 @@ func (r ProjectDependencyRepository) viewColumns(ctx context.Context, stackID in
 		JOIN namespaces n ON n.id = p.namespace_id
 		JOIN policy_values pv ON pv.policy_id = n.policy_id
 		JOIN dependencies d ON d.id = pv.dependency_id
-		WHERE p.stack_id = ? AND d.stack_id = ?
+		WHERE p.stack_id = ? AND d.stack_id = ? AND p.endoflife = 0
 		ORDER BY d.name ASC, pv.version ASC
 	`, stackID, stackID)
 	if err != nil {
@@ -98,9 +100,9 @@ func (r ProjectDependencyRepository) viewColumns(ctx context.Context, stackID in
 
 func (r ProjectDependencyRepository) viewRows(ctx context.Context, stackID int64) ([]DependencyViewRow, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, icon, name, color
+		SELECT id, icon, name, color, freezing, endoflife
 		FROM projects
-		WHERE stack_id = ?
+		WHERE stack_id = ? AND endoflife = 0
 		ORDER BY name ASC
 	`, stackID)
 	if err != nil {
@@ -113,9 +115,13 @@ func (r ProjectDependencyRepository) viewRows(ctx context.Context, stackID int64
 	viewRows := make([]DependencyViewRow, 0)
 	for rows.Next() {
 		var row DependencyViewRow
-		if err := rows.Scan(&row.ProjectID, &row.ProjectIcon, &row.ProjectName, &row.ProjectColor); err != nil {
+		var freezing int
+		var endOfLife int
+		if err := rows.Scan(&row.ProjectID, &row.ProjectIcon, &row.ProjectName, &row.ProjectColor, &freezing, &endOfLife); err != nil {
 			return nil, fmt.Errorf("scan dependency view row: %w", err)
 		}
+		row.ProjectFreezing = freezing != 0
+		row.ProjectEndOfLife = endOfLife != 0
 		viewRows = append(viewRows, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -130,7 +136,7 @@ func (r ProjectDependencyRepository) viewVersions(ctx context.Context, stackID i
 		SELECT p.id, pd.name, pd.version
 		FROM projects p
 		JOIN project_dependencies pd ON pd.project_id = p.id
-		WHERE p.stack_id = ?
+		WHERE p.stack_id = ? AND p.endoflife = 0
 	`, stackID)
 	if err != nil {
 		return nil, fmt.Errorf("list dependency view versions: %w", err)
@@ -162,6 +168,12 @@ func (r ProjectDependencyRepository) viewVersions(ctx context.Context, stackID i
 func normalizeDependencyViewName(name string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
 	replacer := strings.NewReplacer(" ", "", "-", "", "_", "", ".", "", "/", "", ":", "", "@", "")
+	normalized := replacer.Replace(name)
 
-	return replacer.Replace(name)
+	switch normalized {
+	case "nodejs":
+		return "node"
+	default:
+		return normalized
+	}
 }

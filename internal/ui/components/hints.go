@@ -69,7 +69,8 @@ func isListScreen(screen uikit.Screen) bool {
 		screen == uikit.ScreenPolicies ||
 		screen == uikit.ScreenView ||
 		screen == uikit.ScreenSettings ||
-		screen == uikit.ScreenReleases
+		screen == uikit.ScreenReleases ||
+		screen == uikit.ScreenVulnerabilities
 }
 
 func (h Hints) defaultRows() []string {
@@ -78,19 +79,19 @@ func (h Hints) defaultRows() []string {
 			hintSpec{h.palette.Hint, uikit.SymbolTooNew, "too new", 10},
 			hintSpec{h.palette.Primary, uikit.SymbolAuth, "Auth", 8},
 			hintSpec{h.palette.Error, uikit.SymbolNpmPackage, "package", 11},
-			h.fromBinding(h.palette.Hint, uikit.KeyHome, 16),
+			h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 16),
 		),
 		h.row(
 			hintSpec{h.palette.Primary, uikit.SymbolSoGood, "so good", 10},
 			hintSpec{h.palette.Info, uikit.SymbolNetworkPublic, "WWW", 8},
 			hintSpec{h.palette.Info, uikit.SymbolDockerImage, "image", 11},
-			h.fromBinding(h.palette.Hint, uikit.KeyStacks, 16),
+			hintSpec{h.palette.Hint, "", "", 16},
 		),
 		h.row(
 			hintSpec{h.palette.Info, uikit.SymbolBeNice, "be nice", 10},
 			hintSpec{h.palette.Info, uikit.SymbolSEO, "SEO", 8},
 			hintSpec{h.palette.Info, uikit.SymbolSite, "site", 11},
-			h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 16),
+			hintSpec{h.palette.Hint, "", "", 16},
 		),
 		h.row(
 			hintSpec{h.palette.Primary, uikit.SymbolTooOld, "too old", 10},
@@ -103,16 +104,10 @@ func (h Hints) defaultRows() []string {
 
 func (h Hints) listRows() []string {
 	return []string{
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyHome, 18), h.fromBinding(h.palette.Primary, uikit.KeyAdd, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyStacks, 18), h.fromBinding(h.palette.Info, uikit.KeyEdit, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyNamespaces, 18), h.fromBinding(h.palette.Error, uikit.KeyDelete, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyDependencies, 18), h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyProjects, 18), h.fromBinding(h.palette.Info, uikit.KeyClone, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeySources, 18), hintSpec{h.palette.Hint, "", "", 20}),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPolicies, 18), h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyView, 18), h.fromBinding(h.palette.Primary, uikit.KeyRefreshAll, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeySettings, 18), hintSpec{h.palette.Hint, "", "[Tab] stack", 20}),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyReleases, 18), hintSpec{h.palette.Hint, "", "[Tab] period", 20}),
+		h.row(h.fromBinding(h.palette.Primary, uikit.KeyAdd, 20), h.fromBinding(h.palette.Info, uikit.KeyEdit, 20)),
+		h.row(h.fromBinding(h.palette.Error, uikit.KeyDelete, 20), h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20)),
+		h.row(h.fromBinding(h.palette.Info, uikit.KeyClone, 20), h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20)),
+		h.row(h.fromBinding(h.palette.Primary, uikit.KeyRefreshAll, 20), h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 20)),
 	}
 }
 

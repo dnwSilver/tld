@@ -119,19 +119,23 @@ func (s ReleasesScreen) renderRow(width int, row uikit.ReleaseRow, monthWidths [
 		background = s.palette.Hover
 	}
 	iconColor := lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor))
-	projectColor := s.palette.Text
+	defaultNameColor := s.palette.Text
 	if !row.HasReleases {
 		iconColor = s.palette.Hint
-		projectColor = s.palette.Hint
+		defaultNameColor = s.palette.Hint
 	}
-	projectCell := lipgloss.NewStyle().
-		Background(background).
-		Foreground(iconColor).
-		Width(2).
-		Render(row.ProjectIcon) + lipgloss.NewStyle().
-		Background(background).
-		Foreground(projectColor).
-		Render(row.ProjectName)
+	projectCell := uikit.RenderProjectWithIcon(
+		s.palette,
+		row.ProjectIcon,
+		iconColor,
+		row.ProjectName,
+		row.ProjectFreezing,
+		row.ProjectEndOfLife,
+		background,
+		defaultNameColor,
+		2,
+	)
+	projectColor := uikit.ProjectNameColor(s.palette, row.ProjectFreezing, row.ProjectEndOfLife, defaultNameColor)
 
 	cells := []components.TableCell{
 		{Value: projectCell, Width: releasesProjectColumnWidth, Foreground: projectColor},

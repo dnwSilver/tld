@@ -13,6 +13,7 @@ const (
 	ScreenView
 	ScreenSettings
 	ScreenReleases
+	ScreenVulnerabilities
 )
 
 type Stack struct {
@@ -64,6 +65,8 @@ type Project struct {
 	Icon            string
 	Name            string
 	Color           string
+	Freezing        bool
+	EndOfLife       bool
 	DependencyCount int
 }
 
@@ -115,11 +118,13 @@ type DependencyViewColumn struct {
 }
 
 type DependencyViewRow struct {
-	ProjectID    int64
-	ProjectIcon  string
-	ProjectName  string
-	ProjectColor string
-	Versions     map[int64]string
+	ProjectID        int64
+	ProjectIcon      string
+	ProjectName      string
+	ProjectColor     string
+	ProjectFreezing  bool
+	ProjectEndOfLife bool
+	Versions         map[int64]string
 }
 
 type Policy struct {
@@ -229,6 +234,8 @@ const (
 	ProjectFormFieldNamespace
 	ProjectFormFieldSource
 	ProjectFormFieldStack
+	ProjectFormFieldFreezing
+	ProjectFormFieldEndOfLife
 )
 
 type ProjectForm struct {
@@ -243,6 +250,8 @@ type ProjectForm struct {
 	Icon        string
 	Color       string
 	Name        string
+	Freezing    bool
+	EndOfLife   bool
 	CanSave     bool
 	Error       string
 }
@@ -305,11 +314,13 @@ const (
 )
 
 type ProjectCheckRow struct {
-	ProjectID    int64
-	ProjectIcon  string
-	ProjectName  string
-	ProjectColor string
-	Results      map[string]CheckState
+	ProjectID        int64
+	ProjectIcon      string
+	ProjectName      string
+	ProjectColor     string
+	ProjectFreezing  bool
+	ProjectEndOfLife bool
+	Results          map[string]CheckState
 }
 
 type SettingsStatus struct {
@@ -368,10 +379,46 @@ type ReleaseMonth struct {
 }
 
 type ReleaseRow struct {
-	ProjectID    int64
-	ProjectIcon  string
-	ProjectName  string
-	ProjectColor string
-	HasReleases  bool
-	Months       []ReleaseMonth
+	ProjectID        int64
+	ProjectIcon      string
+	ProjectName      string
+	ProjectColor     string
+	ProjectFreezing  bool
+	ProjectEndOfLife bool
+	HasReleases      bool
+	Months           []ReleaseMonth
 }
+
+type VulnCounts struct {
+	Critical int
+	High     int
+	Medium   int
+	Low      int
+	None     int
+}
+
+type VulnerabilityItem struct {
+	Package     string
+	Severity    string
+	Title       string
+	Description string
+	Range       string
+}
+
+type VulnProjectRow struct {
+	ProjectID        int64
+	ProjectIcon      string
+	ProjectName      string
+	ProjectColor     string
+	ProjectFreezing  bool
+	ProjectEndOfLife bool
+	Scanned          bool
+	Counts           VulnCounts
+}
+
+type VulnPane int
+
+const (
+	VulnPaneProjects VulnPane = iota
+	VulnPaneDetails
+)

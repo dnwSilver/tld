@@ -27,7 +27,7 @@ type releaseSyncMsg struct {
 }
 
 func (m model) loadReleases() tea.Cmd {
-	projects := m.projects
+	projects := activeProjects(m.projects)
 	sources := m.sources
 	return func() tea.Msg {
 		if m.store == nil {
@@ -40,11 +40,13 @@ func (m model) loadReleases() tea.Cmd {
 		rows := make([]ui.ReleaseRow, 0, len(projects))
 		for _, project := range projects {
 			row := ui.ReleaseRow{
-				ProjectID:    project.ID,
-				ProjectIcon:  project.Icon,
-				ProjectName:  project.Name,
-				ProjectColor: project.Color,
-				Months:       buildReleaseMonths(now, nil, period),
+				ProjectID:        project.ID,
+				ProjectIcon:      project.Icon,
+				ProjectName:      project.Name,
+				ProjectColor:     project.Color,
+				ProjectFreezing:  project.Freezing,
+				ProjectEndOfLife: project.EndOfLife,
+				Months:           buildReleaseMonths(now, nil, period),
 			}
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
@@ -82,7 +84,7 @@ func (m model) startReleasesRefresh(projects []ui.Project) (tea.Model, tea.Cmd) 
 }
 
 func (m model) selectedReleaseProjects() []ui.Project {
-	if project, ok := findByID(m.projects, m.selectedReleaseProjectID, projectID); ok {
+	if project, ok := findByID(m.projects, m.selectedReleaseProjectID, projectID); ok && !project.EndOfLife {
 		return []ui.Project{project}
 	}
 

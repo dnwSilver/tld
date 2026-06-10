@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dnwSilver/tld/internal/ui/components"
 	"github.com/dnwSilver/tld/internal/ui/screens"
@@ -10,6 +12,7 @@ import (
 type Creator struct {
 	palette            uikit.Palette
 	hints              components.Hints
+	navModal           components.NavModal
 	logo               components.Logo
 	defaultScreen      screens.DefaultScreen
 	stacksScreen       screens.StacksScreen
@@ -20,7 +23,8 @@ type Creator struct {
 	policiesScreen     screens.PoliciesScreen
 	viewScreen         screens.DependencyViewScreen
 	settingsScreen     screens.SettingsScreen
-	releasesScreen     screens.ReleasesScreen
+	releasesScreen          screens.ReleasesScreen
+	vulnerabilitiesScreen   screens.VulnerabilitiesScreen
 }
 
 func NewCreator() Creator {
@@ -29,6 +33,7 @@ func NewCreator() Creator {
 	return Creator{
 		palette:            palette,
 		hints:              components.NewHints(palette),
+		navModal:           components.NewNavModal(palette),
 		logo:               components.NewLogo(palette),
 		defaultScreen:      screens.NewDefaultScreen(palette),
 		stacksScreen:       screens.NewStacksScreen(palette),
@@ -39,7 +44,8 @@ func NewCreator() Creator {
 		policiesScreen:     screens.NewPoliciesScreen(palette),
 		viewScreen:         screens.NewDependencyViewScreen(palette),
 		settingsScreen:     screens.NewSettingsScreen(palette),
-		releasesScreen:     screens.NewReleasesScreen(palette),
+		releasesScreen:        screens.NewReleasesScreen(palette),
+		vulnerabilitiesScreen: screens.NewVulnerabilitiesScreen(palette),
 	}
 }
 
@@ -78,6 +84,12 @@ func (c Creator) Render(
 	selectedReleaseProjectID int64,
 	releasePeriod uikit.ReleasePeriod,
 	releasesStatus uikit.SettingsStatus,
+	vulnRows []uikit.VulnProjectRow,
+	selectedVulnProjectID int64,
+	vulnItems []uikit.VulnerabilityItem,
+	selectedVulnItemIndex int,
+	vulnFocus uikit.VulnPane,
+	vulnsStatus uikit.SettingsStatus,
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
 	dependencyForm uikit.DependencyForm,
@@ -91,6 +103,8 @@ func (c Creator) Render(
 	projectDeleteConfirm uikit.DeleteConfirm,
 	sourceDeleteConfirm uikit.DeleteConfirm,
 	policyDeleteConfirm uikit.DeleteConfirm,
+	navModalOpen bool,
+	navModalIndex int,
 ) string {
 	base := lipgloss.NewStyle().
 		Width(width).
@@ -180,8 +194,21 @@ func (c Creator) Render(
 	if screen == uikit.ScreenReleases {
 		body = c.releasesScreen.Render(width, bodyHeight, releaseRows, selectedReleaseProjectID, releasePeriod, releasesStatus)
 	}
+	if screen == uikit.ScreenVulnerabilities {
+		body = c.vulnerabilitiesScreen.Render(width, bodyHeight, vulnRows, selectedVulnProjectID, vulnItems, selectedVulnItemIndex, vulnFocus, vulnsStatus)
+	}
 
-	return base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
+	result := base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
+	if !navModalOpen {
+		return result
+	}
+
+	lines := strings.Split(result, uikit.SymbolLineBreak)
+	block := c.navModal.Render(width, navModalIndex, screen)
+	modal := components.NewModal(c.palette, c.palette.Primary)
+	lines = modal.Overlay(lines, width, height, block)
+
+	return strings.Join(lines, uikit.SymbolLineBreak)
 }
 
 func toNamespaceItems(namespaces []uikit.Namespace, policies []uikit.Policy) []uikit.Stack {

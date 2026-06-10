@@ -24,3 +24,46 @@ func CenterLine(palette Palette, width int, content string) string {
 
 	return BackgroundSpaces(palette, left) + content + BackgroundSpaces(palette, right)
 }
+
+func ProjectNameColor(palette Palette, freezing, endOfLife bool, defaultColor lipgloss.Color) lipgloss.Color {
+	switch {
+	case endOfLife:
+		return palette.Hint
+	case freezing:
+		return palette.Info
+	default:
+		return defaultColor
+	}
+}
+
+func RenderProjectName(palette Palette, name string, freezing, endOfLife bool, background, defaultColor lipgloss.Color, width int) string {
+	style := lipgloss.NewStyle().
+		Background(background).
+		Foreground(ProjectNameColor(palette, freezing, endOfLife, defaultColor))
+	if endOfLife {
+		style = style.Strikethrough(true)
+	}
+	if width > 0 {
+		style = style.Width(width)
+	}
+
+	return style.Render(name)
+}
+
+func RenderProjectWithIcon(
+	palette Palette,
+	icon string,
+	iconColor lipgloss.Color,
+	name string,
+	freezing, endOfLife bool,
+	background, defaultNameColor lipgloss.Color,
+	iconWidth int,
+) string {
+	iconPart := lipgloss.NewStyle().
+		Background(background).
+		Foreground(iconColor).
+		Width(iconWidth).
+		Render(icon)
+
+	return iconPart + RenderProjectName(palette, name, freezing, endOfLife, background, defaultNameColor, 0)
+}

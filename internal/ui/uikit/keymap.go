@@ -27,7 +27,8 @@ var (
 	KeyPolicies     = Binding{Keys: []string{"6", "cmd+6", "alt+6"}, Label: "policies", Symbol: SymbolPolicy, Hint: "6 policies"}
 	KeyView         = Binding{Keys: []string{"7", "cmd+7", "alt+7"}, Label: "view", Symbol: SymbolDependency, Hint: "7 view"}
 	KeySettings     = Binding{Keys: []string{"8", "cmd+8", "alt+8"}, Label: "settings", Symbol: SymbolSettings, Hint: "8 settings"}
-	KeyReleases     = Binding{Keys: []string{"9", "cmd+9", "alt+9"}, Label: "releases", Symbol: SymbolReleases, Hint: "9 releases"}
+	KeyReleases          = Binding{Keys: []string{"9", "cmd+9", "alt+9"}, Label: "releases", Symbol: SymbolReleases, Hint: "9 releases"}
+	KeyVulnerabilities   = Binding{Keys: []string{"v", "cmd+v", "alt+v"}, Label: "vulns", Symbol: SymbolVulnerabilities, Hint: "v vulns"}
 
 	KeyAdd            = Binding{Keys: []string{"a"}, Label: "add", Symbol: SymbolAdd, Hint: "[a] add"}
 	KeyEdit           = Binding{Keys: []string{"e"}, Label: "edit", Symbol: SymbolEdit, Hint: "[e] edit"}
@@ -44,7 +45,7 @@ var (
 	KeyPolicyPick     = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "policy", Symbol: SymbolPolicy, Hint: "[h/l] Policy"}
 	KeyDependencyPick = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "dependency", Symbol: SymbolDependency, Hint: "[h/l] Dep"}
 
-	KeyToggleHead = Binding{Keys: []string{}, Label: "toggle head", Symbol: SymbolToggleHead, Hint: "toggle head"}
+	KeyToggleHead = Binding{Keys: []string{"?", "shift+/"}, Label: "sections", Symbol: SymbolToggleHead, Hint: "[Shift+/] sections"}
 	KeyQuit       = Binding{Keys: []string{"ctrl+c", "esc", "q"}, Label: "quit", Symbol: SymbolQuit, Hint: "quit"}
 
 	KeyCancel     = Binding{Keys: []string{"esc"}, Label: "cancel", Hint: "[Esc] Cancel"}

@@ -140,13 +140,17 @@ func (s DependencyViewScreen) versionText(version string) string {
 }
 
 func (s DependencyViewScreen) projectCell(row uikit.DependencyViewRow, background lipgloss.Color) string {
-	icon := lipgloss.NewStyle().
-		Background(background).
-		Foreground(lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor))).
-		Width(viewProjectIconWidth).
-		Render(row.ProjectIcon)
-
-	return icon + row.ProjectName
+	return uikit.RenderProjectWithIcon(
+		s.palette,
+		row.ProjectIcon,
+		lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor)),
+		row.ProjectName,
+		row.ProjectFreezing,
+		row.ProjectEndOfLife,
+		background,
+		s.palette.Text,
+		viewProjectIconWidth,
+	)
 }
 
 func (s DependencyViewScreen) headerCell(column uikit.DependencyViewColumn) string {

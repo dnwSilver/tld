@@ -11,6 +11,7 @@ const (
 	CacheNamespaceProjectFiles    = "project-files"
 	CacheNamespaceProjectChecks   = "project-checks"
 	CacheNamespaceProjectReleases = "project-releases"
+	CacheNamespaceProjectVulns    = "project-vulnerabilities"
 )
 
 type Project struct {

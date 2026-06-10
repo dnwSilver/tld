@@ -82,14 +82,17 @@ func (s SettingsScreen) renderRow(width int, checkColumns []uikit.ProjectCheck, 
 		background = s.palette.Hover
 	}
 	iconColor := lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor))
-	projectCell := lipgloss.NewStyle().
-		Background(background).
-		Foreground(iconColor).
-		Width(2).
-		Render(row.ProjectIcon) + lipgloss.NewStyle().
-		Background(background).
-		Foreground(s.palette.Text).
-		Render(row.ProjectName)
+	projectCell := uikit.RenderProjectWithIcon(
+		s.palette,
+		row.ProjectIcon,
+		iconColor,
+		row.ProjectName,
+		row.ProjectFreezing,
+		row.ProjectEndOfLife,
+		background,
+		s.palette.Text,
+		2,
+	)
 
 	cells := []components.TableCell{
 		{Value: projectCell, Width: settingsProjectColumnWidth, Foreground: s.palette.Text},

@@ -35,6 +35,8 @@ const (
 	SymbolDependency     = ""
 	SymbolSource         = ""
 	SymbolProject        = "󰏖"
+	SymbolProjectFreeze  = ""
+	SymbolProjectEOL     = "󰮢"
 	SymbolPolicy         = "󰯄"
 	SymbolSettings       = "󰒓"
 	SymbolCheckPass      = ""
@@ -43,6 +45,12 @@ const (
 )
 
 const (
-	SymbolReleases = ""
-	SymbolRocket   = ""
+	SymbolReleases        = ""
+	SymbolRocket          = ""
+	SymbolVulnerabilities = "󰅴"
+	SymbolVulnCritical    = ""
+	SymbolVulnHigh        = "󰞏"
+	SymbolVulnMedium      = ""
+	SymbolVulnLow         = ""
+	SymbolVulnNone        = ""
 )
