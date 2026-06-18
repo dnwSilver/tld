@@ -120,6 +120,7 @@ type SettingsStatus = uikit.SettingsStatus
 type ReleaseRow = uikit.ReleaseRow
 type ReleaseMonth = uikit.ReleaseMonth
 type ReleasePeriod = uikit.ReleasePeriod
+type ReleaseStatusIndicator = uikit.ReleaseStatusIndicator
 type VulnCounts = uikit.VulnCounts
 type VulnerabilityItem = uikit.VulnerabilityItem
 type VulnProjectRow = uikit.VulnProjectRow
@@ -134,6 +135,13 @@ const (
 	ReleasePeriodYear    = uikit.ReleasePeriodYear
 	ReleasePeriodHalf    = uikit.ReleasePeriodHalf
 	ReleasePeriodQuarter = uikit.ReleasePeriodQuarter
+)
+
+const (
+	ReleaseStatusUnknown      = uikit.ReleaseStatusUnknown
+	ReleaseStatusUntaggedMain = uikit.ReleaseStatusUntaggedMain
+	ReleaseStatusDevAhead     = uikit.ReleaseStatusDevAhead
+	ReleaseStatusDevBehind    = uikit.ReleaseStatusDevBehind
 )
 
 const (

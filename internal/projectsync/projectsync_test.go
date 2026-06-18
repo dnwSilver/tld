@@ -518,6 +518,29 @@ func TestServiceCachesPackageLock(t *testing.T) {
 	}
 }
 
+func TestReleaseStatusUsesDevBranchDivergence(t *testing.T) {
+	client := &fakeSourceClient{
+		files: map[string][]byte{
+			"package.json": []byte(`{"version":"1.2.3"}`),
+		},
+		divergence: BranchDivergence{Ahead: 2, Behind: 1},
+	}
+	service := ReleaseStatusService{SourceClient: client}
+
+	statuses := service.computeStatuses(context.Background(), Source{Type: storage.SourceTypeGitHub}, Project{
+		ProviderID: "owner/repo",
+		Name:       "Repo",
+		StackName:  "JavaScript",
+	}, []Tag{{Name: "v1.2.3"}})
+
+	if len(statuses) != 2 {
+		t.Fatalf("statuses = %#v, want 2 statuses", statuses)
+	}
+	if statuses[0] != ReleaseStatusDevAhead || statuses[1] != ReleaseStatusDevBehind {
+		t.Fatalf("statuses = %#v, want dev ahead and dev behind", statuses)
+	}
+}
+
 func TestGitHubClientUsesInjectedHTTPClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -568,6 +591,8 @@ func TestGitHubClientHasBranchAndDefaultBranch(t *testing.T) {
 			_, _ = w.Write([]byte(`{"name":"dev"}`))
 		case "/api/v3/repos/owner/repo/branches/missing":
 			http.NotFound(w, r)
+		case "/api/v3/repos/owner/repo/compare/master...dev":
+			_, _ = w.Write([]byte(`{"ahead_by":5,"behind_by":2}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -594,6 +619,13 @@ func TestGitHubClientHasBranchAndDefaultBranch(t *testing.T) {
 	if err != nil || hasMissing {
 		t.Fatalf("has missing = %v, err = %v, want false", hasMissing, err)
 	}
+	divergence, err := client.CompareBranches(context.Background(), source, project, "master", "dev")
+	if err != nil {
+		t.Fatalf("compare branches: %v", err)
+	}
+	if divergence.Ahead != 5 || divergence.Behind != 2 {
+		t.Fatalf("divergence = %#v, want ahead 5 behind 2", divergence)
+	}
 }
 
 func TestGitLabClientHasBranchAndDefaultBranch(t *testing.T) {
@@ -605,6 +637,15 @@ func TestGitLabClientHasBranchAndDefaultBranch(t *testing.T) {
 			_, _ = w.Write([]byte(`{"name":"master"}`))
 		case "/api/v4/projects/group%2Frepo/repository/branches/missing":
 			http.NotFound(w, r)
+		case "/api/v4/projects/group%2Frepo/repository/compare":
+			switch r.URL.Query().Get("from") + "..." + r.URL.Query().Get("to") {
+			case "master...dev":
+				_, _ = w.Write([]byte(`{"commits":[{}, {}, {}]}`))
+			case "dev...master":
+				_, _ = w.Write([]byte(`{"commits":[{}]}`))
+			default:
+				http.NotFound(w, r)
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -630,6 +671,13 @@ func TestGitLabClientHasBranchAndDefaultBranch(t *testing.T) {
 	hasMissing, err := client.HasBranch(context.Background(), source, project, "missing")
 	if err != nil || hasMissing {
 		t.Fatalf("has missing = %v, err = %v, want false", hasMissing, err)
+	}
+	divergence, err := client.CompareBranches(context.Background(), source, project, "master", "dev")
+	if err != nil {
+		t.Fatalf("compare branches: %v", err)
+	}
+	if divergence.Ahead != 3 || divergence.Behind != 1 {
+		t.Fatalf("divergence = %#v, want ahead 3 behind 1", divergence)
 	}
 }
 
@@ -707,8 +755,9 @@ func TestGitLabClientUsesInjectedHTTPClient(t *testing.T) {
 }
 
 type fakeSourceClient struct {
-	files   map[string][]byte
-	fetches map[string]int
+	files      map[string][]byte
+	fetches    map[string]int
+	divergence BranchDivergence
 }
 
 func (c *fakeSourceClient) ResolveHead(context.Context, Source, Project) (Commit, error) {
@@ -731,6 +780,10 @@ func (c *fakeSourceClient) FetchFile(_ context.Context, _ Source, _ Project, _ s
 
 func (c *fakeSourceClient) HasBranch(_ context.Context, _ Source, _ Project, branch string) (bool, error) {
 	return branch == "main" || branch == "master" || branch == "dev", nil
+}
+
+func (c *fakeSourceClient) CompareBranches(context.Context, Source, Project, string, string) (BranchDivergence, error) {
+	return c.divergence, nil
 }
 
 func (c *fakeSourceClient) DefaultBranch(_ context.Context, _ Source, _ Project) (string, error) {

@@ -378,6 +378,15 @@ type ReleaseMonth struct {
 	Marks     []bool
 }
 
+type ReleaseStatusIndicator string
+
+const (
+	ReleaseStatusUnknown      ReleaseStatusIndicator = "unknown"
+	ReleaseStatusUntaggedMain ReleaseStatusIndicator = "untagged-main"
+	ReleaseStatusDevAhead     ReleaseStatusIndicator = "dev-ahead"
+	ReleaseStatusDevBehind    ReleaseStatusIndicator = "dev-behind"
+)
+
 type ReleaseRow struct {
 	ProjectID        int64
 	ProjectIcon      string
@@ -387,6 +396,7 @@ type ReleaseRow struct {
 	ProjectEndOfLife bool
 	HasReleases      bool
 	Months           []ReleaseMonth
+	Statuses         []ReleaseStatusIndicator
 }
 
 type VulnCounts struct {

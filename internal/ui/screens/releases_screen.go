@@ -13,6 +13,7 @@ type ReleasesScreen struct {
 }
 
 const (
+	releasesStatusColumnWidth  = 2
 	releasesProjectColumnWidth = 24
 	releasesSeparator          = "│"
 )
@@ -68,7 +69,7 @@ func (s ReleasesScreen) renderContent(
 
 func (s ReleasesScreen) monthWidths(width int, monthCount int) []int {
 	widths := make([]int, monthCount)
-	available := uikit.Max(width-releasesProjectColumnWidth-monthCount, monthCount)
+	available := uikit.Max(width-releasesStatusColumnWidth-1-releasesProjectColumnWidth-monthCount, monthCount)
 	base := available / monthCount
 	remainder := available % monthCount
 	for index := range widths {
@@ -84,6 +85,8 @@ func (s ReleasesScreen) monthWidths(width int, monthCount int) []int {
 func (s ReleasesScreen) tableHeader(width int, rows []uikit.ReleaseRow, monthWidths []int) string {
 	labels := s.headerMonths(rows, len(monthWidths))
 	cells := []components.TableCell{
+		{Value: "", Width: releasesStatusColumnWidth, Foreground: s.palette.Hint},
+		s.separatorCell(),
 		{Value: "project", Width: releasesProjectColumnWidth, Foreground: s.palette.Hint, Bold: true},
 	}
 	for index, monthWidth := range monthWidths {
@@ -138,6 +141,8 @@ func (s ReleasesScreen) renderRow(width int, row uikit.ReleaseRow, monthWidths [
 	projectColor := uikit.ProjectNameColor(s.palette, row.ProjectFreezing, row.ProjectEndOfLife, defaultNameColor)
 
 	cells := []components.TableCell{
+		{Value: s.statusCell(row, background), Width: releasesStatusColumnWidth},
+		s.separatorCell(),
 		{Value: projectCell, Width: releasesProjectColumnWidth, Foreground: projectColor},
 	}
 	for index, monthWidth := range monthWidths {
@@ -162,6 +167,36 @@ func (s ReleasesScreen) separatorCell() components.TableCell {
 		Width:      1,
 		Foreground: s.palette.Disable,
 	}
+}
+
+func (s ReleasesScreen) statusCell(row uikit.ReleaseRow, background lipgloss.Color) string {
+	icons := make([]string, 0, 2)
+	for _, status := range row.Statuses {
+		if len(icons) >= releasesStatusColumnWidth {
+			break
+		}
+		var symbol string
+		var color lipgloss.Color
+		switch status {
+		case uikit.ReleaseStatusUntaggedMain:
+			symbol = uikit.SymbolReleaseUntaggedMain
+			color = s.palette.Primary
+		case uikit.ReleaseStatusDevAhead:
+			symbol = uikit.SymbolReleaseDevAhead
+			color = s.palette.Primary
+		case uikit.ReleaseStatusDevBehind:
+			symbol = uikit.SymbolReleaseDevBehind
+			color = s.palette.Error
+		default:
+			symbol = uikit.SymbolReleaseStatusUnknown
+			color = s.palette.Hint
+		}
+		icons = append(icons, lipgloss.NewStyle().Background(background).Foreground(color).Render(symbol))
+	}
+	if len(icons) == 0 {
+		icons = append(icons, lipgloss.NewStyle().Background(background).Foreground(s.palette.Hint).Render(uikit.SymbolReleaseStatusUnknown))
+	}
+	return strings.Join(icons, "")
 }
 
 func (s ReleasesScreen) monthCell(month uikit.ReleaseMonth, monthWidth int) string {

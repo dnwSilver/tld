@@ -45,12 +45,16 @@ const (
 )
 
 const (
-	SymbolReleases        = ""
-	SymbolRocket          = ""
-	SymbolVulnerabilities = "󰅴"
-	SymbolVulnCritical    = ""
-	SymbolVulnHigh        = "󰞏"
-	SymbolVulnMedium      = ""
-	SymbolVulnLow         = ""
-	SymbolVulnNone        = ""
+	SymbolReleases             = ""
+	SymbolRocket               = ""
+	SymbolVulnerabilities      = "󰅴"
+	SymbolVulnCritical         = ""
+	SymbolVulnHigh             = "󰞏"
+	SymbolVulnMedium           = ""
+	SymbolVulnLow              = ""
+	SymbolVulnNone             = ""
+	SymbolReleaseUntaggedMain  = "󰑣"
+	SymbolReleaseDevAhead      = "󰳗"
+	SymbolReleaseDevBehind     = "󱐋"
+	SymbolReleaseStatusUnknown = "󰒲"
 )

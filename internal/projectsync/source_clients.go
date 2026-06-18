@@ -115,6 +115,17 @@ func (c GitHubClient) HasBranch(ctx context.Context, source Source, project Proj
 	})
 }
 
+func (c GitHubClient) CompareBranches(ctx context.Context, source Source, project Project, baseBranch string, headBranch string) (BranchDivergence, error) {
+	var raw struct {
+		AheadBy  int `json:"ahead_by"`
+		BehindBy int `json:"behind_by"`
+	}
+	if err := c.getJSON(ctx, source, githubAPIURL(source, "repos", project.ProviderID, "compare", baseBranch+"..."+headBranch), &raw); err != nil {
+		return BranchDivergence{}, err
+	}
+	return BranchDivergence{Ahead: raw.AheadBy, Behind: raw.BehindBy}, nil
+}
+
 func (c GitHubClient) DefaultBranch(ctx context.Context, source Source, project Project) (string, error) {
 	var repo struct {
 		DefaultBranch string `json:"default_branch"`
@@ -221,6 +232,35 @@ func (c GitLabClient) HasBranch(ctx context.Context, source Source, project Proj
 		}
 		return req, nil
 	})
+}
+
+func (c GitLabClient) CompareBranches(ctx context.Context, source Source, project Project, baseBranch string, headBranch string) (BranchDivergence, error) {
+	ahead, err := c.compareBranchCommitCount(ctx, source, project, baseBranch, headBranch)
+	if err != nil {
+		return BranchDivergence{}, err
+	}
+	behind, err := c.compareBranchCommitCount(ctx, source, project, headBranch, baseBranch)
+	if err != nil {
+		return BranchDivergence{}, err
+	}
+	return BranchDivergence{Ahead: ahead, Behind: behind}, nil
+}
+
+func (c GitLabClient) compareBranchCommitCount(ctx context.Context, source Source, project Project, fromBranch string, toBranch string) (int, error) {
+	requestURL := gitlabProjectAPIURL(source, project.ProviderID, "repository", "compare")
+	values := requestURL.Query()
+	values.Set("from", fromBranch)
+	values.Set("to", toBranch)
+	values.Set("per_page", "100")
+	requestURL.RawQuery = values.Encode()
+
+	var raw struct {
+		Commits []struct{} `json:"commits"`
+	}
+	if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+		return 0, err
+	}
+	return len(raw.Commits), nil
 }
 
 func (c GitLabClient) DefaultBranch(ctx context.Context, source Source, project Project) (string, error) {
@@ -357,6 +397,17 @@ func (c GiteaClient) HasBranch(ctx context.Context, source Source, project Proje
 	})
 }
 
+func (c GiteaClient) CompareBranches(ctx context.Context, source Source, project Project, baseBranch string, headBranch string) (BranchDivergence, error) {
+	var raw struct {
+		AheadBy  int `json:"ahead_by"`
+		BehindBy int `json:"behind_by"`
+	}
+	if err := c.getJSON(ctx, source, giteaAPIURL(source, "repos", project.ProviderID, "compare", baseBranch+"..."+headBranch), &raw); err != nil {
+		return BranchDivergence{}, err
+	}
+	return BranchDivergence{Ahead: raw.AheadBy, Behind: raw.BehindBy}, nil
+}
+
 func (c GiteaClient) DefaultBranch(ctx context.Context, source Source, project Project) (string, error) {
 	var repo struct {
 		DefaultBranch string `json:"default_branch"`
@@ -475,6 +526,46 @@ func (c BitbucketClient) HasBranch(ctx context.Context, source Source, project P
 	return branchExists(c.HTTPClient, func() (*http.Request, error) {
 		return c.newRequest(ctx, source, requestURL)
 	})
+}
+
+func (c BitbucketClient) CompareBranches(ctx context.Context, source Source, project Project, baseBranch string, headBranch string) (BranchDivergence, error) {
+	ahead, err := c.bitbucketBranchCommitCount(ctx, source, project, headBranch, baseBranch)
+	if err != nil {
+		return BranchDivergence{}, err
+	}
+	behind, err := c.bitbucketBranchCommitCount(ctx, source, project, baseBranch, headBranch)
+	if err != nil {
+		return BranchDivergence{}, err
+	}
+	return BranchDivergence{Ahead: ahead, Behind: behind}, nil
+}
+
+func (c BitbucketClient) bitbucketBranchCommitCount(ctx context.Context, source Source, project Project, includeBranch string, excludeBranch string) (int, error) {
+	requestURL := bitbucketRepoAPIURL(source, project.ProviderID, "commits", includeBranch)
+	values := requestURL.Query()
+	values.Set("exclude", excludeBranch)
+	values.Set("pagelen", "100")
+	requestURL.RawQuery = values.Encode()
+
+	total := 0
+	for {
+		var raw struct {
+			Values []struct{} `json:"values"`
+			Next   string     `json:"next"`
+		}
+		if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+			return 0, err
+		}
+		total += len(raw.Values)
+		if raw.Next == "" {
+			return total, nil
+		}
+		nextURL, err := url.Parse(raw.Next)
+		if err != nil {
+			return 0, fmt.Errorf("parse bitbucket next page: %w", err)
+		}
+		requestURL = *nextURL
+	}
 }
 
 func (c BitbucketClient) DefaultBranch(ctx context.Context, source Source, project Project) (string, error) {

@@ -50,17 +50,28 @@ func (m model) loadReleases() tea.Cmd {
 			}
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
+				row.Statuses = []ui.ReleaseStatusIndicator{ui.ReleaseStatusUnknown}
 				rows = append(rows, row)
 				continue
 			}
 
-			service := projectsync.ReleaseService{Cache: cache}
-			dates, err := service.LoadProject(context.Background(), projectsync.Source{Type: source.Type}, projectsync.Project{ProviderID: project.ProjectID})
+			psSource := projectsync.Source{Type: source.Type}
+			psProject := projectsync.Project{ProviderID: project.ProjectID, StackName: project.StackName}
+
+			releaseService := projectsync.ReleaseService{Cache: cache}
+			dates, err := releaseService.LoadProject(context.Background(), psSource, psProject)
 			if err != nil {
 				return releasesLoadedMsg{err: err}
 			}
 			row.HasReleases = len(dates) > 0
 			row.Months = buildReleaseMonths(now, dates, period)
+
+			statusService := projectsync.ReleaseStatusService{Cache: cache}
+			statuses, err := statusService.LoadProject(context.Background(), psSource, psProject)
+			if err != nil {
+				return releasesLoadedMsg{err: err}
+			}
+			row.Statuses = toUIReleaseStatuses(statuses)
 			rows = append(rows, row)
 		}
 
@@ -114,22 +125,37 @@ func runReleasesRefresh(store *storage.Store, projects []ui.Project, sources []u
 				return nil
 			}
 
-			service := projectsync.ReleaseService{
-				Cache:        cache,
-				SourceClient: client,
-			}
-			_, err = service.RunProject(context.Background(), projectsync.Source{
+			psSource := projectsync.Source{
 				ID:       source.ID,
 				Type:     source.Type,
 				URL:      source.URL,
 				PATToken: source.PATToken,
-			}, projectsync.Project{
+			}
+			psProject := projectsync.Project{
 				ID:         project.ID,
 				ProviderID: project.ProjectID,
 				Name:       project.Name,
-			}, func(message string) {
+				StackName:  project.StackName,
+			}
+			progress := func(message string) {
 				ch <- releaseSyncMsg{message: project.Name + ": " + message, current: index, total: total}
-			})
+			}
+
+			releaseService := projectsync.ReleaseService{
+				Cache:        cache,
+				SourceClient: client,
+			}
+			_, err = releaseService.RunProject(context.Background(), psSource, psProject, progress)
+			if err != nil {
+				ch <- releaseSyncMsg{message: err.Error(), err: err, done: true}
+				return nil
+			}
+
+			statusService := projectsync.ReleaseStatusService{
+				Cache:        cache,
+				SourceClient: client,
+			}
+			_, err = statusService.RunProject(context.Background(), psSource, psProject, progress)
 			if err != nil {
 				ch <- releaseSyncMsg{message: err.Error(), err: err, done: true}
 				return nil
@@ -235,4 +261,12 @@ func (m *model) selectPreviousReleaseProject() {
 
 func (m *model) selectNextReleaseProject() {
 	m.selectedReleaseProjectID = selectNext(m.releaseRows, m.selectedReleaseProjectID, releaseRowID)
+}
+
+func toUIReleaseStatuses(statuses []projectsync.ReleaseStatusIndicator) []ui.ReleaseStatusIndicator {
+	result := make([]ui.ReleaseStatusIndicator, len(statuses))
+	for i, s := range statuses {
+		result[i] = ui.ReleaseStatusIndicator(s)
+	}
+	return result
 }

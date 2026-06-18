@@ -38,6 +38,11 @@ type Tag struct {
 	CreatedAt time.Time
 }
 
+type BranchDivergence struct {
+	Ahead  int
+	Behind int
+}
+
 type ProtectedBranch struct {
 	Name              string
 	PushAccessLevels  []int
@@ -58,6 +63,7 @@ type SourceClient interface {
 	ResolveHead(ctx context.Context, source Source, project Project) (Commit, error)
 	FetchFile(ctx context.Context, source Source, project Project, commitSHA string, path string) ([]byte, error)
 	HasBranch(ctx context.Context, source Source, project Project, branch string) (bool, error)
+	CompareBranches(ctx context.Context, source Source, project Project, baseBranch string, headBranch string) (BranchDivergence, error)
 	DefaultBranch(ctx context.Context, source Source, project Project) (string, error)
 	ProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, error)
 	Tags(ctx context.Context, source Source, project Project) ([]Tag, error)
