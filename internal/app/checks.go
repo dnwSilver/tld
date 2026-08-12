@@ -52,6 +52,7 @@ func (m model) loadProjectChecks() tea.Cmd {
 				ProjectFreezing:  project.Freezing,
 				ProjectEndOfLife: project.EndOfLife,
 				Results:          make(map[string]ui.CheckState, len(projectsync.ProjectChecks)),
+				Versions:         make(map[string]string, len(projectsync.ProjectChecks)),
 			}
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
@@ -63,12 +64,15 @@ func (m model) loadProjectChecks() tea.Cmd {
 			}
 
 			service := projectsync.CheckService{Cache: cache}
-			results, err := service.LoadProject(context.Background(), projectsync.Source{Type: source.Type}, projectsync.Project{ProviderID: project.ProjectID})
+			results, versions, err := service.LoadProjectWithVersions(context.Background(), projectsync.Source{Type: source.Type}, projectsync.Project{ProviderID: project.ProjectID})
 			if err != nil {
 				return projectChecksLoadedMsg{err: err}
 			}
 			for checkID, state := range results {
 				row.Results[checkID] = ui.CheckState(state)
+			}
+			for checkID, version := range versions {
+				row.Versions[checkID] = version
 			}
 			rows = append(rows, row)
 		}

@@ -109,7 +109,7 @@ func TestParseOsvScanner(t *testing.T) {
 }
 
 func TestResolveVulnStrategyMobile(t *testing.T) {
-	android, err := ResolveVulnStrategy("Android")
+	android, err := ResolveVulnStrategy("Android", VulnScanModeProd)
 	if err != nil {
 		t.Fatalf("resolve android strategy: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestResolveVulnStrategyMobile(t *testing.T) {
 		t.Fatalf("android strategy = %T", android)
 	}
 
-	ios, err := ResolveVulnStrategy("iOS")
+	ios, err := ResolveVulnStrategy("iOS", VulnScanModeProd)
 	if err != nil {
 		t.Fatalf("resolve ios strategy: %v", err)
 	}

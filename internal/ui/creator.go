@@ -10,40 +10,40 @@ import (
 )
 
 type Creator struct {
-	palette            uikit.Palette
-	hints              components.Hints
-	navModal           components.NavModal
-	logo               components.Logo
-	defaultScreen      screens.DefaultScreen
-	stacksScreen       screens.StacksScreen
-	namespacesScreen   screens.StacksScreen
-	dependenciesScreen screens.DependenciesScreen
-	projectsScreen     screens.ProjectsScreen
-	sourcesScreen      screens.SourcesScreen
-	policiesScreen     screens.PoliciesScreen
-	viewScreen         screens.DependencyViewScreen
-	settingsScreen     screens.SettingsScreen
-	releasesScreen          screens.ReleasesScreen
-	vulnerabilitiesScreen   screens.VulnerabilitiesScreen
+	palette               uikit.Palette
+	hints                 components.Hints
+	navModal              components.NavModal
+	logo                  components.Logo
+	defaultScreen         screens.DefaultScreen
+	stacksScreen          screens.StacksScreen
+	namespacesScreen      screens.StacksScreen
+	dependenciesScreen    screens.DependenciesScreen
+	projectsScreen        screens.ProjectsScreen
+	sourcesScreen         screens.SourcesScreen
+	policiesScreen        screens.PoliciesScreen
+	viewScreen            screens.DependencyViewScreen
+	settingsScreen        screens.SettingsScreen
+	releasesScreen        screens.ReleasesScreen
+	vulnerabilitiesScreen screens.VulnerabilitiesScreen
 }
 
 func NewCreator() Creator {
 	palette := uikit.NewPalette()
 
 	return Creator{
-		palette:            palette,
-		hints:              components.NewHints(palette),
-		navModal:           components.NewNavModal(palette),
-		logo:               components.NewLogo(palette),
-		defaultScreen:      screens.NewDefaultScreen(palette),
-		stacksScreen:       screens.NewStacksScreen(palette),
-		namespacesScreen:   screens.NewNamespacesScreen(palette),
-		dependenciesScreen: screens.NewDependenciesScreen(palette),
-		projectsScreen:     screens.NewProjectsScreen(palette),
-		sourcesScreen:      screens.NewSourcesScreen(palette),
-		policiesScreen:     screens.NewPoliciesScreen(palette),
-		viewScreen:         screens.NewDependencyViewScreen(palette),
-		settingsScreen:     screens.NewSettingsScreen(palette),
+		palette:               palette,
+		hints:                 components.NewHints(palette),
+		navModal:              components.NewNavModal(palette),
+		logo:                  components.NewLogo(palette),
+		defaultScreen:         screens.NewDefaultScreen(palette),
+		stacksScreen:          screens.NewStacksScreen(palette),
+		namespacesScreen:      screens.NewNamespacesScreen(palette),
+		dependenciesScreen:    screens.NewDependenciesScreen(palette),
+		projectsScreen:        screens.NewProjectsScreen(palette),
+		sourcesScreen:         screens.NewSourcesScreen(palette),
+		policiesScreen:        screens.NewPoliciesScreen(palette),
+		viewScreen:            screens.NewDependencyViewScreen(palette),
+		settingsScreen:        screens.NewSettingsScreen(palette),
 		releasesScreen:        screens.NewReleasesScreen(palette),
 		vulnerabilitiesScreen: screens.NewVulnerabilitiesScreen(palette),
 	}
@@ -73,6 +73,7 @@ func (c Creator) Render(
 	policyValues []uikit.PolicyValue,
 	selectedPolicyValueID int64,
 	policyFocus uikit.PolicyPane,
+	policyUpdateStatus uikit.SettingsStatus,
 	dependencyView uikit.DependencyView,
 	selectedViewProjectID int64,
 	viewColumnOffset int,
@@ -89,6 +90,7 @@ func (c Creator) Render(
 	vulnItems []uikit.VulnerabilityItem,
 	selectedVulnItemIndex int,
 	vulnFocus uikit.VulnPane,
+	vulnMode uikit.VulnMode,
 	vulnsStatus uikit.SettingsStatus,
 	stackForm uikit.StackForm,
 	namespaceForm uikit.StackForm,
@@ -97,6 +99,7 @@ func (c Creator) Render(
 	sourceForm uikit.SourceForm,
 	policyForm uikit.PolicyForm,
 	policyValueForm uikit.PolicyValueForm,
+	policyUpdateForm uikit.PolicyUpdateForm,
 	deleteConfirm uikit.DeleteConfirm,
 	namespaceDeleteConfirm uikit.DeleteConfirm,
 	dependencyDeleteConfirm uikit.DeleteConfirm,
@@ -137,6 +140,7 @@ func (c Creator) Render(
 			dependencies,
 			selectedDependencyID,
 			stacks,
+			registrySources(sources),
 			dependencyForm,
 			dependencyDeleteConfirm,
 		)
@@ -153,7 +157,7 @@ func (c Creator) Render(
 			projectSyncStatus,
 			projectFocus,
 			namespaces,
-			sources,
+			projectSources(sources),
 			stacks,
 			projectForm,
 			projectDeleteConfirm,
@@ -180,8 +184,12 @@ func (c Creator) Render(
 			policyFocus,
 			namespaces,
 			dependencies,
+			stacks,
+			registrySources(sources),
 			policyForm,
 			policyValueForm,
+			policyUpdateForm,
+			policyUpdateStatus,
 			policyDeleteConfirm,
 		)
 	}
@@ -195,7 +203,7 @@ func (c Creator) Render(
 		body = c.releasesScreen.Render(width, bodyHeight, releaseRows, selectedReleaseProjectID, releasePeriod, releasesStatus)
 	}
 	if screen == uikit.ScreenVulnerabilities {
-		body = c.vulnerabilitiesScreen.Render(width, bodyHeight, vulnRows, selectedVulnProjectID, vulnItems, selectedVulnItemIndex, vulnFocus, vulnsStatus)
+		body = c.vulnerabilitiesScreen.Render(width, bodyHeight, vulnRows, selectedVulnProjectID, vulnItems, selectedVulnItemIndex, vulnFocus, vulnMode, vulnsStatus)
 	}
 
 	result := base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
@@ -209,6 +217,26 @@ func (c Creator) Render(
 	lines = modal.Overlay(lines, width, height, block)
 
 	return strings.Join(lines, uikit.SymbolLineBreak)
+}
+
+func registrySources(sources []uikit.Source) []uikit.Source {
+	result := make([]uikit.Source, 0, len(sources))
+	for _, source := range sources {
+		if source.Type == "registry" {
+			result = append(result, source)
+		}
+	}
+	return result
+}
+
+func projectSources(sources []uikit.Source) []uikit.Source {
+	result := make([]uikit.Source, 0, len(sources))
+	for _, source := range sources {
+		if source.Type != "registry" {
+			result = append(result, source)
+		}
+	}
+	return result
 }
 
 func toNamespaceItems(namespaces []uikit.Namespace, policies []uikit.Policy) []uikit.Stack {

@@ -104,13 +104,25 @@ func (s SettingsScreen) renderRow(width int, checkColumns []uikit.ProjectCheck, 
 				state = value
 			}
 		}
+		version := ""
+		if row.Versions != nil {
+			version = row.Versions[check.ID]
+		}
 		cells = append(cells, components.TableCell{
-			Value:      s.checkSymbol(state),
+			Value:      s.checkValue(state, version),
 			Width:      settingsCheckColumnWidth,
 			Foreground: s.checkColor(state),
 		})
 	}
 	return components.RenderTableRow(s.palette, background, width, cells)
+}
+
+func (s SettingsScreen) checkValue(state uikit.CheckState, version string) string {
+	value := s.checkSymbol(state)
+	if version != "" {
+		value += " " + version
+	}
+	return value
 }
 
 func (s SettingsScreen) checkSymbol(state uikit.CheckState) string {
@@ -119,6 +131,8 @@ func (s SettingsScreen) checkSymbol(state uikit.CheckState) string {
 		return uikit.SymbolCheckPass
 	case uikit.CheckStateFail:
 		return uikit.SymbolCheckFail
+	case uikit.CheckStateNotApplicable:
+		return uikit.SymbolCheckNotApplicable
 	default:
 		return uikit.SymbolCheckUnknown
 	}

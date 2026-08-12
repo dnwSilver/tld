@@ -35,11 +35,15 @@ func (t Tabs) RenderInline(tabs []Tab) string {
 		if tab.Active {
 			color = t.palette.Primary
 		}
+		label := tab.Label
+		if tab.Icon != "" {
+			label = tab.Icon + " " + label
+		}
 		parts = append(parts, lipgloss.NewStyle().
 			Background(t.palette.Background).
 			Foreground(color).
 			Bold(tab.Active).
-			Render(tab.Icon+" "+tab.Label))
+			Render(label))
 	}
 
 	return strings.Join(parts, uikit.BackgroundSpaces(t.palette, 3))

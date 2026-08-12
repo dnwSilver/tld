@@ -12,13 +12,15 @@ import (
 	"strings"
 )
 
-type JavaScriptVulnStrategy struct{}
+type JavaScriptVulnStrategy struct {
+	Mode VulnScanMode
+}
 
 func (JavaScriptVulnStrategy) Files() []string {
 	return []string{"package.json", "package-lock.json"}
 }
 
-func (JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
+func (s JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
 	var packageJSON []byte
 	var packageLock []byte
 	for _, file := range files {
@@ -33,7 +35,7 @@ func (JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
 		return VulnReport{}, errors.New("package.json is required for npm audit")
 	}
 
-	output, err := runNpmAudit(packageJSON, packageLock)
+	output, err := runNpmAudit(packageJSON, packageLock, s.Mode)
 	if err != nil {
 		return VulnReport{}, err
 	}
@@ -41,7 +43,7 @@ func (JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
 	return parseNpmAudit(output)
 }
 
-func runNpmAudit(packageJSON []byte, packageLock []byte) ([]byte, error) {
+func runNpmAudit(packageJSON []byte, packageLock []byte, mode VulnScanMode) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "tld-npm-audit-*")
 	if err != nil {
 		return nil, fmt.Errorf("create npm audit temp dir: %w", err)
@@ -60,7 +62,7 @@ func runNpmAudit(packageJSON []byte, packageLock []byte) ([]byte, error) {
 	}
 
 	ctx := context.Background()
-	cmd := exec.CommandContext(ctx, "npm", "audit", "--json")
+	cmd := exec.CommandContext(ctx, "npm", npmAuditArgs(mode)...)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	if len(bytes.TrimSpace(output)) == 0 {
@@ -77,6 +79,14 @@ func runNpmAudit(packageJSON []byte, packageLock []byte) ([]byte, error) {
 	}
 
 	return output, nil
+}
+
+func npmAuditArgs(mode VulnScanMode) []string {
+	args := []string{"audit"}
+	if normalizeVulnScanMode(mode) == VulnScanModeProd {
+		args = append(args, "--omit=dev")
+	}
+	return append(args, "--json")
 }
 
 func parseNpmAudit(output []byte) (VulnReport, error) {

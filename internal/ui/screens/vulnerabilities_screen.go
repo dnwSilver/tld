@@ -31,6 +31,7 @@ func (s VulnerabilitiesScreen) Render(
 	items []uikit.VulnerabilityItem,
 	selectedItemIndex int,
 	focus uikit.VulnPane,
+	mode uikit.VulnMode,
 	status uikit.SettingsStatus,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
@@ -46,7 +47,13 @@ func (s VulnerabilitiesScreen) Render(
 	left := components.NewBox(s.palette, leftBorder).Render(leftContentWidth, contentHeight, leftTitle, s.renderProjectsContent(leftContentWidth, contentHeight, rows, selectedProjectID))
 	rightTitle := components.ScreenTitle(s.palette, uikit.SymbolVulnHigh, "CVE", intPtr(len(items)))
 	rightBorder := s.borderForPane(focus == uikit.VulnPaneDetails)
-	right := components.NewBox(s.palette, rightBorder).Render(rightContentWidth, contentHeight, rightTitle, s.renderDetailsContent(rightContentWidth, contentHeight, items, selectedItemIndex))
+	right := components.NewTabbedPanel(s.palette, rightBorder).Render(
+		rightContentWidth,
+		contentHeight,
+		rightTitle,
+		vulnModeTabs(mode),
+		s.renderDetailsContent(rightContentWidth, contentHeight, items, selectedItemIndex),
+	)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 	if status.Message != "" || status.Error != "" {
@@ -54,6 +61,13 @@ func (s VulnerabilitiesScreen) Render(
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, body, footer)
+}
+
+func vulnModeTabs(mode uikit.VulnMode) []components.Tab {
+	return []components.Tab{
+		{ID: int64(uikit.VulnModeProd), Label: "prod", Active: mode == uikit.VulnModeProd},
+		{ID: int64(uikit.VulnModeDev), Label: "dev", Active: mode == uikit.VulnModeDev},
+	}
 }
 
 func (s VulnerabilitiesScreen) borderForPane(active bool) lipgloss.Color {

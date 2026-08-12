@@ -13,6 +13,7 @@ const (
 	SourceTypeGitHub    = "github"
 	SourceTypeGitea     = "gitea"
 	SourceTypeBitbucket = "bitbucket"
+	SourceTypeRegistry  = "registry"
 )
 
 type SourceRepository struct {
@@ -20,15 +21,16 @@ type SourceRepository struct {
 }
 
 type Source struct {
-	ID        int64
-	Icon      string
-	Name      string
-	Color     string
-	PATToken  string
-	URL       string
-	Type      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           int64
+	Icon         string
+	Name         string
+	Color        string
+	PATToken     string
+	URL          string
+	Type         string
+	RegistryKind string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type sourceAppearance struct {
@@ -41,11 +43,12 @@ var sourceAppearances = map[string]sourceAppearance{
 	SourceTypeGitHub:    {icon: "", color: "FFFFFF"},
 	SourceTypeBitbucket: {icon: "", color: "1A74ED"},
 	SourceTypeGitea:     {icon: "", color: "609926"},
+	SourceTypeRegistry:  {icon: "󰏗", color: "CB3837"},
 }
 
 func (r SourceRepository) List(ctx context.Context) ([]Source, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, icon, name, color, pat_token, url, type, created_at, updated_at
+		SELECT id, icon, name, color, pat_token, url, type, registry_kind, created_at, updated_at
 		FROM sources
 		ORDER BY name ASC
 	`)
@@ -69,6 +72,7 @@ func (r SourceRepository) List(ctx context.Context) ([]Source, error) {
 			&source.PATToken,
 			&source.URL,
 			&source.Type,
+			&source.RegistryKind,
 			&createdAt,
 			&updatedAt,
 		); err != nil {
@@ -95,10 +99,14 @@ func (r SourceRepository) Count(ctx context.Context) (int, error) {
 }
 
 func (r SourceRepository) Create(ctx context.Context, name string, patToken string, sourceURL string, sourceType string) (Source, error) {
+	return r.CreateWithRegistryKind(ctx, name, patToken, sourceURL, sourceType, "")
+}
+
+func (r SourceRepository) CreateWithRegistryKind(ctx context.Context, name string, patToken string, sourceURL string, sourceType string, registryKind string) (Source, error) {
 	if name == "" {
 		return Source{}, errors.New("source name is empty")
 	}
-	if patToken == "" {
+	if patToken == "" && sourceType != SourceTypeRegistry {
 		return Source{}, errors.New("source PAT token is empty")
 	}
 	if sourceURL == "" {
@@ -108,12 +116,15 @@ func (r SourceRepository) Create(ctx context.Context, name string, patToken stri
 	if err != nil {
 		return Source{}, err
 	}
+	if sourceType == SourceTypeRegistry && registryKind == "" {
+		return Source{}, errors.New("registry kind is empty")
+	}
 
 	now := time.Now().Unix()
 	result, err := r.db.ExecContext(ctx, `
-		INSERT INTO sources (icon, name, color, pat_token, url, type, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, appearance.icon, name, appearance.color, patToken, sourceURL, sourceType, now, now)
+		INSERT INTO sources (icon, name, color, pat_token, url, type, registry_kind, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, appearance.icon, name, appearance.color, patToken, sourceURL, sourceType, registryKind, now, now)
 	if err != nil {
 		return Source{}, fmt.Errorf("create source: %w", err)
 	}
@@ -124,26 +135,31 @@ func (r SourceRepository) Create(ctx context.Context, name string, patToken stri
 	}
 
 	return Source{
-		ID:        id,
-		Icon:      appearance.icon,
-		Name:      name,
-		Color:     appearance.color,
-		PATToken:  patToken,
-		URL:       sourceURL,
-		Type:      sourceType,
-		CreatedAt: time.Unix(now, 0).UTC(),
-		UpdatedAt: time.Unix(now, 0).UTC(),
+		ID:           id,
+		Icon:         appearance.icon,
+		Name:         name,
+		Color:        appearance.color,
+		PATToken:     patToken,
+		URL:          sourceURL,
+		Type:         sourceType,
+		RegistryKind: registryKind,
+		CreatedAt:    time.Unix(now, 0).UTC(),
+		UpdatedAt:    time.Unix(now, 0).UTC(),
 	}, nil
 }
 
 func (r SourceRepository) Update(ctx context.Context, id int64, name string, patToken string, sourceURL string, sourceType string) error {
+	return r.UpdateWithRegistryKind(ctx, id, name, patToken, sourceURL, sourceType, "")
+}
+
+func (r SourceRepository) UpdateWithRegistryKind(ctx context.Context, id int64, name string, patToken string, sourceURL string, sourceType string, registryKind string) error {
 	if id == 0 {
 		return errors.New("source id is empty")
 	}
 	if name == "" {
 		return errors.New("source name is empty")
 	}
-	if patToken == "" {
+	if patToken == "" && sourceType != SourceTypeRegistry {
 		return errors.New("source PAT token is empty")
 	}
 	if sourceURL == "" {
@@ -153,12 +169,15 @@ func (r SourceRepository) Update(ctx context.Context, id int64, name string, pat
 	if err != nil {
 		return err
 	}
+	if sourceType == SourceTypeRegistry && registryKind == "" {
+		return errors.New("registry kind is empty")
+	}
 
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE sources
-		SET icon = ?, name = ?, color = ?, pat_token = ?, url = ?, type = ?, updated_at = ?
+		SET icon = ?, name = ?, color = ?, pat_token = ?, url = ?, type = ?, registry_kind = ?, updated_at = ?
 		WHERE id = ?
-	`, appearance.icon, name, appearance.color, patToken, sourceURL, sourceType, time.Now().Unix(), id)
+	`, appearance.icon, name, appearance.color, patToken, sourceURL, sourceType, registryKind, time.Now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("update source: %w", err)
 	}

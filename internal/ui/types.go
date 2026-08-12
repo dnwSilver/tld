@@ -5,17 +5,17 @@ import "github.com/dnwSilver/tld/internal/ui/uikit"
 type Screen = uikit.Screen
 
 const (
-	ScreenDefault      = uikit.ScreenDefault
-	ScreenStacks       = uikit.ScreenStacks
-	ScreenNamespaces   = uikit.ScreenNamespaces
-	ScreenDependencies = uikit.ScreenDependencies
-	ScreenProjects     = uikit.ScreenProjects
-	ScreenSources      = uikit.ScreenSources
-	ScreenPolicies     = uikit.ScreenPolicies
-	ScreenView         = uikit.ScreenView
-	ScreenSettings     = uikit.ScreenSettings
-	ScreenReleases          = uikit.ScreenReleases
-	ScreenVulnerabilities   = uikit.ScreenVulnerabilities
+	ScreenDefault         = uikit.ScreenDefault
+	ScreenStacks          = uikit.ScreenStacks
+	ScreenNamespaces      = uikit.ScreenNamespaces
+	ScreenDependencies    = uikit.ScreenDependencies
+	ScreenProjects        = uikit.ScreenProjects
+	ScreenSources         = uikit.ScreenSources
+	ScreenPolicies        = uikit.ScreenPolicies
+	ScreenView            = uikit.ScreenView
+	ScreenSettings        = uikit.ScreenSettings
+	ScreenReleases        = uikit.ScreenReleases
+	ScreenVulnerabilities = uikit.ScreenVulnerabilities
 )
 
 type Stack = uikit.Stack
@@ -64,20 +64,23 @@ type StackForm = uikit.StackForm
 type DependencyFormField = uikit.DependencyFormField
 
 const (
-	DependencyFormFieldIcon  = uikit.DependencyFormFieldIcon
-	DependencyFormFieldColor = uikit.DependencyFormFieldColor
-	DependencyFormFieldName  = uikit.DependencyFormFieldName
-	DependencyFormFieldStack = uikit.DependencyFormFieldStack
+	DependencyFormFieldIcon     = uikit.DependencyFormFieldIcon
+	DependencyFormFieldColor    = uikit.DependencyFormFieldColor
+	DependencyFormFieldName     = uikit.DependencyFormFieldName
+	DependencyFormFieldRegistry = uikit.DependencyFormFieldRegistry
+	DependencyFormFieldPackage  = uikit.DependencyFormFieldPackage
+	DependencyFormFieldStack    = uikit.DependencyFormFieldStack
 )
 
 type DependencyForm = uikit.DependencyForm
 type SourceFormField = uikit.SourceFormField
 
 const (
-	SourceFormFieldName     = uikit.SourceFormFieldName
-	SourceFormFieldURL      = uikit.SourceFormFieldURL
-	SourceFormFieldPATToken = uikit.SourceFormFieldPATToken
-	SourceFormFieldType     = uikit.SourceFormFieldType
+	SourceFormFieldName         = uikit.SourceFormFieldName
+	SourceFormFieldURL          = uikit.SourceFormFieldURL
+	SourceFormFieldPATToken     = uikit.SourceFormFieldPATToken
+	SourceFormFieldType         = uikit.SourceFormFieldType
+	SourceFormFieldRegistryKind = uikit.SourceFormFieldRegistryKind
 )
 
 type SourceForm = uikit.SourceForm
@@ -108,10 +111,19 @@ type PolicyValueFormField = uikit.PolicyValueFormField
 
 const (
 	PolicyValueFormFieldDependency = uikit.PolicyValueFormFieldDependency
+	PolicyValueFormFieldRegistry   = uikit.PolicyValueFormFieldRegistry
 	PolicyValueFormFieldVersion    = uikit.PolicyValueFormFieldVersion
 )
 
 type PolicyValueForm = uikit.PolicyValueForm
+type PolicyUpdateFormField = uikit.PolicyUpdateFormField
+
+const (
+	PolicyUpdateFormFieldStack    = uikit.PolicyUpdateFormFieldStack
+	PolicyUpdateFormFieldRegistry = uikit.PolicyUpdateFormFieldRegistry
+)
+
+type PolicyUpdateForm = uikit.PolicyUpdateForm
 type DeleteConfirm = uikit.DeleteConfirm
 type ProjectCheck = uikit.ProjectCheck
 type CheckState = uikit.CheckState
@@ -124,7 +136,13 @@ type ReleaseStatusIndicator = uikit.ReleaseStatusIndicator
 type VulnCounts = uikit.VulnCounts
 type VulnerabilityItem = uikit.VulnerabilityItem
 type VulnProjectRow = uikit.VulnProjectRow
+type VulnMode = uikit.VulnMode
 type VulnPane = uikit.VulnPane
+
+const (
+	VulnModeProd = uikit.VulnModeProd
+	VulnModeDev  = uikit.VulnModeDev
+)
 
 const (
 	VulnPaneProjects = uikit.VulnPaneProjects
@@ -145,41 +163,46 @@ const (
 )
 
 const (
-	CheckStateUnknown = uikit.CheckStateUnknown
-	CheckStatePass    = uikit.CheckStatePass
-	CheckStateFail    = uikit.CheckStateFail
+	CheckStateUnknown       = uikit.CheckStateUnknown
+	CheckStatePass          = uikit.CheckStatePass
+	CheckStateFail          = uikit.CheckStateFail
+	CheckStateNotApplicable = uikit.CheckStateNotApplicable
 )
 
 type Binding = uikit.Binding
 
 var (
-	KeyHome           = uikit.KeyHome
-	KeyStacks         = uikit.KeyStacks
-	KeyNamespaces     = uikit.KeyNamespaces
-	KeyDependencies   = uikit.KeyDependencies
-	KeyProjects       = uikit.KeyProjects
-	KeySources        = uikit.KeySources
-	KeyPolicies       = uikit.KeyPolicies
-	KeyView           = uikit.KeyView
-	KeySettings       = uikit.KeySettings
-	KeyReleases          = uikit.KeyReleases
-	KeyVulnerabilities   = uikit.KeyVulnerabilities
-	KeyAdd            = uikit.KeyAdd
-	KeyEdit           = uikit.KeyEdit
-	KeyClone          = uikit.KeyClone
-	KeyDelete         = uikit.KeyDelete
-	KeyRefreshDeps    = uikit.KeyRefreshDeps
-	KeyRefreshAll     = uikit.KeyRefreshAll
-	KeyPrev           = uikit.KeyPrev
-	KeyNext           = uikit.KeyNext
-	KeyStackPick      = uikit.KeyStackPick
-	KeySourcePick     = uikit.KeySourcePick
-	KeySourceTypePick = uikit.KeySourceTypePick
-	KeyNamespacePick  = uikit.KeyNamespacePick
-	KeyPolicyPick     = uikit.KeyPolicyPick
-	KeyDependencyPick = uikit.KeyDependencyPick
-	KeyToggleHead = uikit.KeyToggleHead
-	KeyQuit       = uikit.KeyQuit
+	KeyHome             = uikit.KeyHome
+	KeyStacks           = uikit.KeyStacks
+	KeyNamespaces       = uikit.KeyNamespaces
+	KeyDependencies     = uikit.KeyDependencies
+	KeyProjects         = uikit.KeyProjects
+	KeySources          = uikit.KeySources
+	KeyPolicies         = uikit.KeyPolicies
+	KeyView             = uikit.KeyView
+	KeySettings         = uikit.KeySettings
+	KeyReleases         = uikit.KeyReleases
+	KeyVulnerabilities  = uikit.KeyVulnerabilities
+	KeyAdd              = uikit.KeyAdd
+	KeyEdit             = uikit.KeyEdit
+	KeyClone            = uikit.KeyClone
+	KeyDelete           = uikit.KeyDelete
+	KeyRefreshDeps      = uikit.KeyRefreshDeps
+	KeyRefreshAll       = uikit.KeyRefreshAll
+	KeyUpdatePins       = uikit.KeyUpdatePins
+	KeyVulnMode         = uikit.KeyVulnMode
+	KeyPrev             = uikit.KeyPrev
+	KeyNext             = uikit.KeyNext
+	KeyStackPick        = uikit.KeyStackPick
+	KeySourcePick       = uikit.KeySourcePick
+	KeySourceTypePick   = uikit.KeySourceTypePick
+	KeyRegistryPick     = uikit.KeyRegistryPick
+	KeyRegistryKindPick = uikit.KeyRegistryKindPick
+	KeyNamespacePick    = uikit.KeyNamespacePick
+	KeyPolicyPick       = uikit.KeyPolicyPick
+	KeyDependencyPick   = uikit.KeyDependencyPick
+	KeyToggleHead       = uikit.KeyToggleHead
+	KeyQuit             = uikit.KeyQuit
 )
 
 type NavSection = uikit.NavSection

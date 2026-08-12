@@ -13,11 +13,12 @@ type SourcesScreen struct {
 }
 
 const (
-	sourceFormLabelWidth  = 5
-	sourceFormValueWidth  = 28
-	sourceNameColumnWidth = 22
-	sourceURLColumnWidth  = 34
-	sourceTypeColumnWidth = 10
+	sourceFormLabelWidth     = 5
+	sourceFormValueWidth     = 28
+	sourceNameColumnWidth    = 22
+	sourceURLColumnMinWidth  = 34
+	sourceTypeColumnMinWidth = 10
+	sourceColumnGap          = 2
 )
 
 func NewSourcesScreen(palette uikit.Palette) SourcesScreen {
@@ -61,14 +62,16 @@ func (s SourcesScreen) renderContent(
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	lines := make([]string, 0, height)
-	lines = append(lines, s.tableHeader(width))
+	typeColumnWidth := components.ColumnWidth(sources, func(source uikit.Source) string { return s.sourceType(source) }, sourceTypeColumnMinWidth)
+	urlColumnWidth := components.ColumnWidth(sources, func(source uikit.Source) string { return source.URL }, sourceURLColumnMinWidth)
+	lines = append(lines, s.tableHeader(width, typeColumnWidth, urlColumnWidth))
 
 	if len(sources) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No sources yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
 		for _, source := range sources {
-			lines = append(lines, s.renderSourceRow(width, source, source.ID == selectedSourceID))
+			lines = append(lines, s.renderSourceRow(width, source, source.ID == selectedSourceID, typeColumnWidth, urlColumnWidth))
 		}
 	}
 
@@ -90,15 +93,17 @@ func (s SourcesScreen) renderContent(
 	return strings.Join(lines, uikit.SymbolLineBreak)
 }
 
-func (s SourcesScreen) tableHeader(width int) string {
+func (s SourcesScreen) tableHeader(width int, typeColumnWidth int, urlColumnWidth int) string {
 	return components.RenderTableRow(s.palette, s.palette.Background, width, []components.TableCell{
 		{Value: "name", Width: sourceNameColumnWidth, Foreground: s.palette.Hint, Bold: true},
-		{Value: "url", Width: sourceURLColumnWidth, Foreground: s.palette.Hint, Bold: true},
-		{Value: "type", Width: sourceTypeColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "", Width: sourceColumnGap, Foreground: s.palette.Hint},
+		{Value: "type", Width: typeColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "", Width: sourceColumnGap, Foreground: s.palette.Hint},
+		{Value: "url", Width: urlColumnWidth, Foreground: s.palette.Hint, Bold: true},
 	})
 }
 
-func (s SourcesScreen) renderSourceRow(width int, source uikit.Source, selected bool) string {
+func (s SourcesScreen) renderSourceRow(width int, source uikit.Source, selected bool, typeColumnWidth int, urlColumnWidth int) string {
 	background := s.palette.Background
 	if selected {
 		background = s.palette.Hover
@@ -106,8 +111,10 @@ func (s SourcesScreen) renderSourceRow(width int, source uikit.Source, selected 
 
 	return components.RenderTableRow(s.palette, background, width, []components.TableCell{
 		{Value: source.Name, Width: sourceNameColumnWidth, Foreground: s.palette.Text},
-		{Value: source.URL, Width: sourceURLColumnWidth, Foreground: s.palette.Hint},
-		{Value: source.Type, Width: sourceTypeColumnWidth, Foreground: s.palette.Info},
+		{Value: "", Width: sourceColumnGap, Foreground: s.palette.Text},
+		{Value: s.sourceType(source), Width: typeColumnWidth, Foreground: s.palette.Info},
+		{Value: "", Width: sourceColumnGap, Foreground: s.palette.Text},
+		{Value: source.URL, Width: urlColumnWidth, Foreground: s.palette.Hint},
 	})
 }
 
@@ -133,7 +140,18 @@ func (s SourcesScreen) modal(width int, form uikit.SourceForm) string {
 		modal.CenterLine(contentWidth, s.inputLine("PAT", maskSecret(form.PATToken), form.Focus == uikit.SourceFormFieldPATToken)),
 		modal.CenterLine(contentWidth, s.inputLine("Type", form.Type, form.Focus == uikit.SourceFormFieldType)),
 		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
-		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, form.Focus == uikit.SourceFormFieldType)),
+		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, form.Focus == uikit.SourceFormFieldType, false)),
+	}
+	if form.Type == "registry" {
+		rows = []string{
+			modal.CenterLine(contentWidth, s.inputLine("Name", form.Name, form.Focus == uikit.SourceFormFieldName)),
+			modal.CenterLine(contentWidth, s.inputLine("URL", form.URL, form.Focus == uikit.SourceFormFieldURL)),
+			modal.CenterLine(contentWidth, s.inputLine("PAT", maskSecret(form.PATToken), form.Focus == uikit.SourceFormFieldPATToken)),
+			modal.CenterLine(contentWidth, s.inputLine("Type", form.Type, form.Focus == uikit.SourceFormFieldType)),
+			modal.CenterLine(contentWidth, s.inputLine("Kind", form.RegistryKind, form.Focus == uikit.SourceFormFieldRegistryKind)),
+			modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
+			modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, form.Focus == uikit.SourceFormFieldType, form.Focus == uikit.SourceFormFieldRegistryKind)),
+		}
 	}
 
 	return modal.Render(contentWidth, title, rows)
@@ -149,7 +167,7 @@ func (s SourcesScreen) inputLine(label, value string, focused bool) string {
 	})
 }
 
-func (s SourcesScreen) actionsLine(canSave bool, typeFocused bool) string {
+func (s SourcesScreen) actionsLine(canSave bool, typeFocused bool, kindFocused bool) string {
 	saveColor := s.palette.Disable
 	if canSave {
 		saveColor = s.palette.Primary
@@ -162,8 +180,18 @@ func (s SourcesScreen) actionsLine(canSave bool, typeFocused bool) string {
 	if typeFocused {
 		actions = append(actions, components.Action{Hint: uikit.KeySourceTypePick.Hint, Color: s.palette.Hint})
 	}
+	if kindFocused {
+		actions = append(actions, components.Action{Hint: uikit.KeyRegistryKindPick.Hint, Color: s.palette.Hint})
+	}
 
 	return components.RenderActions(s.palette, actions)
+}
+
+func (s SourcesScreen) sourceType(source uikit.Source) string {
+	if source.Type == "registry" && source.RegistryKind != "" {
+		return source.Type + "/" + source.RegistryKind
+	}
+	return source.Type
 }
 
 func (s SourcesScreen) renderDeleteConfirm(lines []string, width, height int, confirm uikit.DeleteConfirm) []string {

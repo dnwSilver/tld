@@ -20,6 +20,13 @@ const (
 	VulnSeverityNone     VulnSeverity = "none"
 )
 
+type VulnScanMode string
+
+const (
+	VulnScanModeProd VulnScanMode = "prod"
+	VulnScanModeDev  VulnScanMode = "dev"
+)
+
 type VulnCounts struct {
 	Critical int
 	High     int
@@ -47,11 +54,12 @@ type VulnStrategy interface {
 	Scan(files []File) (VulnReport, error)
 }
 
-func ResolveVulnStrategy(stackName string) (VulnStrategy, error) {
+func ResolveVulnStrategy(stackName string, mode VulnScanMode) (VulnStrategy, error) {
 	normalized := strings.ToLower(strings.TrimSpace(stackName))
+	mode = normalizeVulnScanMode(mode)
 	switch normalized {
 	case "javascript", "js", "node", "nodejs", "node.js":
-		return JavaScriptVulnStrategy{}, nil
+		return JavaScriptVulnStrategy{Mode: mode}, nil
 	case "kotlin", "android":
 		return AndroidVulnStrategy{}, nil
 	case "swift", "ios":
@@ -64,6 +72,7 @@ func ResolveVulnStrategy(stackName string) (VulnStrategy, error) {
 type VulnScanService struct {
 	Cache        storage.CacheRepository
 	SourceClient SourceClient
+	Mode         VulnScanMode
 }
 
 func (s VulnScanService) RunProject(ctx context.Context, source Source, project Project, progress ProgressFunc) (VulnReport, error) {
@@ -74,7 +83,7 @@ func (s VulnScanService) RunProject(ctx context.Context, source Source, project 
 		return VulnReport{}, errors.New("vulnerability provider project id is empty")
 	}
 
-	strategy, err := ResolveVulnStrategy(project.StackName)
+	strategy, err := ResolveVulnStrategy(project.StackName, s.mode())
 	if err != nil {
 		return VulnReport{}, err
 	}
@@ -116,7 +125,7 @@ func (s VulnScanService) RunProject(ctx context.Context, source Source, project 
 }
 
 func (s VulnScanService) LoadProject(ctx context.Context, source Source, project Project) (VulnReport, error) {
-	key := vulnCacheKey(source.Type, project.ProviderID)
+	key := vulnCacheKey(source.Type, project.ProviderID, s.mode())
 	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectVulns, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrCacheMiss) {
@@ -162,9 +171,20 @@ func (s VulnScanService) cacheReport(ctx context.Context, source Source, project
 		return fmt.Errorf("encode vulnerabilities: %w", err)
 	}
 
-	return s.Cache.Set(ctx, CacheNamespaceProjectVulns, vulnCacheKey(source.Type, project.ProviderID), payload, "application/json", 0)
+	return s.Cache.Set(ctx, CacheNamespaceProjectVulns, vulnCacheKey(source.Type, project.ProviderID, s.mode()), payload, "application/json", 0)
 }
 
-func vulnCacheKey(sourceType string, projectID string) string {
-	return cacheKey(sourceType, projectID, "vulns", "report")
+func (s VulnScanService) mode() VulnScanMode {
+	return normalizeVulnScanMode(s.Mode)
+}
+
+func normalizeVulnScanMode(mode VulnScanMode) VulnScanMode {
+	if mode == VulnScanModeDev {
+		return VulnScanModeDev
+	}
+	return VulnScanModeProd
+}
+
+func vulnCacheKey(sourceType string, projectID string, mode VulnScanMode) string {
+	return cacheKey(sourceType, projectID, "vulns", string(normalizeVulnScanMode(mode))+"/report")
 }

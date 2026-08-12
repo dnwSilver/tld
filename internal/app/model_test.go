@@ -84,6 +84,34 @@ func TestReleasesScreenNavigation(t *testing.T) {
 	}
 }
 
+func TestVulnerabilityModeDefaultsToProdAndCanSwitch(t *testing.T) {
+	m := newModel(nil)
+	m.screen = ui.ScreenVulnerabilities
+
+	if m.vulnMode != ui.VulnModeProd {
+		t.Fatalf("default mode = %v, want prod", m.vulnMode)
+	}
+
+	next, cmd := m.Update(key("m"))
+	updated := next.(model)
+	if updated.vulnMode != ui.VulnModeDev {
+		t.Fatalf("mode = %v, want dev", updated.vulnMode)
+	}
+	if cmd == nil {
+		t.Fatal("expected vulnerabilities reload command")
+	}
+
+	updated.vulnsStatus.Running = true
+	next, cmd = updated.Update(key("m"))
+	running := next.(model)
+	if running.vulnMode != ui.VulnModeDev {
+		t.Fatalf("running scan changed mode to %v", running.vulnMode)
+	}
+	if cmd != nil {
+		t.Fatal("running scan should not reload vulnerabilities")
+	}
+}
+
 func TestScreenNavigation(t *testing.T) {
 	m := newModel(nil)
 
@@ -233,18 +261,25 @@ func TestCreateDependencyFromForm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create stack: %v", err)
 	}
+	source, err := store.Sources().CreateWithRegistryKind(ctx, "NPM", "", "https://registry.npmjs.org", storage.SourceTypeRegistry, "npm")
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
 
 	m := newModel(store)
 	m.screen = ui.ScreenDependencies
 	m.stacks = []ui.Stack{{ID: stack.ID, Icon: stack.Icon, Name: stack.Name, Color: stack.Color}}
+	m.sources = []ui.Source{{ID: source.ID, Name: source.Name, Type: source.Type, RegistryKind: source.RegistryKind}}
 	m.dependencyForm = ui.DependencyForm{
-		Open:    true,
-		Focus:   ui.DependencyFormFieldName,
-		StackID: stack.ID,
-		Icon:    "",
-		Color:   "#EC9706",
-		Name:    "Package",
-		CanSave: true,
+		Open:         true,
+		Focus:        ui.DependencyFormFieldName,
+		StackID:      stack.ID,
+		RegistryID:   source.ID,
+		Icon:         "",
+		Color:        "#EC9706",
+		Name:         "Package",
+		RegistryName: "package",
+		CanSave:      true,
 	}
 
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -281,16 +316,19 @@ func TestCreateDependencyFromForm(t *testing.T) {
 func TestDependencyFormHLInputAndPicker(t *testing.T) {
 	stackA := ui.Stack{ID: 1, Icon: "", Name: "JavaScript", Color: "#84BA64"}
 	stackB := ui.Stack{ID: 2, Icon: "", Name: "Swift", Color: "#F05138"}
+	sourceA := ui.Source{ID: 1, Name: "NPM", Type: storage.SourceTypeRegistry, RegistryKind: "npm"}
+	sourceB := ui.Source{ID: 2, Name: "CocoaPods", Type: storage.SourceTypeRegistry, RegistryKind: "cocoapods"}
 	form := normalizeDependencyForm(ui.DependencyForm{
-		Open:    true,
-		Focus:   ui.DependencyFormFieldName,
-		StackID: stackA.ID,
-		Icon:    "",
-		Color:   "#EC9706",
-	}, []ui.Stack{stackA, stackB})
+		Open:       true,
+		Focus:      ui.DependencyFormFieldName,
+		StackID:    stackA.ID,
+		RegistryID: sourceA.ID,
+		Icon:       "",
+		Color:      "#EC9706",
+	}, []ui.Stack{stackA, stackB}, []ui.Source{sourceA, sourceB})
 
-	form, _ = updateDependencyFormState(key("l"), form, []ui.Stack{stackA, stackB})
-	form, _ = updateDependencyFormState(key("h"), form, []ui.Stack{stackA, stackB})
+	form, _ = updateDependencyFormState(key("l"), form, []ui.Stack{stackA, stackB}, []ui.Source{sourceA, sourceB})
+	form, _ = updateDependencyFormState(key("h"), form, []ui.Stack{stackA, stackB}, []ui.Source{sourceA, sourceB})
 	if form.Name != "lh" {
 		t.Fatalf("name = %q, want lh", form.Name)
 	}
@@ -299,7 +337,7 @@ func TestDependencyFormHLInputAndPicker(t *testing.T) {
 	}
 
 	form.Focus = ui.DependencyFormFieldStack
-	form, _ = updateDependencyFormState(key("l"), form, []ui.Stack{stackA, stackB})
+	form, _ = updateDependencyFormState(key("l"), form, []ui.Stack{stackA, stackB}, []ui.Source{sourceA, sourceB})
 	if form.StackID != stackB.ID {
 		t.Fatalf("stack = %d, want %d", form.StackID, stackB.ID)
 	}
@@ -1044,6 +1082,50 @@ func TestCreatePolicyValueFromForm(t *testing.T) {
 	}
 	if updated.policyValues[0].Version != "1.2.3" {
 		t.Fatalf("policy value version = %q, want 1.2.3", updated.policyValues[0].Version)
+	}
+}
+
+func TestPolicyValueFormUpdateUsesSelectedRegistry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/react" {
+			t.Fatalf("path = %q, want /react", r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(`{"versions":{"1.9.0":{},"2.0.0-rc.1":{},"1.10.0":{}}}`))
+	}))
+	defer server.Close()
+
+	dependency := ui.Dependency{
+		ID:           1,
+		Name:         "React",
+		RegistryName: "react",
+	}
+	source := ui.Source{
+		ID:           2,
+		Name:         "npm",
+		URL:          server.URL,
+		Type:         storage.SourceTypeRegistry,
+		RegistryKind: "npm",
+	}
+	m := newModel(nil)
+	m.policyValueForm = normalizePolicyValueForm(ui.PolicyValueForm{
+		Open:         true,
+		PolicyID:     1,
+		DependencyID: dependency.ID,
+		RegistryID:   source.ID,
+		Version:      "1.9.0",
+	}, []ui.Dependency{dependency}, []ui.Source{source})
+	m.dependencies = []ui.Dependency{dependency}
+	m.sources = []ui.Source{source}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	if cmd == nil {
+		t.Fatal("expected latest version command")
+	}
+
+	next, _ = next.(model).Update(cmd().(policyValueLatestLoadedMsg))
+	updated := next.(model)
+	if updated.policyValueForm.Version != "1.10.0" {
+		t.Fatalf("version = %q, want 1.10.0", updated.policyValueForm.Version)
 	}
 }
 

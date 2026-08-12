@@ -44,6 +44,8 @@ const (
 	SymbolCheckUnknown   = ""
 )
 
+const SymbolCheckNotApplicable = "—"
+
 const (
 	SymbolReleases             = ""
 	SymbolRocket               = ""

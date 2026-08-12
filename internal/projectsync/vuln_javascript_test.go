@@ -1,6 +1,9 @@
 package projectsync
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestParseNpmAudit(t *testing.T) {
 	output := []byte(`{
@@ -54,11 +57,32 @@ func TestParseNpmAudit(t *testing.T) {
 }
 
 func TestResolveVulnStrategyJavaScript(t *testing.T) {
-	strategy, err := ResolveVulnStrategy("JavaScript")
+	strategy, err := ResolveVulnStrategy("JavaScript", VulnScanModeDev)
 	if err != nil {
 		t.Fatalf("resolve strategy: %v", err)
 	}
-	if _, ok := strategy.(JavaScriptVulnStrategy); !ok {
+	javascript, ok := strategy.(JavaScriptVulnStrategy)
+	if !ok {
 		t.Fatalf("strategy = %T, want JavaScriptVulnStrategy", strategy)
+	}
+	if javascript.Mode != VulnScanModeDev {
+		t.Fatalf("mode = %q, want %q", javascript.Mode, VulnScanModeDev)
+	}
+}
+
+func TestNpmAuditArgsOmitDevDependenciesInProd(t *testing.T) {
+	prod := npmAuditArgs(VulnScanModeProd)
+	if !slices.Equal(prod, []string{"audit", "--omit=dev", "--json"}) {
+		t.Fatalf("prod args = %v", prod)
+	}
+
+	dev := npmAuditArgs(VulnScanModeDev)
+	if !slices.Equal(dev, []string{"audit", "--json"}) {
+		t.Fatalf("dev args = %v", dev)
+	}
+
+	defaultMode := npmAuditArgs("")
+	if !slices.Equal(defaultMode, prod) {
+		t.Fatalf("default args = %v, want prod args %v", defaultMode, prod)
 	}
 }

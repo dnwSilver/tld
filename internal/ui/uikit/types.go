@@ -33,22 +33,26 @@ type Namespace struct {
 }
 
 type Dependency struct {
-	ID        int64
-	StackID   int64
-	StackName string
-	Icon      string
-	Name      string
-	Color     string
+	ID                 int64
+	StackID            int64
+	StackName          string
+	Icon               string
+	Name               string
+	Color              string
+	RegistryName       string
+	RegistryID         int64
+	RegistrySourceName string
 }
 
 type Source struct {
-	ID       int64
-	Icon     string
-	Name     string
-	Color    string
-	PATToken string
-	URL      string
-	Type     string
+	ID           int64
+	Icon         string
+	Name         string
+	Color        string
+	PATToken     string
+	URL          string
+	Type         string
+	RegistryKind string
 }
 
 type Project struct {
@@ -134,13 +138,18 @@ type Policy struct {
 }
 
 type PolicyValue struct {
-	ID              int64
-	PolicyID        int64
-	DependencyID    int64
-	DependencyIcon  string
-	DependencyName  string
-	DependencyColor string
-	Version         string
+	ID                 int64
+	PolicyID           int64
+	DependencyID       int64
+	DependencyIcon     string
+	DependencyName     string
+	DependencyColor    string
+	StackID            int64
+	StackName          string
+	RegistryName       string
+	RegistryID         int64
+	RegistrySourceName string
+	Version            string
 }
 
 type PolicyPane int
@@ -186,6 +195,8 @@ const (
 	DependencyFormFieldIcon DependencyFormField = iota
 	DependencyFormFieldColor
 	DependencyFormFieldName
+	DependencyFormFieldRegistry
+	DependencyFormFieldPackage
 	DependencyFormFieldStack
 )
 
@@ -198,6 +209,8 @@ type DependencyForm struct {
 	Icon         string
 	Color        string
 	Name         string
+	RegistryName string
+	RegistryID   int64
 	CanSave      bool
 	Error        string
 }
@@ -209,19 +222,21 @@ const (
 	SourceFormFieldURL
 	SourceFormFieldPATToken
 	SourceFormFieldType
+	SourceFormFieldRegistryKind
 )
 
 type SourceForm struct {
-	Open     bool
-	Mode     StackFormMode
-	SourceID int64
-	Focus    SourceFormField
-	Name     string
-	URL      string
-	PATToken string
-	Type     string
-	CanSave  bool
-	Error    string
+	Open         bool
+	Mode         StackFormMode
+	SourceID     int64
+	Focus        SourceFormField
+	Name         string
+	URL          string
+	PATToken     string
+	Type         string
+	RegistryKind string
+	CanSave      bool
+	Error        string
 }
 
 type ProjectFormField int
@@ -278,6 +293,7 @@ type PolicyValueFormField int
 
 const (
 	PolicyValueFormFieldDependency PolicyValueFormField = iota
+	PolicyValueFormFieldRegistry
 	PolicyValueFormFieldVersion
 )
 
@@ -287,10 +303,29 @@ type PolicyValueForm struct {
 	PolicyValueID int64
 	PolicyID      int64
 	DependencyID  int64
+	RegistryID    int64
 	Focus         PolicyValueFormField
 	Version       string
 	CanSave       bool
+	CanUpdate     bool
 	Error         string
+}
+
+type PolicyUpdateFormField int
+
+const (
+	PolicyUpdateFormFieldStack PolicyUpdateFormField = iota
+	PolicyUpdateFormFieldRegistry
+)
+
+type PolicyUpdateForm struct {
+	Open       bool
+	PolicyID   int64
+	StackID    int64
+	RegistryID int64
+	Focus      PolicyUpdateFormField
+	CanStart   bool
+	Error      string
 }
 
 type DeleteConfirm struct {
@@ -308,9 +343,10 @@ type ProjectCheck struct {
 type CheckState string
 
 const (
-	CheckStateUnknown CheckState = "unknown"
-	CheckStatePass    CheckState = "pass"
-	CheckStateFail    CheckState = "fail"
+	CheckStateUnknown       CheckState = "unknown"
+	CheckStatePass          CheckState = "pass"
+	CheckStateFail          CheckState = "fail"
+	CheckStateNotApplicable CheckState = "not-applicable"
 )
 
 type ProjectCheckRow struct {
@@ -321,6 +357,7 @@ type ProjectCheckRow struct {
 	ProjectFreezing  bool
 	ProjectEndOfLife bool
 	Results          map[string]CheckState
+	Versions         map[string]string
 }
 
 type SettingsStatus struct {
@@ -424,6 +461,27 @@ type VulnProjectRow struct {
 	ProjectEndOfLife bool
 	Scanned          bool
 	Counts           VulnCounts
+}
+
+type VulnMode int
+
+const (
+	VulnModeProd VulnMode = iota
+	VulnModeDev
+)
+
+func (m VulnMode) Title() string {
+	if m == VulnModeDev {
+		return "dev"
+	}
+	return "prod"
+}
+
+func (m VulnMode) Next() VulnMode {
+	if m == VulnModeProd {
+		return VulnModeDev
+	}
+	return VulnModeProd
 }
 
 type VulnPane int

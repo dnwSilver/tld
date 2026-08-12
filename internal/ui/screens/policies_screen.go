@@ -13,11 +13,13 @@ type PoliciesScreen struct {
 }
 
 const (
-	policyFormLabelWidth   = 9
-	policyFormValueWidth   = 28
-	policyNameColumnWidth  = 22
-	policyDepColumnWidth   = 40
-	policyValueColumnWidth = 14
+	policyFormLabelWidth      = 9
+	policyFormValueWidth      = 28
+	policyNameColumnWidth     = 22
+	policyDepColumnWidth      = 36
+	policyRegistryColumnWidth = 12
+	policyValueColumnWidth    = 14
+	policyColumnGap           = 2
 )
 
 func NewPoliciesScreen(palette uikit.Palette) PoliciesScreen {
@@ -34,14 +36,18 @@ func (s PoliciesScreen) Render(
 	focus uikit.PolicyPane,
 	namespaces []uikit.Namespace,
 	dependencies []uikit.Dependency,
+	stacks []uikit.Stack,
+	sources []uikit.Source,
 	policyForm uikit.PolicyForm,
 	valueForm uikit.PolicyValueForm,
+	updateForm uikit.PolicyUpdateForm,
+	updateStatus uikit.SettingsStatus,
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
 	hasPolicy := selectedPolicyID != 0
-	modalOpen := policyForm.Open || valueForm.Open || deleteConfirm.Open
+	modalOpen := policyForm.Open || valueForm.Open || updateForm.Open || deleteConfirm.Open
 	leftTotalWidth := uikit.Max(width, 2)
 	rightTotalWidth := 0
 	if hasPolicy {
@@ -67,13 +73,19 @@ func (s PoliciesScreen) Render(
 		lines = s.overlay(lines, width, boxHeight, s.policyModal(width, namespaces, policyForm))
 	}
 	if valueForm.Open {
-		lines = s.overlay(lines, width, boxHeight, s.valueModal(width, dependencies, valueForm))
+		lines = s.overlay(lines, width, boxHeight, s.valueModal(width, dependencies, sources, valueForm))
+	}
+	if updateForm.Open {
+		lines = s.overlay(lines, width, boxHeight, s.updateModal(width, stacks, sources, updateForm))
 	}
 	if deleteConfirm.Open {
 		lines = s.overlay(lines, width, boxHeight, s.deleteConfirmModal(width, focus, deleteConfirm))
 	}
 
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
+	if updateStatus.Message != "" || updateStatus.Error != "" {
+		footer = components.RenderProgress(s.palette, width, uikit.SymbolDependency, updateStatus.Message, updateStatus.Error, updateStatus.Running, updateStatus.Current, updateStatus.Total)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, strings.Join(lines, uikit.SymbolLineBreak), footer)
 }
 
@@ -132,6 +144,9 @@ func (s PoliciesScreen) policyRow(width int, policy uikit.Policy, selected bool)
 func (s PoliciesScreen) valuesHeader(width int) string {
 	return components.RenderTableRow(s.palette, s.palette.Background, width, []components.TableCell{
 		{Value: "dependency", Width: policyDepColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "", Width: policyColumnGap, Foreground: s.palette.Hint},
+		{Value: "registry", Width: policyRegistryColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		{Value: "", Width: policyColumnGap, Foreground: s.palette.Hint},
 		{Value: "version", Width: policyValueColumnWidth, Foreground: s.palette.Hint, Bold: true},
 	})
 }
@@ -144,6 +159,9 @@ func (s PoliciesScreen) valueRow(width int, value uikit.PolicyValue, selected bo
 	color := lipgloss.Color(uikit.NormalizeHexColor(value.DependencyColor))
 	return components.RenderTableRow(s.palette, background, width, []components.TableCell{
 		{Value: s.policyValueDependency(value, background, color), Width: policyDepColumnWidth, Foreground: s.palette.Text},
+		{Value: "", Width: policyColumnGap, Foreground: s.palette.Text},
+		{Value: policyValueRegistryName(value), Width: policyRegistryColumnWidth, Foreground: s.palette.Info},
+		{Value: "", Width: policyColumnGap, Foreground: s.palette.Text},
 		{Value: value.Version, Width: policyValueColumnWidth, Foreground: s.palette.Text},
 	})
 }
@@ -178,7 +196,7 @@ func (s PoliciesScreen) policyModal(width int, namespaces []uikit.Namespace, for
 	return modal.Render(contentWidth, modal.Title(uikit.SymbolPolicy+" "+action+" policy"), rows)
 }
 
-func (s PoliciesScreen) valueModal(width int, dependencies []uikit.Dependency, form uikit.PolicyValueForm) string {
+func (s PoliciesScreen) valueModal(width int, dependencies []uikit.Dependency, sources []uikit.Source, form uikit.PolicyValueForm) string {
 	modalWidth := uikit.Min(uikit.Max(width-6, 40), 64)
 	contentWidth := uikit.Max(modalWidth-2, 1)
 	modal := components.NewModal(s.palette, s.palette.Primary)
@@ -188,11 +206,25 @@ func (s PoliciesScreen) valueModal(width int, dependencies []uikit.Dependency, f
 	}
 	rows := []string{
 		modal.CenterLine(contentWidth, s.inputLine("Dep", s.dependencyName(dependencies, form.DependencyID), form.Focus == uikit.PolicyValueFormFieldDependency)),
+		modal.CenterLine(contentWidth, s.inputLine("Registry", s.registryName(sources, form.RegistryID), form.Focus == uikit.PolicyValueFormFieldRegistry)),
 		modal.CenterLine(contentWidth, s.inputLine("Version", form.Version, form.Focus == uikit.PolicyValueFormFieldVersion)),
 		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
-		modal.CenterLine(contentWidth, s.actionsLine(form.CanSave, form.Focus == uikit.PolicyValueFormFieldDependency, uikit.KeyDependencyPick.Hint)),
+		modal.CenterLine(contentWidth, s.policyValueActionsLine(form)),
 	}
 	return modal.Render(contentWidth, modal.Title(uikit.SymbolDependency+" "+action+" pinned dep"), rows)
+}
+
+func (s PoliciesScreen) updateModal(width int, stacks []uikit.Stack, sources []uikit.Source, form uikit.PolicyUpdateForm) string {
+	modalWidth := uikit.Min(uikit.Max(width-6, 42), 66)
+	contentWidth := uikit.Max(modalWidth-2, 1)
+	modal := components.NewModal(s.palette, s.palette.Primary)
+	rows := []string{
+		modal.CenterLine(contentWidth, s.inputLine("Stack", s.stackName(stacks, form.StackID), form.Focus == uikit.PolicyUpdateFormFieldStack)),
+		modal.CenterLine(contentWidth, s.inputLine("Registry", s.registryName(sources, form.RegistryID), form.Focus == uikit.PolicyUpdateFormFieldRegistry)),
+		modal.CenterLine(contentWidth, modal.Text(s.palette.Error, form.Error)),
+		modal.CenterLine(contentWidth, s.actionsLine(form.CanStart, true, s.policyUpdatePickHint(form.Focus))),
+	}
+	return modal.Render(contentWidth, modal.Title(uikit.SymbolDependency+" Update pinned deps"), rows)
 }
 
 func (s PoliciesScreen) inputLine(label, value string, focused bool) string {
@@ -216,6 +248,29 @@ func (s PoliciesScreen) actionsLine(canSave bool, pickFocused bool, pickHint str
 	}
 	if pickFocused {
 		actions = append(actions, components.Action{Hint: pickHint, Color: s.palette.Hint})
+	}
+	return components.RenderActions(s.palette, actions)
+}
+
+func (s PoliciesScreen) policyValueActionsLine(form uikit.PolicyValueForm) string {
+	saveColor := s.palette.Disable
+	if form.CanSave {
+		saveColor = s.palette.Primary
+	}
+	updateColor := s.palette.Disable
+	if form.CanUpdate {
+		updateColor = s.palette.Primary
+	}
+	actions := []components.Action{
+		{Hint: uikit.KeyCancel.Hint, Color: s.palette.Primary},
+		{Hint: uikit.KeySave.Hint, Color: saveColor},
+		{Hint: uikit.KeyUpdatePins.Hint, Color: updateColor},
+	}
+	if form.Focus == uikit.PolicyValueFormFieldDependency {
+		actions = append(actions, components.Action{Hint: uikit.KeyDependencyPick.Hint, Color: s.palette.Hint})
+	}
+	if form.Focus == uikit.PolicyValueFormFieldRegistry {
+		actions = append(actions, components.Action{Hint: uikit.KeyRegistryPick.Hint, Color: s.palette.Hint})
 	}
 	return components.RenderActions(s.palette, actions)
 }
@@ -266,6 +321,47 @@ func (s PoliciesScreen) dependencyName(dependencies []uikit.Dependency, id int64
 		return "No deps"
 	}
 	return ""
+}
+
+func (s PoliciesScreen) stackName(stacks []uikit.Stack, id int64) string {
+	for _, stack := range stacks {
+		if stack.ID == id {
+			return stack.Name
+		}
+	}
+	if len(stacks) == 0 {
+		return "No stacks"
+	}
+	return ""
+}
+
+func (s PoliciesScreen) registryName(sources []uikit.Source, id int64) string {
+	for _, source := range sources {
+		if source.ID == id {
+			if source.RegistryKind != "" {
+				return source.Name + " (" + source.RegistryKind + ")"
+			}
+			return source.Name
+		}
+	}
+	if len(sources) == 0 {
+		return "No registries"
+	}
+	return ""
+}
+
+func (s PoliciesScreen) policyUpdatePickHint(field uikit.PolicyUpdateFormField) string {
+	if field == uikit.PolicyUpdateFormFieldStack {
+		return uikit.KeyStackPick.Hint
+	}
+	return uikit.KeyRegistryPick.Hint
+}
+
+func policyValueRegistryName(value uikit.PolicyValue) string {
+	if value.RegistrySourceName == "" {
+		return "-"
+	}
+	return value.RegistrySourceName
 }
 
 func fillLines(palette uikit.Palette, lines []string, width, height int) string {

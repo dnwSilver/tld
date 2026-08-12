@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 12
+const currentSchemaVersion = 14
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -92,6 +92,16 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 12 {
 		if err := migrateV12(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 13 {
+		if err := migrateV13(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 14 {
+		if err := migrateV14(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -637,5 +647,56 @@ func migrateV12(ctx context.Context, tx *sql.Tx) error {
 		return fmt.Errorf("apply schema v12: %w", err)
 	}
 
+	return nil
+}
+
+func migrateV13(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		"PRAGMA defer_foreign_keys = ON",
+		"ALTER TABLE projects RENAME TO projects_v12",
+		"ALTER TABLE sources RENAME TO sources_v12",
+		`CREATE TABLE sources (id INTEGER PRIMARY KEY AUTOINCREMENT, icon TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, pat_token TEXT NOT NULL, url TEXT NOT NULL, type TEXT NOT NULL, registry_kind TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), UNIQUE (name), CHECK (type IN ('gitlab', 'github', 'gitea', 'bitbucket', 'registry')))`,
+		`INSERT INTO sources (id, icon, name, color, pat_token, url, type, registry_kind, created_at, updated_at) SELECT id, icon, name, color, pat_token, url, type, '', created_at, updated_at FROM sources_v12`,
+		`CREATE TABLE projects (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL, namespace_id INTEGER NOT NULL, source_id INTEGER NOT NULL, stack_id INTEGER NOT NULL, icon TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), freezing INTEGER NOT NULL DEFAULT 0, endoflife INTEGER NOT NULL DEFAULT 0, UNIQUE (namespace_id, name), FOREIGN KEY (namespace_id) REFERENCES namespaces (id) ON UPDATE CASCADE ON DELETE RESTRICT, FOREIGN KEY (source_id) REFERENCES sources (id) ON UPDATE CASCADE ON DELETE RESTRICT, FOREIGN KEY (stack_id) REFERENCES stacks (id) ON UPDATE CASCADE ON DELETE RESTRICT)`,
+		`INSERT INTO projects (id, project_id, namespace_id, source_id, stack_id, icon, name, color, created_at, updated_at, freezing, endoflife) SELECT id, project_id, namespace_id, source_id, stack_id, icon, name, color, created_at, updated_at, freezing, endoflife FROM projects_v12`,
+		`CREATE TABLE project_dependency_runs_v13 (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, commit_short_sha TEXT NOT NULL, commit_sha TEXT NOT NULL, status TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), UNIQUE (project_id, commit_short_sha), FOREIGN KEY (project_id) REFERENCES projects (id) ON UPDATE CASCADE ON DELETE CASCADE)`,
+		`INSERT INTO project_dependency_runs_v13 SELECT id, project_id, commit_short_sha, commit_sha, status, started_at, finished_at, error, created_at, updated_at FROM project_dependency_runs`,
+		`CREATE TABLE project_dependencies_v13 (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, run_id INTEGER NOT NULL, name TEXT NOT NULL, version TEXT NOT NULL, dependency_type TEXT NOT NULL, source_file TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)), FOREIGN KEY (project_id) REFERENCES projects (id) ON UPDATE CASCADE ON DELETE CASCADE, FOREIGN KEY (run_id) REFERENCES project_dependency_runs_v13 (id) ON UPDATE CASCADE ON DELETE CASCADE)`,
+		`INSERT INTO project_dependencies_v13 SELECT id, project_id, run_id, name, version, dependency_type, source_file, created_at, updated_at FROM project_dependencies`,
+		"ALTER TABLE dependencies ADD COLUMN registry_name TEXT NOT NULL DEFAULT ''",
+		"UPDATE dependencies SET registry_name = name WHERE registry_name = ''",
+		"DROP TABLE project_dependencies",
+		"DROP TABLE project_dependency_runs",
+		"DROP TABLE projects_v12",
+		"DROP TABLE sources_v12",
+		"ALTER TABLE project_dependency_runs_v13 RENAME TO project_dependency_runs",
+		"ALTER TABLE project_dependencies_v13 RENAME TO project_dependencies",
+		"CREATE INDEX IF NOT EXISTS idx_projects_namespace_id ON projects (namespace_id)",
+		"CREATE INDEX IF NOT EXISTS idx_projects_source_id ON projects (source_id)",
+		"CREATE INDEX IF NOT EXISTS idx_projects_stack_id ON projects (stack_id)",
+		"CREATE INDEX IF NOT EXISTS idx_project_dependency_runs_project_id ON project_dependency_runs (project_id)",
+		"CREATE INDEX IF NOT EXISTS idx_project_dependencies_project_id ON project_dependencies (project_id)",
+		"CREATE INDEX IF NOT EXISTS idx_project_dependencies_run_id ON project_dependencies (run_id)",
+		"CREATE INDEX IF NOT EXISTS idx_project_dependencies_project_name ON project_dependencies (project_id, name)",
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (13)",
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v13: %w", err)
+		}
+	}
+	return nil
+}
+
+func migrateV14(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		"ALTER TABLE dependencies ADD COLUMN registry_source_id INTEGER NOT NULL DEFAULT 0",
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (14)",
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v14: %w", err)
+		}
+	}
 	return nil
 }

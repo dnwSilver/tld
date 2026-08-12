@@ -32,6 +32,7 @@ func (m model) loadVulnerabilities() tea.Cmd {
 	projects := activeProjects(m.projects)
 	sources := m.sources
 	selectedProjectID := m.selectedVulnProjectID
+	mode := projectsync.VulnScanMode(m.vulnMode.Title())
 	return func() tea.Msg {
 		if m.store == nil {
 			return vulnsLoadedMsg{rows: []ui.VulnProjectRow{}, items: []ui.VulnerabilityItem{}}
@@ -55,7 +56,10 @@ func (m model) loadVulnerabilities() tea.Cmd {
 				continue
 			}
 
-			service := projectsync.VulnScanService{Cache: cache}
+			service := projectsync.VulnScanService{
+				Cache: cache,
+				Mode:  mode,
+			}
 			report, err := service.LoadProject(context.Background(), projectsync.Source{Type: source.Type}, projectsync.Project{
 				ProviderID: project.ProjectID,
 				StackName:  project.StackName,
@@ -87,7 +91,8 @@ func (m model) startVulnsRefresh(projects []ui.Project) (tea.Model, tea.Cmd) {
 		Running: true,
 	}
 
-	return m, tea.Batch(runVulnsRefresh(m.store, projects, m.sources, ch), waitVulnSync(ch))
+	mode := projectsync.VulnScanMode(m.vulnMode.Title())
+	return m, tea.Batch(runVulnsRefresh(m.store, projects, m.sources, mode, ch), waitVulnSync(ch))
 }
 
 func (m model) selectedVulnProjects() []ui.Project {
@@ -97,7 +102,13 @@ func (m model) selectedVulnProjects() []ui.Project {
 	return nil
 }
 
-func runVulnsRefresh(store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- vulnSyncMsg) tea.Cmd {
+func runVulnsRefresh(
+	store *storage.Store,
+	projects []ui.Project,
+	sources []ui.Source,
+	mode projectsync.VulnScanMode,
+	ch chan<- vulnSyncMsg,
+) tea.Cmd {
 	return func() tea.Msg {
 		defer close(ch)
 		if store == nil {
@@ -108,7 +119,7 @@ func runVulnsRefresh(store *storage.Store, projects []ui.Project, sources []ui.S
 		cache := store.Cache()
 		total := len(projects)
 		for index, project := range projects {
-			if _, err := projectsync.ResolveVulnStrategy(project.StackName); err != nil {
+			if _, err := projectsync.ResolveVulnStrategy(project.StackName, mode); err != nil {
 				ch <- vulnSyncMsg{message: fmt.Sprintf("Skipping %s: %s", project.Name, err.Error()), current: index, total: total}
 				continue
 			}
@@ -128,6 +139,7 @@ func runVulnsRefresh(store *storage.Store, projects []ui.Project, sources []ui.S
 			service := projectsync.VulnScanService{
 				Cache:        cache,
 				SourceClient: client,
+				Mode:         mode,
 			}
 			_, err = service.RunProject(context.Background(), projectsync.Source{
 				ID:       source.ID,

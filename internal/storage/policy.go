@@ -21,15 +21,20 @@ type Policy struct {
 }
 
 type PolicyValue struct {
-	ID              int64
-	PolicyID        int64
-	DependencyID    int64
-	DependencyIcon  string
-	DependencyName  string
-	DependencyColor string
-	Version         string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                 int64
+	PolicyID           int64
+	DependencyID       int64
+	DependencyIcon     string
+	DependencyName     string
+	DependencyColor    string
+	StackID            int64
+	StackName          string
+	RegistryName       string
+	RegistrySourceID   int64
+	RegistrySourceName string
+	Version            string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 func (r PolicyRepository) List(ctx context.Context) ([]Policy, error) {
@@ -207,9 +212,11 @@ func (r PolicyRepository) ListValues(ctx context.Context, policyID int64) ([]Pol
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT pv.id, pv.policy_id, pv.dependency_id, d.icon, d.name, d.color, pv.version, pv.created_at, pv.updated_at
+		SELECT pv.id, pv.policy_id, pv.dependency_id, d.stack_id, s.name, d.icon, d.name, d.color, d.registry_name, d.registry_source_id, COALESCE(src.name, ''), pv.version, pv.created_at, pv.updated_at
 		FROM policy_values pv
 		JOIN dependencies d ON d.id = pv.dependency_id
+		JOIN stacks s ON s.id = d.stack_id
+		LEFT JOIN sources src ON src.id = d.registry_source_id AND src.type = 'registry'
 		WHERE pv.policy_id = ?
 		ORDER BY d.name ASC
 	`, policyID)
@@ -229,9 +236,14 @@ func (r PolicyRepository) ListValues(ctx context.Context, policyID int64) ([]Pol
 			&value.ID,
 			&value.PolicyID,
 			&value.DependencyID,
+			&value.StackID,
+			&value.StackName,
 			&value.DependencyIcon,
 			&value.DependencyName,
 			&value.DependencyColor,
+			&value.RegistryName,
+			&value.RegistrySourceID,
+			&value.RegistrySourceName,
 			&value.Version,
 			&createdAt,
 			&updatedAt,
@@ -247,6 +259,41 @@ func (r PolicyRepository) ListValues(ctx context.Context, policyID int64) ([]Pol
 	}
 
 	return values, nil
+}
+
+func (r PolicyRepository) ListValuesByStack(ctx context.Context, policyID int64, stackID int64) ([]PolicyValue, error) {
+	values, err := r.ListValues(ctx, policyID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]PolicyValue, 0, len(values))
+	for _, value := range values {
+		if value.StackID == stackID {
+			filtered = append(filtered, value)
+		}
+	}
+	return filtered, nil
+}
+
+func (r PolicyRepository) UpdateValueVersion(ctx context.Context, id int64, version string) error {
+	if id == 0 {
+		return errors.New("policy value id is empty")
+	}
+	if version == "" {
+		return errors.New("policy value version is empty")
+	}
+	result, err := r.db.ExecContext(ctx, `UPDATE policy_values SET version = ?, updated_at = ? WHERE id = ?`, version, time.Now().Unix(), id)
+	if err != nil {
+		return fmt.Errorf("update policy value version: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read updated policy values count: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r PolicyRepository) CreateValue(ctx context.Context, policyID int64, dependencyID int64, version string) (PolicyValue, error) {

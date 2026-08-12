@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dnwSilver/tld/internal/projectsync"
+	"github.com/dnwSilver/tld/internal/registry"
 	"github.com/dnwSilver/tld/internal/storage"
 	"github.com/dnwSilver/tld/internal/ui"
 )
@@ -39,6 +41,8 @@ type model struct {
 	policyValues             []ui.PolicyValue
 	selectedPolicyValueID    int64
 	policyFocus              ui.PolicyPane
+	policyUpdateForm         ui.PolicyUpdateForm
+	policyUpdateStatus       ui.SettingsStatus
 	dependencyView           ui.DependencyView
 	viewStackID              int64
 	selectedViewProjectID    int64
@@ -71,6 +75,7 @@ type model struct {
 	selectedVulnProjectID    int64
 	selectedVulnItemIndex    int
 	vulnFocus                ui.VulnPane
+	vulnMode                 ui.VulnMode
 	vulnsStatus              ui.SettingsStatus
 	vulnsSyncCh              <-chan vulnSyncMsg
 	navModalOpen             bool
@@ -204,6 +209,18 @@ type policyValueDeletedMsg struct {
 	err     error
 }
 
+type policyPinsUpdatedMsg struct {
+	checked  int
+	updated  int
+	failures []string
+	err      error
+}
+
+type policyValueLatestLoadedMsg struct {
+	version string
+	err     error
+}
+
 func newModel(store *storage.Store) model {
 	return model{
 		creator:      ui.NewCreator(),
@@ -265,6 +282,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.policyValueForm.Open {
 			return m.updatePolicyValueForm(msg)
+		}
+		if m.policyUpdateForm.Open {
+			return m.updatePolicyUpdateForm(msg)
 		}
 		if m.namespaceForm.Open {
 			return m.updateNamespaceForm(msg)
@@ -337,6 +357,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.startReleasesRefresh(activeProjects(m.projects))
 			case ui.ScreenVulnerabilities:
 				return m.startVulnsRefresh(activeProjects(m.projects))
+			}
+		case ui.KeyVulnMode.Matches(key):
+			if m.screen == ui.ScreenVulnerabilities && !m.vulnsStatus.Running {
+				m.vulnMode = m.vulnMode.Next()
+				m.selectedVulnItemIndex = 0
+				return m, m.loadVulnerabilities()
+			}
+		case ui.KeyUpdatePins.Matches(key):
+			if m.screen == ui.ScreenPolicies && !m.policyUpdateStatus.Running {
+				if m.policyFocus == ui.PolicyPaneValues {
+					return m.startSelectedPolicyValueUpdate()
+				}
 			}
 		case ui.KeyPrev.Matches(key):
 			if m.screen == ui.ScreenView {
@@ -529,6 +561,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadPolicyValues()
 		}
 		m.policyValueForm.Error = msg.err.Error()
+	case policyValueLatestLoadedMsg:
+		m.err = msg.err
+		if msg.err != nil {
+			m.policyValueForm.Error = msg.err.Error()
+			return m, nil
+		}
+		m.policyValueForm.Version = msg.version
+		m.policyValueForm.Error = ""
 	case stackDeletedMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -601,6 +641,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadPolicyValues()
 		}
 		m.policyDeleteConfirm.Error = msg.err.Error()
+	case policyPinsUpdatedMsg:
+		m.policyUpdateStatus.Running = false
+		m.policyUpdateStatus.Current = msg.checked
+		m.policyUpdateStatus.Total = msg.checked
+		if msg.err != nil {
+			m.err = msg.err
+			m.policyUpdateStatus.Message = "Pins update failed"
+			m.policyUpdateStatus.Error = msg.err.Error()
+			return m, m.loadPolicyValues()
+		}
+		m.policyUpdateStatus.Message = fmt.Sprintf("Updated %d of %d pins", msg.updated, msg.checked)
+		m.policyUpdateStatus.Error = strings.Join(msg.failures, "; ")
+		return m, m.loadPolicyValues()
 	case projectChecksLoadedMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -757,6 +810,7 @@ func (m model) View() string {
 		m.policyValues,
 		m.selectedPolicyValueID,
 		m.policyFocus,
+		m.policyUpdateStatus,
 		m.dependencyView,
 		m.selectedViewProjectID,
 		m.viewColumnOffset,
@@ -773,6 +827,7 @@ func (m model) View() string {
 		m.vulnItems,
 		m.selectedVulnItemIndex,
 		m.vulnFocus,
+		m.vulnMode,
 		m.vulnsStatus,
 		m.form,
 		m.namespaceForm,
@@ -781,6 +836,7 @@ func (m model) View() string {
 		m.sourceForm,
 		m.policyForm,
 		m.policyValueForm,
+		m.policyUpdateForm,
 		m.deleteConfirm,
 		m.namespaceDeleteConfirm,
 		m.dependencyDeleteConfirm,
@@ -881,13 +937,13 @@ func (m model) finishStackFormAction(action stackFormAction, save func() tea.Cmd
 
 func (m model) updateDependencyForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action stackFormAction
-	m.dependencyForm, action = updateDependencyFormState(msg, m.dependencyForm, m.stacks)
+	m.dependencyForm, action = updateDependencyFormState(msg, m.dependencyForm, m.stacks, registryUISources(m.sources))
 	return m.finishStackFormAction(action, m.saveDependency)
 }
 
 func (m model) updateProjectForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action stackFormAction
-	m.projectForm, action = updateProjectFormState(msg, m.projectForm, m.namespaces, m.sources, m.stacks)
+	m.projectForm, action = updateProjectFormState(msg, m.projectForm, m.namespaces, vcsSources(m.sources), m.stacks)
 	return m.finishStackFormAction(action, m.saveProject)
 }
 
@@ -904,12 +960,42 @@ func (m model) updatePolicyForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updatePolicyValueForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if ui.KeyUpdatePins.Matches(msg.String()) {
+		if !m.policyValueForm.CanUpdate {
+			return m, nil
+		}
+		return m, m.loadPolicyValueLatest()
+	}
 	var action stackFormAction
-	m.policyValueForm, action = updatePolicyValueFormState(msg, m.policyValueForm, m.dependencies)
+	m.policyValueForm, action = updatePolicyValueFormState(msg, m.policyValueForm, m.dependencies, registryUISources(m.sources))
 	return m.finishStackFormAction(action, m.savePolicyValue)
 }
 
-func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []ui.Stack) (ui.DependencyForm, stackFormAction) {
+func (m model) updatePolicyUpdateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var action stackFormAction
+	m.policyUpdateForm, action = updatePolicyUpdateFormState(msg, m.policyUpdateForm, policyStacks(m.policyValues, m.stacks), registryUISources(m.sources))
+	switch action {
+	case stackFormActionQuit:
+		return m, tea.Quit
+	case stackFormActionSave:
+		form := m.policyUpdateForm
+		registrySource, ok := findByID(registryUISources(m.sources), form.RegistryID, sourceID)
+		if !ok {
+			m.policyUpdateForm.Error = "Add registry source first"
+			return m, nil
+		}
+		m.policyUpdateForm = ui.PolicyUpdateForm{}
+		m.policyUpdateStatus = ui.SettingsStatus{
+			Message: "Updating pinned deps",
+			Running: true,
+		}
+		return m, m.policyPinsUpdateCmd(form, registrySource)
+	default:
+		return m, nil
+	}
+}
+
+func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []ui.Stack, sources []ui.Source) (ui.DependencyForm, stackFormAction) {
 	switch {
 	case isQuitKey(msg):
 		return form, stackFormActionQuit
@@ -928,6 +1014,10 @@ func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []
 		form.StackID = previousStackID(stacks, form.StackID)
 	case form.Focus == ui.DependencyFormFieldStack && isOneOf(msg, "right", "l"):
 		form.StackID = nextStackID(stacks, form.StackID)
+	case form.Focus == ui.DependencyFormFieldRegistry && isOneOf(msg, "left", "h"):
+		form.RegistryID = previousSourceID(sources, form.RegistryID)
+	case form.Focus == ui.DependencyFormFieldRegistry && isOneOf(msg, "right", "l"):
+		form.RegistryID = nextSourceID(sources, form.RegistryID)
 	case isBackspaceKey(msg):
 		form = deleteDependencyFormRune(form)
 	default:
@@ -936,7 +1026,7 @@ func updateDependencyFormState(msg tea.KeyMsg, form ui.DependencyForm, stacks []
 		}
 	}
 
-	return normalizeDependencyForm(form, stacks), stackFormActionNone
+	return normalizeDependencyForm(form, stacks, sources), stackFormActionNone
 }
 
 func updateProjectFormState(msg tea.KeyMsg, form ui.ProjectForm, namespaces []ui.Namespace, sources []ui.Source, stacks []ui.Stack) (ui.ProjectForm, stackFormAction) {
@@ -1002,13 +1092,17 @@ func updateSourceFormState(msg tea.KeyMsg, form ui.SourceForm) (ui.SourceForm, s
 		}
 		return form, stackFormActionSave
 	case isOneOf(msg, "tab", "down"):
-		form.Focus = nextSourceFormField(form.Focus)
+		form.Focus = nextSourceFormFieldForForm(form)
 	case isOneOf(msg, "shift+tab", "up"):
-		form.Focus = previousSourceFormField(form.Focus)
+		form.Focus = previousSourceFormFieldForForm(form)
 	case form.Focus == ui.SourceFormFieldType && isOneOf(msg, "left", "h"):
 		form.Type = previousSourceType(form.Type)
 	case form.Focus == ui.SourceFormFieldType && isOneOf(msg, "right", "l"):
 		form.Type = nextSourceType(form.Type)
+	case form.Focus == ui.SourceFormFieldRegistryKind && isOneOf(msg, "left", "h"):
+		form.RegistryKind = previousRegistryKind(form.RegistryKind)
+	case form.Focus == ui.SourceFormFieldRegistryKind && isOneOf(msg, "right", "l"):
+		form.RegistryKind = nextRegistryKind(form.RegistryKind)
 	case isBackspaceKey(msg):
 		form = deleteSourceFormRune(form)
 	default:
@@ -1050,7 +1144,7 @@ func updatePolicyFormState(msg tea.KeyMsg, form ui.PolicyForm, namespaces []ui.N
 	return normalizePolicyForm(form, namespaces), stackFormActionNone
 }
 
-func updatePolicyValueFormState(msg tea.KeyMsg, form ui.PolicyValueForm, dependencies []ui.Dependency) (ui.PolicyValueForm, stackFormAction) {
+func updatePolicyValueFormState(msg tea.KeyMsg, form ui.PolicyValueForm, dependencies []ui.Dependency, sources []ui.Source) (ui.PolicyValueForm, stackFormAction) {
 	switch {
 	case isQuitKey(msg):
 		return form, stackFormActionQuit
@@ -1069,6 +1163,10 @@ func updatePolicyValueFormState(msg tea.KeyMsg, form ui.PolicyValueForm, depende
 		form.DependencyID = previousDependencyID(dependencies, form.DependencyID)
 	case form.Focus == ui.PolicyValueFormFieldDependency && isOneOf(msg, "right", "l"):
 		form.DependencyID = nextDependencyID(dependencies, form.DependencyID)
+	case form.Focus == ui.PolicyValueFormFieldRegistry && isOneOf(msg, "left", "h"):
+		form.RegistryID = previousSourceID(sources, form.RegistryID)
+	case form.Focus == ui.PolicyValueFormFieldRegistry && isOneOf(msg, "right", "l"):
+		form.RegistryID = nextSourceID(sources, form.RegistryID)
 	case isBackspaceKey(msg):
 		form = deletePolicyValueFormRune(form)
 	default:
@@ -1077,7 +1175,35 @@ func updatePolicyValueFormState(msg tea.KeyMsg, form ui.PolicyValueForm, depende
 		}
 	}
 
-	return normalizePolicyValueForm(form, dependencies), stackFormActionNone
+	return normalizePolicyValueForm(form, dependencies, sources), stackFormActionNone
+}
+
+func updatePolicyUpdateFormState(msg tea.KeyMsg, form ui.PolicyUpdateForm, stacks []ui.Stack, sources []ui.Source) (ui.PolicyUpdateForm, stackFormAction) {
+	switch {
+	case isQuitKey(msg):
+		return form, stackFormActionQuit
+	case isCancelKey(msg):
+		return ui.PolicyUpdateForm{}, stackFormActionNone
+	case isEnterKey(msg):
+		if !form.CanStart {
+			return form, stackFormActionNone
+		}
+		return form, stackFormActionSave
+	case isOneOf(msg, "tab", "down"):
+		form.Focus = nextPolicyUpdateFormField(form.Focus)
+	case isOneOf(msg, "shift+tab", "up"):
+		form.Focus = previousPolicyUpdateFormField(form.Focus)
+	case form.Focus == ui.PolicyUpdateFormFieldStack && isOneOf(msg, "left", "h"):
+		form.StackID = previousStackID(stacks, form.StackID)
+	case form.Focus == ui.PolicyUpdateFormFieldStack && isOneOf(msg, "right", "l"):
+		form.StackID = nextStackID(stacks, form.StackID)
+	case form.Focus == ui.PolicyUpdateFormFieldRegistry && isOneOf(msg, "left", "h"):
+		form.RegistryID = previousSourceID(sources, form.RegistryID)
+	case form.Focus == ui.PolicyUpdateFormFieldRegistry && isOneOf(msg, "right", "l"):
+		form.RegistryID = nextSourceID(sources, form.RegistryID)
+	}
+
+	return normalizePolicyUpdateForm(form, stacks, sources), stackFormActionNone
 }
 
 func (m model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1158,7 +1284,7 @@ func (m *model) openAddForm() {
 	case ui.ScreenNamespaces:
 		m.namespaceForm = newNamespaceForm(m.policies)
 	case ui.ScreenDependencies:
-		m.dependencyForm = newDependencyForm(m.stacks)
+		m.dependencyForm = newDependencyForm(m.stacks, m.sources)
 	case ui.ScreenProjects:
 		m.projectForm = newProjectForm(m.namespaces, m.sources, m.stacks)
 	case ui.ScreenSources:
@@ -1168,7 +1294,7 @@ func (m *model) openAddForm() {
 			if m.selectedPolicyID == 0 {
 				return
 			}
-			m.policyValueForm = newPolicyValueForm(m.selectedPolicyID, m.dependencies)
+			m.policyValueForm = newPolicyValueForm(m.selectedPolicyID, m.dependencies, m.sources)
 			return
 		}
 		m.policyForm = newPolicyForm(m.namespaces, m.policies)
@@ -1724,12 +1850,14 @@ func (m model) saveDependency() tea.Cmd {
 		icon := strings.TrimSpace(form.Icon)
 		name := strings.TrimSpace(form.Name)
 		color := strings.TrimSpace(form.Color)
+		registryName := strings.TrimSpace(form.RegistryName)
+		registrySourceID := form.RegistryID
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Dependencies().Update(context.Background(), form.DependencyID, form.StackID, icon, name, color)
+			err := m.store.Dependencies().UpdateWithRegistry(context.Background(), form.DependencyID, form.StackID, icon, name, color, registryName, registrySourceID)
 			return dependencySavedMsg{dependencyID: form.DependencyID, err: err}
 		}
 
-		dependency, err := m.store.Dependencies().Create(context.Background(), form.StackID, icon, name, color)
+		dependency, err := m.store.Dependencies().CreateWithRegistry(context.Background(), form.StackID, icon, name, color, registryName, registrySourceID)
 		return dependencySavedMsg{dependencyID: dependency.ID, err: err}
 	}
 }
@@ -1769,12 +1897,13 @@ func (m model) saveSource() tea.Cmd {
 		patToken := strings.TrimSpace(form.PATToken)
 		sourceURL := strings.TrimSpace(form.URL)
 		sourceType := strings.TrimSpace(form.Type)
+		registryKind := strings.TrimSpace(form.RegistryKind)
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Sources().Update(context.Background(), form.SourceID, name, patToken, sourceURL, sourceType)
+			err := m.store.Sources().UpdateWithRegistryKind(context.Background(), form.SourceID, name, patToken, sourceURL, sourceType, registryKind)
 			return sourceSavedMsg{sourceID: form.SourceID, err: err}
 		}
 
-		source, err := m.store.Sources().Create(context.Background(), name, patToken, sourceURL, sourceType)
+		source, err := m.store.Sources().CreateWithRegistryKind(context.Background(), name, patToken, sourceURL, sourceType, registryKind)
 		return sourceSavedMsg{sourceID: source.ID, err: err}
 	}
 }
@@ -1812,6 +1941,120 @@ func (m model) savePolicyValue() tea.Cmd {
 
 		value, err := m.store.Policies().CreateValue(context.Background(), form.PolicyID, form.DependencyID, version)
 		return policyValueSavedMsg{valueID: value.ID, err: err}
+	}
+}
+
+func (m model) policyPinsUpdateCmd(form ui.PolicyUpdateForm, registrySource ui.Source) tea.Cmd {
+	return func() tea.Msg {
+		if m.store == nil {
+			return policyPinsUpdatedMsg{}
+		}
+		values, err := m.store.Policies().ListValuesByStack(context.Background(), form.PolicyID, form.StackID)
+		if err != nil {
+			return policyPinsUpdatedMsg{err: err}
+		}
+		client := registry.Client{}
+		source := registry.Source{
+			URL:   registrySource.URL,
+			Token: registrySource.PATToken,
+			Kind:  registrySource.RegistryKind,
+		}
+		updated := 0
+		failures := make([]string, 0)
+		for _, value := range values {
+			latest, err := client.LatestStable(context.Background(), source, value.RegistryName)
+			if err != nil {
+				failures = append(failures, value.DependencyName+": "+err.Error())
+				continue
+			}
+			if latest == value.Version {
+				continue
+			}
+			if err := m.store.Policies().UpdateValueVersion(context.Background(), value.ID, latest); err != nil {
+				failures = append(failures, value.DependencyName+": "+err.Error())
+				continue
+			}
+			updated++
+		}
+		return policyPinsUpdatedMsg{checked: len(values), updated: updated, failures: failures}
+	}
+}
+
+func (m model) startSelectedPolicyValueUpdate() (tea.Model, tea.Cmd) {
+	value, ok := m.selectedPolicyValue()
+	if !ok {
+		return m, nil
+	}
+	if value.RegistryID == 0 {
+		m.policyUpdateStatus = ui.SettingsStatus{
+			Message: "Pin update failed",
+			Error:   value.DependencyName + ": registry is empty",
+		}
+		return m, nil
+	}
+	registrySource, ok := findByID(registryUISources(m.sources), value.RegistryID, sourceID)
+	if !ok {
+		m.policyUpdateStatus = ui.SettingsStatus{
+			Message: "Pin update failed",
+			Error:   value.DependencyName + ": registry not found",
+		}
+		return m, nil
+	}
+	m.policyUpdateStatus = ui.SettingsStatus{
+		Message: "Updating " + value.DependencyName,
+		Running: true,
+		Current: 0,
+		Total:   1,
+	}
+	return m, m.selectedPolicyValueUpdateCmd(value, registrySource)
+}
+
+func (m model) selectedPolicyValueUpdateCmd(value ui.PolicyValue, registrySource ui.Source) tea.Cmd {
+	return func() tea.Msg {
+		if m.store == nil {
+			return policyPinsUpdatedMsg{checked: 1}
+		}
+		client := registry.Client{}
+		latest, err := client.LatestStable(context.Background(), registry.Source{
+			URL:   registrySource.URL,
+			Token: registrySource.PATToken,
+			Kind:  registrySource.RegistryKind,
+		}, value.RegistryName)
+		if err != nil {
+			return policyPinsUpdatedMsg{checked: 1, err: fmt.Errorf("%s: %w", value.DependencyName, err)}
+		}
+		if latest == value.Version {
+			return policyPinsUpdatedMsg{checked: 1, updated: 0}
+		}
+		if err := m.store.Policies().UpdateValueVersion(context.Background(), value.ID, latest); err != nil {
+			return policyPinsUpdatedMsg{checked: 1, err: fmt.Errorf("%s: %w", value.DependencyName, err)}
+		}
+		return policyPinsUpdatedMsg{checked: 1, updated: 1}
+	}
+}
+
+func (m model) loadPolicyValueLatest() tea.Cmd {
+	form := m.policyValueForm
+	dependency, ok := findByID(m.dependencies, form.DependencyID, dependencyID)
+	if !ok {
+		return func() tea.Msg {
+			return policyValueLatestLoadedMsg{err: errors.New("dependency is empty")}
+		}
+	}
+	registrySource, ok := findByID(registryUISources(m.sources), form.RegistryID, sourceID)
+	if !ok {
+		return func() tea.Msg {
+			return policyValueLatestLoadedMsg{err: errors.New("registry is empty")}
+		}
+	}
+	return func() tea.Msg {
+		client := registry.Client{}
+		version, err := client.LatestStable(context.Background(), registry.Source{
+			URL:   registrySource.URL,
+			Token: registrySource.PATToken,
+			Kind:  registrySource.RegistryKind,
+		}, dependency.RegistryName)
+		return policyValueLatestLoadedMsg{version: version, err: err}
 	}
 }
 
@@ -1932,12 +2175,15 @@ func toUIDependencies(dependencies []storage.Dependency) []ui.Dependency {
 	result := make([]ui.Dependency, 0, len(dependencies))
 	for _, dependency := range dependencies {
 		result = append(result, ui.Dependency{
-			ID:        dependency.ID,
-			StackID:   dependency.StackID,
-			StackName: dependency.StackName,
-			Icon:      dependency.Icon,
-			Name:      dependency.Name,
-			Color:     dependency.Color,
+			ID:                 dependency.ID,
+			StackID:            dependency.StackID,
+			StackName:          dependency.StackName,
+			Icon:               dependency.Icon,
+			Name:               dependency.Name,
+			Color:              dependency.Color,
+			RegistryName:       dependency.RegistryName,
+			RegistryID:         dependency.RegistrySourceID,
+			RegistrySourceName: dependency.RegistrySourceName,
 		})
 	}
 
@@ -2007,13 +2253,14 @@ func toUISources(sources []storage.Source) []ui.Source {
 	result := make([]ui.Source, 0, len(sources))
 	for _, source := range sources {
 		result = append(result, ui.Source{
-			ID:       source.ID,
-			Icon:     source.Icon,
-			Name:     source.Name,
-			Color:    source.Color,
-			PATToken: source.PATToken,
-			URL:      source.URL,
-			Type:     source.Type,
+			ID:           source.ID,
+			Icon:         source.Icon,
+			Name:         source.Name,
+			Color:        source.Color,
+			PATToken:     source.PATToken,
+			URL:          source.URL,
+			Type:         source.Type,
+			RegistryKind: source.RegistryKind,
 		})
 	}
 
@@ -2037,13 +2284,18 @@ func toUIPolicyValues(values []storage.PolicyValue) []ui.PolicyValue {
 	result := make([]ui.PolicyValue, 0, len(values))
 	for _, value := range values {
 		result = append(result, ui.PolicyValue{
-			ID:              value.ID,
-			PolicyID:        value.PolicyID,
-			DependencyID:    value.DependencyID,
-			DependencyIcon:  value.DependencyIcon,
-			DependencyName:  value.DependencyName,
-			DependencyColor: value.DependencyColor,
-			Version:         value.Version,
+			ID:                 value.ID,
+			PolicyID:           value.PolicyID,
+			DependencyID:       value.DependencyID,
+			DependencyIcon:     value.DependencyIcon,
+			DependencyName:     value.DependencyName,
+			DependencyColor:    value.DependencyColor,
+			StackID:            value.StackID,
+			StackName:          value.StackName,
+			RegistryName:       value.RegistryName,
+			RegistryID:         value.RegistrySourceID,
+			RegistrySourceName: value.RegistrySourceName,
+			Version:            value.Version,
 		})
 	}
 
@@ -2097,7 +2349,7 @@ func newNamespaceForm(policies []ui.Policy) ui.StackForm {
 	return normalizeNamespaceForm(form, policies)
 }
 
-func newDependencyForm(stacks []ui.Stack) ui.DependencyForm {
+func newDependencyForm(stacks []ui.Stack, sources []ui.Source) ui.DependencyForm {
 	form := ui.DependencyForm{
 		Open:  true,
 		Mode:  ui.StackFormModeCreate,
@@ -2106,11 +2358,16 @@ func newDependencyForm(stacks []ui.Stack) ui.DependencyForm {
 	if len(stacks) > 0 {
 		form.StackID = stacks[0].ID
 	}
+	registrySources := registryUISources(sources)
+	if len(registrySources) > 0 {
+		form.RegistryID = registrySources[0].ID
+	}
 
-	return normalizeDependencyForm(form, stacks)
+	return normalizeDependencyForm(form, stacks, registrySources)
 }
 
 func newProjectForm(namespaces []ui.Namespace, sources []ui.Source, stacks []ui.Stack) ui.ProjectForm {
+	sources = vcsSources(sources)
 	form := ui.ProjectForm{
 		Open:  true,
 		Mode:  ui.StackFormModeCreate,
@@ -2138,6 +2395,23 @@ func newSourceForm() ui.SourceForm {
 	})
 }
 
+func newPolicyUpdateForm(policyID int64, values []ui.PolicyValue, stacks []ui.Stack, sources []ui.Source) ui.PolicyUpdateForm {
+	form := ui.PolicyUpdateForm{
+		Open:     true,
+		PolicyID: policyID,
+		Focus:    ui.PolicyUpdateFormFieldStack,
+	}
+	policyStacks := policyStacks(values, stacks)
+	registrySources := registryUISources(sources)
+	if len(policyStacks) > 0 {
+		form.StackID = policyStacks[0].ID
+	}
+	if len(registrySources) > 0 {
+		form.RegistryID = registrySources[0].ID
+	}
+	return normalizePolicyUpdateForm(form, policyStacks, registrySources)
+}
+
 func newPolicyForm(namespaces []ui.Namespace, policies []ui.Policy) ui.PolicyForm {
 	return normalizePolicyForm(ui.PolicyForm{
 		Open:  true,
@@ -2146,7 +2420,7 @@ func newPolicyForm(namespaces []ui.Namespace, policies []ui.Policy) ui.PolicyFor
 	}, namespaces)
 }
 
-func newPolicyValueForm(policyID int64, dependencies []ui.Dependency) ui.PolicyValueForm {
+func newPolicyValueForm(policyID int64, dependencies []ui.Dependency, sources []ui.Source) ui.PolicyValueForm {
 	form := ui.PolicyValueForm{
 		Open:     true,
 		Mode:     ui.StackFormModeCreate,
@@ -2156,7 +2430,7 @@ func newPolicyValueForm(policyID int64, dependencies []ui.Dependency) ui.PolicyV
 	if len(dependencies) > 0 {
 		form.DependencyID = dependencies[0].ID
 	}
-	return normalizePolicyValueForm(form, dependencies)
+	return normalizePolicyValueForm(form, dependencies, registryUISources(sources))
 }
 
 func (m *model) openEditStackForm() {
@@ -2212,7 +2486,9 @@ func (m *model) openEditDependencyForm() {
 		Icon:         dependency.Icon,
 		Color:        dependency.Color,
 		Name:         dependency.Name,
-	}, m.stacks)
+		RegistryName: dependency.RegistryName,
+		RegistryID:   dependency.RegistryID,
+	}, m.stacks, registryUISources(m.sources))
 }
 
 func (m *model) openEditProjectForm() {
@@ -2235,7 +2511,7 @@ func (m *model) openEditProjectForm() {
 		Name:        project.Name,
 		Freezing:    project.Freezing,
 		EndOfLife:   project.EndOfLife,
-	}, m.namespaces, m.sources, m.stacks)
+	}, m.namespaces, vcsSources(m.sources), m.stacks)
 }
 
 func (m *model) openCloneProjectForm() {
@@ -2255,7 +2531,7 @@ func (m *model) openCloneProjectForm() {
 		Icon:        project.Icon,
 		Color:       project.Color,
 		Name:        project.Name,
-	}, m.namespaces, m.sources, m.stacks)
+	}, m.namespaces, vcsSources(m.sources), m.stacks)
 }
 
 func (m *model) openDependencyDeleteConfirm() {
@@ -2283,15 +2559,23 @@ func (m *model) openEditSourceForm() {
 	}
 
 	m.sourceForm = normalizeSourceForm(ui.SourceForm{
-		Open:     true,
-		Mode:     ui.StackFormModeEdit,
-		SourceID: source.ID,
-		Focus:    ui.SourceFormFieldName,
-		Name:     source.Name,
-		URL:      source.URL,
-		PATToken: source.PATToken,
-		Type:     source.Type,
+		Open:         true,
+		Mode:         ui.StackFormModeEdit,
+		SourceID:     source.ID,
+		Focus:        ui.SourceFormFieldName,
+		Name:         source.Name,
+		URL:          source.URL,
+		PATToken:     source.PATToken,
+		Type:         source.Type,
+		RegistryKind: source.RegistryKind,
 	})
+}
+
+func (m *model) openPolicyUpdateForm() {
+	if m.screen != ui.ScreenPolicies || m.selectedPolicyID == 0 {
+		return
+	}
+	m.policyUpdateForm = newPolicyUpdateForm(m.selectedPolicyID, m.policyValues, m.stacks, m.sources)
 }
 
 func (m *model) openSourceDeleteConfirm() {
@@ -2341,7 +2625,7 @@ func (m *model) openEditPolicyValueForm() {
 		DependencyID:  value.DependencyID,
 		Focus:         ui.PolicyValueFormFieldDependency,
 		Version:       value.Version,
-	}, m.dependencies)
+	}, m.dependencies, registryUISources(m.sources))
 }
 
 func (m *model) openPolicyValueDeleteConfirm() {
@@ -2716,6 +3000,20 @@ func previousDependencyFormField(field ui.DependencyFormField) ui.DependencyForm
 	return field - 1
 }
 
+func nextPolicyUpdateFormField(field ui.PolicyUpdateFormField) ui.PolicyUpdateFormField {
+	if field == ui.PolicyUpdateFormFieldRegistry {
+		return ui.PolicyUpdateFormFieldStack
+	}
+	return field + 1
+}
+
+func previousPolicyUpdateFormField(field ui.PolicyUpdateFormField) ui.PolicyUpdateFormField {
+	if field == ui.PolicyUpdateFormFieldStack {
+		return ui.PolicyUpdateFormFieldRegistry
+	}
+	return field - 1
+}
+
 func nextProjectFormField(field ui.ProjectFormField) ui.ProjectFormField {
 	switch field {
 	case ui.ProjectFormFieldIcon:
@@ -2776,12 +3074,32 @@ func nextSourceFormField(field ui.SourceFormField) ui.SourceFormField {
 	return field + 1
 }
 
+func nextSourceFormFieldForForm(form ui.SourceForm) ui.SourceFormField {
+	if form.Type == storage.SourceTypeRegistry && form.Focus == ui.SourceFormFieldType {
+		return ui.SourceFormFieldRegistryKind
+	}
+	if form.Focus == ui.SourceFormFieldRegistryKind {
+		return ui.SourceFormFieldName
+	}
+	return nextSourceFormField(form.Focus)
+}
+
 func previousSourceFormField(field ui.SourceFormField) ui.SourceFormField {
 	if field == ui.SourceFormFieldName {
 		return ui.SourceFormFieldType
 	}
 
 	return field - 1
+}
+
+func previousSourceFormFieldForForm(form ui.SourceForm) ui.SourceFormField {
+	if form.Type == storage.SourceTypeRegistry && form.Focus == ui.SourceFormFieldName {
+		return ui.SourceFormFieldRegistryKind
+	}
+	if form.Focus == ui.SourceFormFieldRegistryKind {
+		return ui.SourceFormFieldType
+	}
+	return previousSourceFormField(form.Focus)
 }
 
 func nextPolicyFormField(field ui.PolicyFormField) ui.PolicyFormField {
@@ -2817,7 +3135,9 @@ func appendDependencyFormRunes(form ui.DependencyForm, runes []rune) ui.Dependen
 		form.Color += value
 	case ui.DependencyFormFieldName:
 		form.Name += value
-	case ui.DependencyFormFieldStack:
+	case ui.DependencyFormFieldPackage:
+		form.RegistryName += value
+	case ui.DependencyFormFieldRegistry, ui.DependencyFormFieldStack:
 	}
 
 	return form
@@ -2848,7 +3168,9 @@ func deleteDependencyFormRune(form ui.DependencyForm) ui.DependencyForm {
 		form.Color = trimLastRune(form.Color)
 	case ui.DependencyFormFieldName:
 		form.Name = trimLastRune(form.Name)
-	case ui.DependencyFormFieldStack:
+	case ui.DependencyFormFieldPackage:
+		form.RegistryName = trimLastRune(form.RegistryName)
+	case ui.DependencyFormFieldRegistry, ui.DependencyFormFieldStack:
 	}
 
 	return form
@@ -2880,6 +3202,7 @@ func appendSourceFormRunes(form ui.SourceForm, runes []rune) ui.SourceForm {
 	case ui.SourceFormFieldPATToken:
 		form.PATToken += value
 	case ui.SourceFormFieldType:
+	case ui.SourceFormFieldRegistryKind:
 	}
 
 	return form
@@ -2894,6 +3217,7 @@ func deleteSourceFormRune(form ui.SourceForm) ui.SourceForm {
 	case ui.SourceFormFieldPATToken:
 		form.PATToken = trimLastRune(form.PATToken)
 	case ui.SourceFormFieldType:
+	case ui.SourceFormFieldRegistryKind:
 	}
 
 	return form
@@ -2931,13 +3255,21 @@ func deletePolicyValueFormRune(form ui.PolicyValueForm) ui.PolicyValueForm {
 	return form
 }
 
-func normalizeDependencyForm(form ui.DependencyForm, stacks []ui.Stack) ui.DependencyForm {
+func normalizeDependencyForm(form ui.DependencyForm, stacks []ui.Stack, sources []ui.Source) ui.DependencyForm {
 	if !hasStackID(stacks, form.StackID) && len(stacks) > 0 {
 		form.StackID = stacks[0].ID
+	}
+	if !hasSourceID(sources, form.RegistryID) && len(sources) > 0 {
+		form.RegistryID = sources[0].ID
+	}
+	if strings.TrimSpace(form.RegistryName) == "" && form.Focus != ui.DependencyFormFieldPackage {
+		form.RegistryName = form.Name
 	}
 	form.CanSave = strings.TrimSpace(form.Icon) != "" &&
 		strings.TrimSpace(form.Color) != "" &&
 		strings.TrimSpace(form.Name) != "" &&
+		strings.TrimSpace(form.RegistryName) != "" &&
+		hasSourceID(sources, form.RegistryID) &&
 		hasStackID(stacks, form.StackID)
 	if form.CanSave {
 		form.Error = ""
@@ -2974,10 +3306,17 @@ func normalizeSourceForm(form ui.SourceForm) ui.SourceForm {
 	if !hasSourceType(form.Type) {
 		form.Type = storage.SourceTypeGitLab
 	}
+	if form.Type != storage.SourceTypeRegistry {
+		form.RegistryKind = ""
+	}
+	if form.Type == storage.SourceTypeRegistry && !hasRegistryKind(form.RegistryKind) {
+		form.RegistryKind = registry.KindNPM
+	}
 	form.CanSave = strings.TrimSpace(form.Name) != "" &&
 		strings.TrimSpace(form.URL) != "" &&
-		strings.TrimSpace(form.PATToken) != "" &&
-		hasSourceType(form.Type)
+		hasSourceType(form.Type) &&
+		(form.Type == storage.SourceTypeRegistry || strings.TrimSpace(form.PATToken) != "") &&
+		(form.Type != storage.SourceTypeRegistry || hasRegistryKind(form.RegistryKind))
 	if form.CanSave {
 		form.Error = ""
 	}
@@ -2994,17 +3333,47 @@ func normalizePolicyForm(form ui.PolicyForm, namespaces []ui.Namespace) ui.Polic
 	return form
 }
 
-func normalizePolicyValueForm(form ui.PolicyValueForm, dependencies []ui.Dependency) ui.PolicyValueForm {
+func normalizePolicyValueForm(form ui.PolicyValueForm, dependencies []ui.Dependency, sources []ui.Source) ui.PolicyValueForm {
 	if !hasDependencyID(dependencies, form.DependencyID) && len(dependencies) > 0 {
 		form.DependencyID = dependencies[0].ID
+	}
+	if dependency, ok := findByID(dependencies, form.DependencyID, dependencyID); ok && dependency.RegistryID != 0 {
+		form.RegistryID = dependency.RegistryID
+	}
+	if !hasSourceID(sources, form.RegistryID) && len(sources) > 0 {
+		form.RegistryID = sources[0].ID
 	}
 	form.CanSave = form.PolicyID != 0 &&
 		strings.TrimSpace(form.Version) != "" &&
 		hasDependencyID(dependencies, form.DependencyID)
+	form.CanUpdate = hasDependencyID(dependencies, form.DependencyID) &&
+		hasSourceID(sources, form.RegistryID)
 	if form.CanSave {
 		form.Error = ""
 	}
 
+	return form
+}
+
+func normalizePolicyUpdateForm(form ui.PolicyUpdateForm, stacks []ui.Stack, sources []ui.Source) ui.PolicyUpdateForm {
+	if !hasStackID(stacks, form.StackID) && len(stacks) > 0 {
+		form.StackID = stacks[0].ID
+	}
+	if !hasSourceID(sources, form.RegistryID) && len(sources) > 0 {
+		form.RegistryID = sources[0].ID
+	}
+	form.CanStart = form.PolicyID != 0 &&
+		hasStackID(stacks, form.StackID) &&
+		hasSourceID(sources, form.RegistryID)
+	if form.CanStart {
+		form.Error = ""
+	}
+	if len(stacks) == 0 {
+		form.Error = "No pinned deps for policy stack"
+	}
+	if len(sources) == 0 {
+		form.Error = "Add registry source first"
+	}
 	return form
 }
 
@@ -3090,6 +3459,15 @@ var sourceTypes = []string{
 	storage.SourceTypeGitHub,
 	storage.SourceTypeGitea,
 	storage.SourceTypeBitbucket,
+	storage.SourceTypeRegistry,
+}
+
+var registryKinds = []string{
+	registry.KindNPM,
+	registry.KindGo,
+	registry.KindMaven,
+	registry.KindRubyGems,
+	registry.KindCocoaPods,
 }
 
 func hasSourceType(sourceType string) bool {
@@ -3132,6 +3510,77 @@ func sourceTypeIndex(sourceType string) int {
 	}
 
 	return 0
+}
+
+func hasRegistryKind(kind string) bool {
+	for _, item := range registryKinds {
+		if item == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func previousRegistryKind(kind string) string {
+	if len(registryKinds) == 0 {
+		return ""
+	}
+	index := int(registryKindIndex(kind))
+	if index <= 0 {
+		index = len(registryKinds)
+	}
+	return registryKinds[index-1]
+}
+
+func nextRegistryKind(kind string) string {
+	if len(registryKinds) == 0 {
+		return ""
+	}
+	index := int(registryKindIndex(kind))
+	return registryKinds[(index+1)%len(registryKinds)]
+}
+
+func registryKindIndex(kind string) int {
+	for index, item := range registryKinds {
+		if item == kind {
+			return index
+		}
+	}
+	return 0
+}
+
+func registryUISources(sources []ui.Source) []ui.Source {
+	result := make([]ui.Source, 0, len(sources))
+	for _, source := range sources {
+		if source.Type == storage.SourceTypeRegistry {
+			result = append(result, source)
+		}
+	}
+	return result
+}
+
+func vcsSources(sources []ui.Source) []ui.Source {
+	result := make([]ui.Source, 0, len(sources))
+	for _, source := range sources {
+		if source.Type != storage.SourceTypeRegistry {
+			result = append(result, source)
+		}
+	}
+	return result
+}
+
+func policyStacks(values []ui.PolicyValue, stacks []ui.Stack) []ui.Stack {
+	used := make(map[int64]bool, len(values))
+	for _, value := range values {
+		used[value.StackID] = true
+	}
+	result := make([]ui.Stack, 0, len(stacks))
+	for _, stack := range stacks {
+		if used[stack.ID] {
+			result = append(result, stack)
+		}
+	}
+	return result
 }
 
 func trimLastRune(value string) string {
