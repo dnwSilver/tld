@@ -657,6 +657,17 @@ func TestDependencyViewByStack(t *testing.T) {
 	if view.Rows[0].Versions[dependency.ID] != "0.82.1" {
 		t.Fatalf("version = %q, want 0.82.1", view.Rows[0].Versions[dependency.ID])
 	}
+
+	comparisons, err := store.ProjectDependencies().ListPolicyVersionComparisons(ctx)
+	if err != nil {
+		t.Fatalf("list policy version comparisons: %v", err)
+	}
+	if len(comparisons) != 1 {
+		t.Fatalf("comparisons = %#v, want one comparison", comparisons)
+	}
+	if comparisons[0].ProjectID != project.ID || comparisons[0].Actual != "0.82.1" || comparisons[0].Policy != "19.2.0" {
+		t.Fatalf("comparison = %#v", comparisons[0])
+	}
 }
 
 func TestDependencyViewByStackMatchesScopedJavaScriptPackages(t *testing.T) {

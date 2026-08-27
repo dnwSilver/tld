@@ -31,6 +31,12 @@ type DependencyViewRow struct {
 	Versions         map[int64]string
 }
 
+type PolicyVersionComparison struct {
+	ProjectID int64
+	Actual    string
+	Policy    string
+}
+
 func (r ProjectDependencyRepository) ViewByStack(ctx context.Context, stackID int64) (DependencyView, error) {
 	if stackID == 0 {
 		return DependencyView{}, nil
@@ -64,6 +70,88 @@ func (r ProjectDependencyRepository) ViewByStack(ctx context.Context, stackID in
 	view.Columns = columns
 	view.Rows = rows
 	return view, nil
+}
+
+func (r ProjectDependencyRepository) ListPolicyVersionComparisons(ctx context.Context) ([]PolicyVersionComparison, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.id, d.name, pv.version
+		FROM projects p
+		JOIN namespaces n ON n.id = p.namespace_id
+		JOIN policy_values pv ON pv.policy_id = n.policy_id
+		JOIN dependencies d ON d.id = pv.dependency_id
+		WHERE p.endoflife = 0 AND d.stack_id = p.stack_id
+		ORDER BY p.id ASC, d.name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list project policy versions: %w", err)
+	}
+
+	type policyTarget struct {
+		projectID      int64
+		dependencyName string
+		version        string
+	}
+	targets := make([]policyTarget, 0)
+	for rows.Next() {
+		var target policyTarget
+		if err := rows.Scan(&target.projectID, &target.dependencyName, &target.version); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scan project policy version: %w", err)
+		}
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("iterate project policy versions: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close project policy versions: %w", err)
+	}
+
+	rows, err = r.db.QueryContext(ctx, `
+		SELECT pd.project_id, pd.name, pd.version
+		FROM project_dependencies pd
+		JOIN projects p ON p.id = pd.project_id
+		WHERE p.endoflife = 0
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list current project dependency versions: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	actualVersions := map[int64]map[string]string{}
+	for rows.Next() {
+		var projectID int64
+		var name string
+		var version string
+		if err := rows.Scan(&projectID, &name, &version); err != nil {
+			return nil, fmt.Errorf("scan current project dependency version: %w", err)
+		}
+		if actualVersions[projectID] == nil {
+			actualVersions[projectID] = map[string]string{}
+		}
+		actualVersions[projectID][normalizeDependencyViewName(name)] = version
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate current project dependency versions: %w", err)
+	}
+
+	comparisons := make([]PolicyVersionComparison, 0, len(targets))
+	for _, target := range targets {
+		actual := actualVersions[target.projectID][normalizeDependencyViewName(target.dependencyName)]
+		if strings.TrimSpace(actual) == "" {
+			continue
+		}
+		comparisons = append(comparisons, PolicyVersionComparison{
+			ProjectID: target.projectID,
+			Actual:    actual,
+			Policy:    target.version,
+		})
+	}
+
+	return comparisons, nil
 }
 
 func (r ProjectDependencyRepository) viewColumns(ctx context.Context, stackID int64) ([]DependencyViewColumn, error) {

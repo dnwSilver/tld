@@ -50,6 +50,12 @@ type ProtectedBranch struct {
 	AllowForcePush    bool
 }
 
+type PipelineSchedule struct {
+	Description   string
+	Ref           string
+	OwnerUsername string
+}
+
 type File struct {
 	Path    string
 	Content []byte
@@ -67,4 +73,8 @@ type SourceClient interface {
 	DefaultBranch(ctx context.Context, source Source, project Project) (string, error)
 	ProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, error)
 	Tags(ctx context.Context, source Source, project Project) ([]Tag, error)
+}
+
+type PipelineScheduleSourceClient interface {
+	PipelineSchedules(ctx context.Context, source Source, project Project) ([]PipelineSchedule, error)
 }

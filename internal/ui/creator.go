@@ -54,6 +54,9 @@ func (c Creator) Render(
 	height int,
 	screen uikit.Screen,
 	stacks []uikit.Stack,
+	dashboardAttentionRows []uikit.DashboardAttentionRow,
+	dashboardFocus uikit.DashboardPane,
+	selectedAttentionProjectID int64,
 	selectedStackID int64,
 	namespaces []uikit.Namespace,
 	selectedNamespaceID int64,
@@ -118,7 +121,7 @@ func (c Creator) Render(
 	top := c.renderTopBar(width, screen)
 	topHeight := lipgloss.Height(top)
 	bodyHeight := uikit.Max(height-topHeight, 1)
-	body := c.defaultScreen.Render(width, bodyHeight, len(stacks))
+	body := c.defaultScreen.Render(width, bodyHeight, len(stacks), dashboardAttentionRows, dashboardFocus, selectedAttentionProjectID)
 	if screen == uikit.ScreenStacks {
 		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, nil, stackForm, deleteConfirm)
 	}

@@ -21,6 +21,7 @@ type model struct {
 	store                    *storage.Store
 	screen                   ui.Screen
 	stacks                   []ui.Stack
+	dashboard                dashboardState
 	selectedStackID          int64
 	namespaces               []ui.Namespace
 	selectedNamespaceID      int64
@@ -241,7 +242,7 @@ func newModel(store *storage.Store) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.loadStacks(), m.loadNamespaces(), m.loadDependencies(), m.loadProjects(), m.loadSources(), m.loadPolicies())
+	return tea.Batch(m.loadStacks(), m.loadDashboardAttention(), m.loadNamespaces(), m.loadDependencies(), m.loadProjects(), m.loadSources(), m.loadPolicies())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -405,26 +406,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.loadDependencyView()
 			}
 		case key == "left":
+			if m.screen == ui.ScreenDefault {
+				m.dashboard.focus = ui.DashboardPaneSummary
+				return m, nil
+			}
 			if m.screen == ui.ScreenView {
 				m.scrollViewColumnsLeft()
 				return m, nil
 			}
 		case key == "right":
+			if m.screen == ui.ScreenDefault {
+				m.dashboard.focus = ui.DashboardPaneAttention
+				m.ensureSelectedAttentionProject()
+				return m, nil
+			}
 			if m.screen == ui.ScreenView {
 				m.scrollViewColumnsRight()
 				return m, nil
 			}
 		case isOneOf(msg, "h", "shift+tab"):
+			if m.screen == ui.ScreenDefault {
+				m.dashboard.focus = ui.DashboardPaneSummary
+				return m, nil
+			}
 			if m.screen == ui.ScreenView {
 				m.selectPreviousViewStack()
 				return m, m.loadDependencyView()
 			}
 		case isOneOf(msg, "l"):
+			if m.screen == ui.ScreenDefault {
+				m.dashboard.focus = ui.DashboardPaneAttention
+				m.ensureSelectedAttentionProject()
+				return m, nil
+			}
 			if m.screen == ui.ScreenView {
 				m.selectNextViewStack()
 				return m, m.loadDependencyView()
 			}
 		case key == "tab":
+			if m.screen == ui.ScreenDefault {
+				m.toggleDashboardPane()
+				return m, nil
+			}
 			if m.screen == ui.ScreenView {
 				m.selectNextViewStack()
 				return m, m.loadDependencyView()
@@ -561,6 +584,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadPolicyValues()
 		}
 		m.policyValueForm.Error = msg.err.Error()
+	case dashboardAttentionLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.dashboard.attentionRows = msg.rows
+			m.ensureSelectedAttentionProject()
+		}
 	case policyValueLatestLoadedMsg:
 		m.err = msg.err
 		if msg.err != nil {
@@ -791,6 +820,9 @@ func (m model) View() string {
 		m.height,
 		m.screen,
 		m.stacks,
+		m.dashboard.attentionRows,
+		m.dashboard.focus,
+		m.dashboard.selectedProjectID,
 		m.selectedStackID,
 		m.namespaces,
 		m.selectedNamespaceID,
@@ -1345,6 +1377,10 @@ func (m *model) openDelete() {
 
 func (m *model) selectPreviousOnScreen() {
 	switch m.screen {
+	case ui.ScreenDefault:
+		if m.dashboard.focus == ui.DashboardPaneAttention {
+			m.selectPreviousAttentionProject()
+		}
 	case ui.ScreenStacks:
 		m.selectPreviousStack()
 	case ui.ScreenNamespaces:
@@ -1380,6 +1416,10 @@ func (m *model) selectPreviousOnScreen() {
 
 func (m *model) selectNextOnScreen() {
 	switch m.screen {
+	case ui.ScreenDefault:
+		if m.dashboard.focus == ui.DashboardPaneAttention {
+			m.selectNextAttentionProject()
+		}
 	case ui.ScreenStacks:
 		m.selectNextStack()
 	case ui.ScreenNamespaces:
@@ -1426,6 +1466,18 @@ func (m *model) togglePolicyPane() {
 		return
 	}
 	m.policyFocus = ui.PolicyPanePolicies
+}
+
+func (m *model) toggleDashboardPane() {
+	if m.screen != ui.ScreenDefault {
+		return
+	}
+	if m.dashboard.focus == ui.DashboardPaneSummary {
+		m.dashboard.focus = ui.DashboardPaneAttention
+		m.ensureSelectedAttentionProject()
+		return
+	}
+	m.dashboard.focus = ui.DashboardPaneSummary
 }
 
 func (m *model) toggleProjectPane() {
@@ -2672,10 +2724,17 @@ func policyValueID(v ui.PolicyValue) int64 {
 func dependencyViewRowID(r ui.DependencyViewRow) int64 {
 	return r.ProjectID
 }
+func dashboardAttentionRowID(r ui.DashboardAttentionRow) int64 {
+	return r.ProjectID
+}
 
 func (m *model) ensureSelectedStack() {
 	m.selectedStackID = ensureSelected(m.stacks, m.selectedStackID, stackID)
 	m.ensureViewStack()
+}
+
+func (m *model) ensureSelectedAttentionProject() {
+	m.dashboard.selectedProjectID = ensureSelected(m.dashboard.attentionRows, m.dashboard.selectedProjectID, dashboardAttentionRowID)
 }
 
 func (m *model) ensureSelectedNamespace() {
@@ -2717,6 +2776,14 @@ func (m *model) ensureSelectedPolicy() {
 
 func (m *model) ensureSelectedPolicyValue() {
 	m.selectedPolicyValueID = ensureSelected(m.policyValues, m.selectedPolicyValueID, policyValueID)
+}
+
+func (m *model) selectPreviousAttentionProject() {
+	m.dashboard.selectedProjectID = selectPrevious(m.dashboard.attentionRows, m.dashboard.selectedProjectID, dashboardAttentionRowID)
+}
+
+func (m *model) selectNextAttentionProject() {
+	m.dashboard.selectedProjectID = selectNext(m.dashboard.attentionRows, m.dashboard.selectedProjectID, dashboardAttentionRowID)
 }
 
 func (m *model) selectPreviousStack() {

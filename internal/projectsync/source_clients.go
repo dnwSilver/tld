@@ -330,6 +330,41 @@ func (c GitLabClient) ProtectedBranches(ctx context.Context, source Source, proj
 	return branches, nil
 }
 
+func (c GitLabClient) PipelineSchedules(ctx context.Context, source Source, project Project) ([]PipelineSchedule, error) {
+	const pageSize = 100
+
+	schedules := make([]PipelineSchedule, 0)
+	for pageNumber := 1; ; pageNumber++ {
+		requestURL := gitlabProjectAPIURL(source, project.ProviderID, "pipeline_schedules")
+		values := requestURL.Query()
+		values.Set("page", fmt.Sprintf("%d", pageNumber))
+		values.Set("per_page", fmt.Sprintf("%d", pageSize))
+		requestURL.RawQuery = values.Encode()
+
+		var raw []struct {
+			Description string `json:"description"`
+			Ref         string `json:"ref"`
+			Owner       struct {
+				Username string `json:"username"`
+			} `json:"owner"`
+		}
+		if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+			return nil, err
+		}
+
+		for _, item := range raw {
+			schedules = append(schedules, PipelineSchedule{
+				Description:   item.Description,
+				Ref:           item.Ref,
+				OwnerUsername: item.Owner.Username,
+			})
+		}
+		if len(raw) < pageSize {
+			return schedules, nil
+		}
+	}
+}
+
 func (c GitLabClient) getJSON(ctx context.Context, source Source, requestURL url.URL, target any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
 	if err != nil {

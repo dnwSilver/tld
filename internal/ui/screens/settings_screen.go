@@ -81,7 +81,7 @@ func (s SettingsScreen) renderRow(width int, checkColumns []uikit.ProjectCheck, 
 	if selected {
 		background = s.palette.Hover
 	}
-	iconColor := lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor))
+	iconColor := s.projectIconColor(checkColumns, row.Results, lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor)))
 	projectCell := uikit.RenderProjectWithIcon(
 		s.palette,
 		row.ProjectIcon,
@@ -117,6 +117,33 @@ func (s SettingsScreen) renderRow(width int, checkColumns []uikit.ProjectCheck, 
 	return components.RenderTableRow(s.palette, background, width, cells)
 }
 
+func (s SettingsScreen) projectIconColor(checkColumns []uikit.ProjectCheck, results map[string]uikit.CheckState, defaultColor lipgloss.Color) lipgloss.Color {
+	if len(checkColumns) == 0 || len(results) == 0 {
+		return defaultColor
+	}
+
+	hasApplicableCheck := false
+	for _, check := range checkColumns {
+		state, ok := results[check.ID]
+		if !ok {
+			return defaultColor
+		}
+		switch state {
+		case uikit.CheckStatePass:
+			hasApplicableCheck = true
+		case uikit.CheckStateNotApplicable:
+			continue
+		default:
+			return defaultColor
+		}
+	}
+	if hasApplicableCheck {
+		return s.palette.Primary
+	}
+
+	return defaultColor
+}
+
 func (s SettingsScreen) checkValue(state uikit.CheckState, version string) string {
 	value := s.checkSymbol(state)
 	if version != "" {
@@ -129,6 +156,8 @@ func (s SettingsScreen) checkSymbol(state uikit.CheckState) string {
 	switch state {
 	case uikit.CheckStatePass:
 		return uikit.SymbolCheckPass
+	case uikit.CheckStateWarning:
+		return uikit.SymbolCheckWarning
 	case uikit.CheckStateFail:
 		return uikit.SymbolCheckFail
 	case uikit.CheckStateNotApplicable:
@@ -142,6 +171,8 @@ func (s SettingsScreen) checkColor(state uikit.CheckState) lipgloss.Color {
 	switch state {
 	case uikit.CheckStatePass:
 		return s.palette.Primary
+	case uikit.CheckStateWarning:
+		return s.palette.Warning
 	case uikit.CheckStateFail:
 		return s.palette.Error
 	default:

@@ -681,6 +681,128 @@ func TestGitLabClientHasBranchAndDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestGitLabClientListsPipelineSchedules(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/api/v4/projects/group%2Frepo/pipeline_schedules" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("PRIVATE-TOKEN") != "secret" {
+			t.Fatalf("PRIVATE-TOKEN = %q, want secret", r.Header.Get("PRIVATE-TOKEN"))
+		}
+		if r.URL.Query().Get("page") != "1" || r.URL.Query().Get("per_page") != "100" {
+			t.Fatalf("pagination query = %q, want page=1 and per_page=100", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`[{
+			"description":"🌚 Nightly build",
+			"ref":"refs/heads/master",
+			"owner":{"username":"group349_bot2"}
+		}]`))
+	}))
+	defer server.Close()
+
+	client := GitLabClient{HTTPClient: server.Client()}
+	source := Source{Type: storage.SourceTypeGitLab, URL: server.URL, PATToken: "secret"}
+	project := Project{ProviderID: "group/repo"}
+
+	schedules, err := client.PipelineSchedules(context.Background(), source, project)
+	if err != nil {
+		t.Fatalf("list pipeline schedules: %v", err)
+	}
+	if len(schedules) != 1 {
+		t.Fatalf("pipeline schedules = %d, want 1", len(schedules))
+	}
+	if schedules[0].Description != nightlyScheduleDescription ||
+		schedules[0].Ref != "refs/heads/master" ||
+		schedules[0].OwnerUsername != nightlyScheduleOwner {
+		t.Fatalf("pipeline schedule = %#v", schedules[0])
+	}
+}
+
+func TestNightlyScheduleCheckPassesWhenConfigured(t *testing.T) {
+	service := CheckService{SourceClient: &fakeSourceClient{
+		schedules: []PipelineSchedule{{
+			Description:   nightlyScheduleDescription,
+			Ref:           "refs/heads/" + nightlyScheduleRef,
+			OwnerUsername: "@" + nightlyScheduleOwner,
+		}},
+	}}
+
+	state, err := service.runCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+		checkNightly,
+		nil,
+		false,
+		nil,
+		false,
+		nil,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("run nightly check: %v", err)
+	}
+	if state != CheckStatePass {
+		t.Fatalf("nightly check state = %q, want %q", state, CheckStatePass)
+	}
+}
+
+func TestNightlyScheduleCheckWarnsWhenOwnerIsMisconfigured(t *testing.T) {
+	service := CheckService{SourceClient: &fakeSourceClient{
+		schedules: []PipelineSchedule{{
+			Description:   nightlyScheduleDescription,
+			Ref:           "refs/heads/" + nightlyScheduleRef,
+			OwnerUsername: "another-user",
+		}},
+	}}
+
+	state, err := service.runCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+		checkNightly,
+		nil,
+		false,
+		nil,
+		false,
+		nil,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("run nightly check: %v", err)
+	}
+	if state != CheckStateWarning {
+		t.Fatalf("nightly check state = %q, want %q", state, CheckStateWarning)
+	}
+}
+
+func TestNightlyScheduleCheckFailsWhenMissing(t *testing.T) {
+	service := CheckService{SourceClient: &fakeSourceClient{}}
+
+	state, err := service.runCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+		checkNightly,
+		nil,
+		false,
+		nil,
+		false,
+		nil,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("run nightly check: %v", err)
+	}
+	if state != CheckStateFail {
+		t.Fatalf("nightly check state = %q, want %q", state, CheckStateFail)
+	}
+}
+
 func TestCheckServiceCachesResults(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
@@ -713,6 +835,32 @@ func TestCheckServiceCachesResults(t *testing.T) {
 	}
 	if loaded["master"] != CheckStatePass || loaded["dev"] != CheckStatePass || loaded["default"] != CheckStatePass {
 		t.Fatalf("loaded = %#v", loaded)
+	}
+}
+
+func TestCheckServiceCachesWarningState(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	service := CheckService{Cache: store.Cache()}
+	source := Source{Type: storage.SourceTypeGitLab}
+	project := Project{ProviderID: "group/repo"}
+	if err := service.cacheResult(ctx, source, project, checkNightly, CheckStateWarning, ""); err != nil {
+		t.Fatalf("cache warning state: %v", err)
+	}
+
+	loaded, err := service.LoadProject(ctx, source, project)
+	if err != nil {
+		t.Fatalf("load project checks: %v", err)
+	}
+	if loaded[checkNightly] != CheckStateWarning {
+		t.Fatalf("loaded nightly state = %q, want %q", loaded[checkNightly], CheckStateWarning)
 	}
 }
 
@@ -758,6 +906,7 @@ type fakeSourceClient struct {
 	files      map[string][]byte
 	fetches    map[string]int
 	divergence BranchDivergence
+	schedules  []PipelineSchedule
 }
 
 func (c *fakeSourceClient) ResolveHead(context.Context, Source, Project) (Commit, error) {
@@ -796,4 +945,8 @@ func (c *fakeSourceClient) ProtectedBranches(_ context.Context, _ Source, _ Proj
 
 func (c *fakeSourceClient) Tags(_ context.Context, _ Source, _ Project) ([]Tag, error) {
 	return nil, nil
+}
+
+func (c *fakeSourceClient) PipelineSchedules(_ context.Context, _ Source, _ Project) ([]PipelineSchedule, error) {
+	return c.schedules, nil
 }

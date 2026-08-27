@@ -40,6 +40,7 @@ const (
 	SymbolPolicy         = "󰯄"
 	SymbolSettings       = "󰒓"
 	SymbolCheckPass      = ""
+	SymbolCheckWarning   = ""
 	SymbolCheckFail      = "󰅙"
 	SymbolCheckUnknown   = ""
 )

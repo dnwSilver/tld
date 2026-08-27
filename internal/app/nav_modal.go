@@ -42,6 +42,8 @@ func (m model) switchToScreen(screen ui.Screen) (tea.Model, tea.Cmd) {
 	m.screen = screen
 
 	switch screen {
+	case ui.ScreenDefault:
+		return m, m.loadDashboardAttention()
 	case ui.ScreenView:
 		m.ensureViewStack()
 		return m, m.loadDependencyView()

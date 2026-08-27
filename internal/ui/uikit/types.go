@@ -74,6 +74,24 @@ type Project struct {
 	DependencyCount int
 }
 
+type DashboardPane int
+
+const (
+	DashboardPaneSummary DashboardPane = iota
+	DashboardPaneAttention
+)
+
+type DashboardAttentionRow struct {
+	ProjectID        int64
+	ProjectName      string
+	Critical         int
+	High             int
+	Major            int
+	MinorPatch       int
+	SettingsErrors   int
+	SettingsWarnings int
+}
+
 type ProjectDependencyRun struct {
 	CommitShortSHA string
 	Status         string
@@ -345,6 +363,7 @@ type CheckState string
 const (
 	CheckStateUnknown       CheckState = "unknown"
 	CheckStatePass          CheckState = "pass"
+	CheckStateWarning       CheckState = "warning"
 	CheckStateFail          CheckState = "fail"
 	CheckStateNotApplicable CheckState = "not-applicable"
 )

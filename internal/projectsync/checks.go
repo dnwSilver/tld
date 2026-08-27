@@ -23,6 +23,13 @@ const (
 )
 
 const (
+	checkNightly               = "nightly"
+	nightlyScheduleDescription = "🌚 Nightly build"
+	nightlyScheduleRef         = "master"
+	nightlyScheduleOwner       = "group349_bot2"
+)
+
+const (
 	accessLevelDeveloper  = 30
 	accessLevelMaintainer = 40
 )
@@ -50,6 +57,7 @@ type CheckState string
 const (
 	CheckStateUnknown       CheckState = "unknown"
 	CheckStatePass          CheckState = "pass"
+	CheckStateWarning       CheckState = "warning"
 	CheckStateFail          CheckState = "fail"
 	CheckStateNotApplicable CheckState = "not-applicable"
 )
@@ -72,6 +80,7 @@ var ProjectChecks = []CheckDefinition{
 	{ID: "ntfy", Title: "ntfy"},
 	{ID: "dtrack", Title: "dtrack"},
 	{ID: "cremr", Title: "cremr"},
+	{ID: checkNightly, Title: "nightly"},
 	{ID: checkNext, Title: "next"},
 	{ID: checkReactStrictMode, Title: "strict"},
 	{ID: checkDistDir, Title: "dist"},
@@ -150,6 +159,8 @@ func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source
 		switch stateValue {
 		case "true", string(CheckStatePass):
 			results[check.ID] = CheckStatePass
+		case string(CheckStateWarning):
+			results[check.ID] = CheckStateWarning
 		case "false", string(CheckStateFail):
 			results[check.ID] = CheckStateFail
 		case string(CheckStateNotApplicable):
@@ -166,6 +177,27 @@ func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source
 }
 
 func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, nextConfigContent []byte, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
+	if checkID == checkNightly {
+		if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
+			return CheckStateNotApplicable, nil
+		}
+		client, ok := s.SourceClient.(PipelineScheduleSourceClient)
+		if !ok {
+			return CheckStateFail, errors.New("pipeline schedules source client is not supported")
+		}
+		schedules, err := client.PipelineSchedules(ctx, source, project)
+		if err != nil {
+			return CheckStateFail, err
+		}
+		if len(schedules) == 0 {
+			return CheckStateFail, nil
+		}
+		if nightlyScheduleConfigured(schedules) {
+			return CheckStatePass, nil
+		}
+		return CheckStateWarning, nil
+	}
+
 	if checkID == checkNext {
 		if !hasProductionNext {
 			return CheckStateNotApplicable, nil
@@ -217,6 +249,20 @@ func checkState(pass bool) CheckState {
 		return CheckStatePass
 	}
 	return CheckStateFail
+}
+
+func nightlyScheduleConfigured(schedules []PipelineSchedule) bool {
+	for _, schedule := range schedules {
+		description := strings.TrimSpace(schedule.Description)
+		ref := strings.TrimPrefix(strings.TrimSpace(schedule.Ref), "refs/heads/")
+		owner := strings.TrimPrefix(strings.TrimSpace(schedule.OwnerUsername), "@")
+		if description == nightlyScheduleDescription &&
+			ref == nightlyScheduleRef &&
+			strings.EqualFold(owner, nightlyScheduleOwner) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s CheckService) loadGitlabCI(ctx context.Context, source Source, project Project) ([]byte, bool) {
@@ -329,6 +375,8 @@ func (s CheckService) cacheResult(ctx context.Context, source Source, project Pr
 	switch state {
 	case CheckStatePass:
 		value = "true"
+	case CheckStateWarning:
+		value = string(CheckStateWarning)
 	case CheckStateNotApplicable:
 		value = string(CheckStateNotApplicable)
 	}

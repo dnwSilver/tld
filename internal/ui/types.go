@@ -22,6 +22,8 @@ type Stack = uikit.Stack
 type Namespace = uikit.Namespace
 type Dependency = uikit.Dependency
 type Project = uikit.Project
+type DashboardPane = uikit.DashboardPane
+type DashboardAttentionRow = uikit.DashboardAttentionRow
 type ProjectDependencyRun = uikit.ProjectDependencyRun
 type ProjectDependency = uikit.ProjectDependency
 type ProjectPane = uikit.ProjectPane
@@ -37,6 +39,11 @@ type PolicyPane = uikit.PolicyPane
 const (
 	ProjectPaneProjects     = uikit.ProjectPaneProjects
 	ProjectPaneDependencies = uikit.ProjectPaneDependencies
+)
+
+const (
+	DashboardPaneSummary   = uikit.DashboardPaneSummary
+	DashboardPaneAttention = uikit.DashboardPaneAttention
 )
 
 const (
@@ -165,6 +172,7 @@ const (
 const (
 	CheckStateUnknown       = uikit.CheckStateUnknown
 	CheckStatePass          = uikit.CheckStatePass
+	CheckStateWarning       = uikit.CheckStateWarning
 	CheckStateFail          = uikit.CheckStateFail
 	CheckStateNotApplicable = uikit.CheckStateNotApplicable
 )
