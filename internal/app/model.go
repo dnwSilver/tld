@@ -81,6 +81,9 @@ type model struct {
 	vulnsSyncCh              <-chan vulnSyncMsg
 	navModalOpen             bool
 	navModalIndex            int
+	settingsOperations       []ui.SettingsOperation
+	operationsModalOpen      bool
+	operationsModalIndex     int
 	err                      error
 }
 
@@ -224,25 +227,26 @@ type policyValueLatestLoadedMsg struct {
 
 func newModel(store *storage.Store) model {
 	return model{
-		creator:      ui.NewCreator(),
-		store:        store,
-		screen:       ui.ScreenDefault,
-		stacks:       []ui.Stack{},
-		namespaces:   []ui.Namespace{},
-		dependencies: []ui.Dependency{},
-		projects:     []ui.Project{},
-		projectFocus: ui.ProjectPaneProjects,
-		sources:      []ui.Source{},
-		policies:     []ui.Policy{},
-		policyValues: []ui.PolicyValue{},
-		policyFocus:  ui.PolicyPanePolicies,
-		checkColumns: defaultCheckColumns(),
-		vulnFocus:    ui.VulnPaneProjects,
+		creator:            ui.NewCreator(),
+		store:              store,
+		screen:             ui.ScreenDefault,
+		stacks:             []ui.Stack{},
+		namespaces:         []ui.Namespace{},
+		dependencies:       []ui.Dependency{},
+		projects:           []ui.Project{},
+		projectFocus:       ui.ProjectPaneProjects,
+		sources:            []ui.Source{},
+		policies:           []ui.Policy{},
+		policyValues:       []ui.PolicyValue{},
+		policyFocus:        ui.PolicyPanePolicies,
+		checkColumns:       defaultCheckColumns(),
+		vulnFocus:          ui.VulnPaneProjects,
+		settingsOperations: settingsOperationItems(),
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.loadStacks(), m.loadDashboardAttention(), m.loadNamespaces(), m.loadDependencies(), m.loadProjects(), m.loadSources(), m.loadPolicies())
+	return tea.Batch(m.loadStacks(), m.loadDashboardAttention(), m.loadTokenRights(), m.loadNamespaces(), m.loadDependencies(), m.loadProjects(), m.loadSources(), m.loadPolicies())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -292,6 +296,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.form.Open {
 			return m.updateStackForm(msg)
+		}
+		if m.operationsModalOpen {
+			return m.updateOperationsModal(msg)
 		}
 		if m.navModalOpen {
 			return m.updateNavModal(msg)
@@ -370,6 +377,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.policyFocus == ui.PolicyPaneValues {
 					return m.startSelectedPolicyValueUpdate()
 				}
+			}
+			if m.screen == ui.ScreenSettings && !m.checksStatus.Running {
+				m = m.openOperationsModal()
 			}
 		case ui.KeyPrev.Matches(key):
 			if m.screen == ui.ScreenView {
@@ -590,6 +600,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dashboard.attentionRows = msg.rows
 			m.ensureSelectedAttentionProject()
 		}
+	case tokenRightsLoadedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.dashboard.tokenRights = msg.rights
+		}
 	case policyValueLatestLoadedMsg:
 		m.err = msg.err
 		if msg.err != nil {
@@ -688,6 +703,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.projectCheckRows = msg.rows
 			m.ensureSelectedCheckProject()
+		}
+	case operationAppliedMsg:
+		m.checksStatus.Running = false
+		if msg.err != nil {
+			m.err = msg.err
+			m.checksStatus.Message = msg.title + " failed for " + msg.project
+			m.checksStatus.Error = msg.err.Error()
+			return m, nil
+		}
+		m.checksStatus.Message = msg.title + " applied to " + msg.project
+		m.checksStatus.Error = ""
+		if project, ok := findByID(m.projects, msg.projectID, projectID); ok {
+			return m.startProjectChecksRefresh([]ui.Project{project})
 		}
 	case checkSyncMsg:
 		m.checksStatus.Message = msg.message
@@ -820,6 +848,7 @@ func (m model) View() string {
 		m.height,
 		m.screen,
 		m.stacks,
+		m.dashboard.tokenRights,
 		m.dashboard.attentionRows,
 		m.dashboard.focus,
 		m.dashboard.selectedProjectID,
@@ -877,6 +906,9 @@ func (m model) View() string {
 		m.policyDeleteConfirm,
 		m.navModalOpen,
 		m.navModalIndex,
+		m.settingsOperations,
+		m.operationsModalOpen,
+		m.operationsModalIndex,
 	)
 }
 

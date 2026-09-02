@@ -81,6 +81,11 @@ const (
 	DashboardPaneAttention
 )
 
+type TokenRights struct {
+	Checked    bool
+	Maintainer bool
+}
+
 type DashboardAttentionRow struct {
 	ProjectID        int64
 	ProjectName      string
@@ -385,6 +390,11 @@ type SettingsStatus struct {
 	Error   string
 	Current int
 	Total   int
+}
+
+type SettingsOperation struct {
+	ID    string
+	Title string
 }
 
 type ReleasePeriod int

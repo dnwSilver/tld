@@ -9,7 +9,7 @@ import (
 
 func TestDefaultScreenRendersAttentionTable(t *testing.T) {
 	screen := NewDefaultScreen(uikit.Palette{})
-	content := screen.Render(120, 14, 4, []uikit.DashboardAttentionRow{
+	content := screen.Render(120, 14, 4, uikit.TokenRights{Checked: true, Maintainer: true}, []uikit.DashboardAttentionRow{
 		{
 			ProjectID:        1,
 			ProjectName:      "payments",
@@ -22,7 +22,7 @@ func TestDefaultScreenRendersAttentionTable(t *testing.T) {
 		},
 	}, uikit.DashboardPaneAttention, 1)
 
-	for _, expected := range []string{"Team lead dashboard", "Stacks: 4", "Attention [1]", "project", "crit", "high", "major", "min/patch", "errors", "warnings", "payments"} {
+	for _, expected := range []string{"Team lead dashboard", "Stacks: 4", "Token has maintainer right: true", "Attention [1]", "project", "crit", "high", "major", "min/patch", "errors", "warnings", "payments"} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("content does not contain %q:\n%s", expected, content)
 		}
@@ -31,10 +31,34 @@ func TestDefaultScreenRendersAttentionTable(t *testing.T) {
 
 func TestDefaultScreenRendersEmptyAttentionState(t *testing.T) {
 	screen := NewDefaultScreen(uikit.Palette{})
-	content := screen.Render(100, 10, 0, nil, uikit.DashboardPaneSummary, 0)
+	content := screen.Render(100, 10, 0, uikit.TokenRights{}, nil, uikit.DashboardPaneSummary, 0)
 
 	if !strings.Contains(content, "No projects require attention") {
 		t.Fatalf("unexpected empty state:\n%s", content)
+	}
+}
+
+func TestDefaultScreenTokenRightsStates(t *testing.T) {
+	palette := uikit.NewPalette()
+	screen := NewDefaultScreen(palette)
+
+	cases := []struct {
+		name   string
+		rights uikit.TokenRights
+		value  string
+	}{
+		{name: "maintainer", rights: uikit.TokenRights{Checked: true, Maintainer: true}, value: "true"},
+		{name: "no rights", rights: uikit.TokenRights{Checked: true, Maintainer: false}, value: "false"},
+		{name: "unchecked", rights: uikit.TokenRights{}, value: "unknown"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			line := screen.tokenRightsLine(testCase.rights)
+			if !strings.Contains(line, "Token has maintainer right: "+testCase.value) {
+				t.Fatalf("line does not contain %q: %q", testCase.value, line)
+			}
+		})
 	}
 }
 

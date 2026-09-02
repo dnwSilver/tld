@@ -13,3 +13,10 @@ func TestVulnerabilityHintsIncludeModeSwitch(t *testing.T) {
 		t.Fatalf("vulnerability hints do not include mode switch: %q", hints)
 	}
 }
+
+func TestSettingsHintsIncludeOperations(t *testing.T) {
+	hints := NewHints(uikit.NewPalette()).Render(uikit.ScreenSettings)
+	if !strings.Contains(hints, "[u] ops") {
+		t.Fatalf("settings hints do not include operations: %q", hints)
+	}
+}

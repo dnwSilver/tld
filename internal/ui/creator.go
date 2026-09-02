@@ -13,6 +13,7 @@ type Creator struct {
 	palette               uikit.Palette
 	hints                 components.Hints
 	navModal              components.NavModal
+	operationsModal       components.OperationsModal
 	logo                  components.Logo
 	defaultScreen         screens.DefaultScreen
 	stacksScreen          screens.StacksScreen
@@ -34,6 +35,7 @@ func NewCreator() Creator {
 		palette:               palette,
 		hints:                 components.NewHints(palette),
 		navModal:              components.NewNavModal(palette),
+		operationsModal:       components.NewOperationsModal(palette),
 		logo:                  components.NewLogo(palette),
 		defaultScreen:         screens.NewDefaultScreen(palette),
 		stacksScreen:          screens.NewStacksScreen(palette),
@@ -54,6 +56,7 @@ func (c Creator) Render(
 	height int,
 	screen uikit.Screen,
 	stacks []uikit.Stack,
+	dashboardTokenRights uikit.TokenRights,
 	dashboardAttentionRows []uikit.DashboardAttentionRow,
 	dashboardFocus uikit.DashboardPane,
 	selectedAttentionProjectID int64,
@@ -111,6 +114,9 @@ func (c Creator) Render(
 	policyDeleteConfirm uikit.DeleteConfirm,
 	navModalOpen bool,
 	navModalIndex int,
+	settingsOperations []uikit.SettingsOperation,
+	operationsModalOpen bool,
+	operationsModalIndex int,
 ) string {
 	base := lipgloss.NewStyle().
 		Width(width).
@@ -121,7 +127,7 @@ func (c Creator) Render(
 	top := c.renderTopBar(width, screen)
 	topHeight := lipgloss.Height(top)
 	bodyHeight := uikit.Max(height-topHeight, 1)
-	body := c.defaultScreen.Render(width, bodyHeight, len(stacks), dashboardAttentionRows, dashboardFocus, selectedAttentionProjectID)
+	body := c.defaultScreen.Render(width, bodyHeight, len(stacks), dashboardTokenRights, dashboardAttentionRows, dashboardFocus, selectedAttentionProjectID)
 	if screen == uikit.ScreenStacks {
 		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, nil, stackForm, deleteConfirm)
 	}
@@ -210,16 +216,33 @@ func (c Creator) Render(
 	}
 
 	result := base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
-	if !navModalOpen {
+	if !navModalOpen && !operationsModalOpen {
 		return result
 	}
 
 	lines := strings.Split(result, uikit.SymbolLineBreak)
-	block := c.navModal.Render(width, navModalIndex, screen)
 	modal := components.NewModal(c.palette, c.palette.Primary)
-	lines = modal.Overlay(lines, width, height, block)
+	if navModalOpen {
+		block := c.navModal.Render(width, navModalIndex, screen)
+		lines = modal.Overlay(lines, width, height, block)
+	}
+	if operationsModalOpen {
+		projectName := checkProjectName(projectCheckRows, selectedCheckProjectID)
+		block := c.operationsModal.Render(width, settingsOperations, operationsModalIndex, projectName)
+		lines = modal.Overlay(lines, width, height, block)
+	}
 
 	return strings.Join(lines, uikit.SymbolLineBreak)
+}
+
+func checkProjectName(rows []uikit.ProjectCheckRow, selectedProjectID int64) string {
+	for _, row := range rows {
+		if row.ProjectID == selectedProjectID {
+			return row.ProjectName
+		}
+	}
+
+	return ""
 }
 
 func registrySources(sources []uikit.Source) []uikit.Source {

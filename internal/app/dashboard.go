@@ -19,8 +19,14 @@ type dashboardAttentionLoadedMsg struct {
 	err  error
 }
 
+type tokenRightsLoadedMsg struct {
+	rights ui.TokenRights
+	err    error
+}
+
 type dashboardState struct {
 	attentionRows     []ui.DashboardAttentionRow
+	tokenRights       ui.TokenRights
 	focus             ui.DashboardPane
 	selectedProjectID int64
 }
@@ -89,6 +95,80 @@ func (m model) loadDashboardAttention() tea.Cmd {
 			rows: buildDashboardAttentionRows(projects, vulnerabilities, checks, comparisons),
 		}
 	}
+}
+
+// loadTokenRights probes the first active GitLab project: the Maintainer
+// role is a per-project relation, so one representative project is enough
+// for a team-wide token.
+func (m model) loadTokenRights() tea.Cmd {
+	store := m.store
+	return func() tea.Msg {
+		if store == nil {
+			return tokenRightsLoadedMsg{}
+		}
+
+		ctx := context.Background()
+		sources, err := store.Sources().List(ctx)
+		if err != nil {
+			return tokenRightsLoadedMsg{err: err}
+		}
+		projects, err := store.Projects().List(ctx)
+		if err != nil {
+			return tokenRightsLoadedMsg{err: err}
+		}
+
+		source, project, ok := firstGitLabProject(sources, projects)
+		if !ok {
+			return tokenRightsLoadedMsg{}
+		}
+
+		client, err := projectsync.NewSourceClient(source.Type, nil)
+		if err != nil {
+			return tokenRightsLoadedMsg{err: err}
+		}
+		rightsClient, ok := client.(projectsync.MaintainerRightsSourceClient)
+		if !ok {
+			return tokenRightsLoadedMsg{}
+		}
+
+		maintainer, err := rightsClient.HasMaintainerRights(ctx, projectsync.Source{
+			ID:       source.ID,
+			Type:     source.Type,
+			URL:      source.URL,
+			PATToken: source.PATToken,
+		}, projectsync.Project{
+			ID:         project.ID,
+			ProviderID: project.ProjectID,
+			Name:       project.Name,
+		})
+		if err != nil {
+			return tokenRightsLoadedMsg{err: err}
+		}
+
+		return tokenRightsLoadedMsg{rights: ui.TokenRights{Checked: true, Maintainer: maintainer}}
+	}
+}
+
+func firstGitLabProject(sources []storage.Source, projects []storage.Project) (storage.Source, storage.Project, bool) {
+	sourcesByID := make(map[int64]storage.Source, len(sources))
+	for _, source := range sources {
+		sourcesByID[source.ID] = source
+	}
+
+	for _, project := range projects {
+		if project.EndOfLife {
+			continue
+		}
+		source, ok := sourcesByID[project.SourceID]
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(source.Type), projectsync.SourceTypeGitLab) {
+			return source, project, true
+		}
+	}
+
+	return storage.Source{}, storage.Project{}, false
 }
 
 func buildDashboardAttentionRows(

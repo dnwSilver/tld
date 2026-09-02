@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -363,6 +365,117 @@ func (c GitLabClient) PipelineSchedules(ctx context.Context, source Source, proj
 			return schedules, nil
 		}
 	}
+}
+
+// CISettings reads project-level CI/CD settings from GET /projects/:id.
+// GitLab returns ci_separated_caches only when the token has at least
+// the Maintainer role, otherwise the field is omitted and decodes as false.
+func (c GitLabClient) CISettings(ctx context.Context, source Source, project Project) (CISettings, error) {
+	var raw struct {
+		SeparatedCaches                 bool   `json:"ci_separated_caches"`
+		ResourceGroupDefaultProcessMode string `json:"resource_group_default_process_mode"`
+	}
+	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID), &raw); err != nil {
+		return CISettings{}, err
+	}
+
+	return CISettings{
+		SeparatedCaches:                 raw.SeparatedCaches,
+		ResourceGroupDefaultProcessMode: raw.ResourceGroupDefaultProcessMode,
+	}, nil
+}
+
+// HasMaintainerRights reports whether the token grants at least the
+// Maintainer role on the project, directly or through its group.
+func (c GitLabClient) HasMaintainerRights(ctx context.Context, source Source, project Project) (bool, error) {
+	var raw struct {
+		Permissions struct {
+			ProjectAccess *struct {
+				AccessLevel int `json:"access_level"`
+			} `json:"project_access"`
+			GroupAccess *struct {
+				AccessLevel int `json:"access_level"`
+			} `json:"group_access"`
+		} `json:"permissions"`
+	}
+	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID), &raw); err != nil {
+		return false, err
+	}
+
+	level := 0
+	if raw.Permissions.ProjectAccess != nil {
+		level = raw.Permissions.ProjectAccess.AccessLevel
+	}
+	if raw.Permissions.GroupAccess != nil && raw.Permissions.GroupAccess.AccessLevel > level {
+		level = raw.Permissions.GroupAccess.AccessLevel
+	}
+
+	return level >= accessLevelMaintainer, nil
+}
+
+func (c GitLabClient) NumericProjectID(ctx context.Context, source Source, project Project) (int64, error) {
+	var raw struct {
+		ID int64 `json:"id"`
+	}
+	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID), &raw); err != nil {
+		return 0, err
+	}
+	if raw.ID == 0 {
+		return 0, fmt.Errorf("gitlab numeric project id is empty for %s", project.ProviderID)
+	}
+
+	return raw.ID, nil
+}
+
+// SetSeparatedCaches toggles the "Use separate caches for protected branches"
+// project setting. Requires a token with the Maintainer role and api scope.
+func (c GitLabClient) SetSeparatedCaches(ctx context.Context, source Source, project Project, separated bool) error {
+	values := url.Values{}
+	values.Set("ci_separated_caches", strconv.FormatBool(separated))
+
+	return c.putForm(ctx, source, gitlabProjectAPIURL(source, project.ProviderID), values)
+}
+
+func (c GitLabClient) SetResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string, processMode string) error {
+	values := url.Values{}
+	values.Set("process_mode", processMode)
+
+	err := c.putForm(ctx, source, gitlabProjectAPIURL(source, project.ProviderID, "resource_groups", resourceGroup), values)
+	if errors.Is(err, ErrFileNotFound) {
+		return fmt.Errorf("resource group %q is not created yet: it appears after the first pipeline that uses it", resourceGroup)
+	}
+
+	return err
+}
+
+func (c GitLabClient) putForm(ctx context.Context, source Source, requestURL url.URL, values url.Values) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, requestURL.String(), strings.NewReader(values.Encode()))
+	if err != nil {
+		return fmt.Errorf("create gitlab request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if source.PATToken != "" {
+		req.Header.Set("PRIVATE-TOKEN", source.PATToken)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("gitlab request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrFileNotFound
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		return errors.New("gitlab returned 403: token needs the Maintainer role with api scope")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("gitlab request failed with status %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func (c GitLabClient) getJSON(ctx context.Context, source Source, requestURL url.URL, target any) error {

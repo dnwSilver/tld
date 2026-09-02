@@ -37,6 +37,9 @@ func (h Hints) Render(screen uikit.Screen) string {
 	if screen == uikit.ScreenPolicies {
 		rows = h.policyRows()
 	}
+	if screen == uikit.ScreenSettings {
+		rows = h.settingsRows()
+	}
 
 	rowWidth := maxRowWidth(rows)
 	columnRows := uikit.Max(maxHintRows-1, 1)
@@ -123,6 +126,15 @@ func (h Hints) vulnerabilityRows() []string {
 		h.row(h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20), h.fromBinding(h.palette.Primary, uikit.KeyRefreshAll, 20)),
 		h.row(h.fromBinding(h.palette.Info, uikit.KeyVulnMode, 20), hintSpec{h.palette.Hint, uikit.SymbolSelectNext, "[Tab] pane", 20}),
 		h.row(h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 20), h.fromBinding(h.palette.Hint, uikit.KeyQuit, 20)),
+	}
+}
+
+func (h Hints) settingsRows() []string {
+	return []string{
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
+		h.row(h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20), h.fromBinding(h.palette.Primary, uikit.KeyRefreshAll, 20)),
+		h.row(h.fromBinding(h.palette.Info, uikit.KeyOperations, 20), h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyQuit, 20), hintSpec{h.palette.Hint, "", "", 20}),
 	}
 }
 

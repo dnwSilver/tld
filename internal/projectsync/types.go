@@ -56,6 +56,11 @@ type PipelineSchedule struct {
 	OwnerUsername string
 }
 
+type CISettings struct {
+	SeparatedCaches                 bool
+	ResourceGroupDefaultProcessMode string
+}
+
 type File struct {
 	Path    string
 	Content []byte
@@ -77,4 +82,18 @@ type SourceClient interface {
 
 type PipelineScheduleSourceClient interface {
 	PipelineSchedules(ctx context.Context, source Source, project Project) ([]PipelineSchedule, error)
+}
+
+type CISettingsSourceClient interface {
+	CISettings(ctx context.Context, source Source, project Project) (CISettings, error)
+}
+
+type ProjectOperationSourceClient interface {
+	NumericProjectID(ctx context.Context, source Source, project Project) (int64, error)
+	SetSeparatedCaches(ctx context.Context, source Source, project Project, separated bool) error
+	SetResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string, processMode string) error
+}
+
+type MaintainerRightsSourceClient interface {
+	HasMaintainerRights(ctx context.Context, source Source, project Project) (bool, error)
 }

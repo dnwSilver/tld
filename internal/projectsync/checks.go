@@ -34,6 +34,12 @@ const (
 	accessLevelMaintainer = 40
 )
 
+const (
+	checkProcessMode       = "processMode"
+	checkSeparatedCaches   = "separatedCaches"
+	processModeOldestFirst = "oldest_first"
+)
+
 var protectedBranchRules = map[string]ProtectedBranch{
 	"dev": {
 		MergeAccessLevels: []int{accessLevelDeveloper},
@@ -76,6 +82,8 @@ var ProjectChecks = []CheckDefinition{
 	{ID: "dev", Title: "dev"},
 	{ID: "default", Title: "default"},
 	{ID: "protect", Title: "protect"},
+	{ID: checkProcessMode, Title: "process"},
+	{ID: checkSeparatedCaches, Title: "caches"},
 	{ID: "ci/cd", Title: "ci/cd"},
 	{ID: "ntfy", Title: "ntfy"},
 	{ID: "dtrack", Title: "dtrack"},
@@ -108,6 +116,7 @@ func (s CheckService) RunProject(ctx context.Context, source Source, project Pro
 
 	ciContent, ciFound := s.loadGitlabCI(ctx, source, project)
 	protectedBranches, protectedFound := s.loadProtectedBranches(ctx, source, project)
+	ciSettings, ciSettingsFound := s.loadCISettings(ctx, source, project)
 	packageJSONContent, packageJSONFound, nextConfigContent, nextConfigFound, err := s.loadNextProjectFiles(ctx, source, project)
 	if err != nil {
 		return nil, err
@@ -124,7 +133,7 @@ func (s CheckService) RunProject(ctx context.Context, source Source, project Pro
 	versions := ciComponentVersions(ciContent)
 	for _, check := range ProjectChecks {
 		report(progress, fmt.Sprintf("Checking %s %s...", project.Name, check.Title))
-		state, err := s.runCheck(ctx, source, project, check.ID, ciContent, ciFound, protectedBranches, protectedFound, nextConfigContent, nextConfigFound, hasProductionNext)
+		state, err := s.runCheck(ctx, source, project, check.ID, ciContent, ciFound, protectedBranches, protectedFound, ciSettings, ciSettingsFound, nextConfigContent, nextConfigFound, hasProductionNext)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +185,22 @@ func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source
 	return results, versions, nil
 }
 
-func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, nextConfigContent []byte, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
+func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, ciSettings CISettings, ciSettingsFound bool, nextConfigContent []byte, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
+	if checkID == checkProcessMode || checkID == checkSeparatedCaches {
+		if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
+			return CheckStateNotApplicable, nil
+		}
+		if !ciSettingsFound {
+			return CheckStateFail, nil
+		}
+		if checkID == checkProcessMode {
+			return checkState(ciSettings.ResourceGroupDefaultProcessMode == processModeOldestFirst), nil
+		}
+		// Feature branches must share one runner cache with dev/master,
+		// so separated caches being disabled is the healthy state.
+		return checkState(!ciSettings.SeparatedCaches), nil
+	}
+
 	if checkID == checkNightly {
 		if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
 			return CheckStateNotApplicable, nil
@@ -321,6 +345,18 @@ func (s CheckService) loadProtectedBranches(ctx context.Context, source Source, 
 		return nil, false
 	}
 	return branches, true
+}
+
+func (s CheckService) loadCISettings(ctx context.Context, source Source, project Project) (CISettings, bool) {
+	client, ok := s.SourceClient.(CISettingsSourceClient)
+	if !ok {
+		return CISettings{}, false
+	}
+	settings, err := client.CISettings(ctx, source, project)
+	if err != nil {
+		return CISettings{}, false
+	}
+	return settings, true
 }
 
 func protectedBranchesValid(branches []ProtectedBranch) bool {

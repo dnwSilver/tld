@@ -31,6 +31,7 @@ func (s DefaultScreen) Render(
 	width int,
 	height int,
 	stackCount int,
+	tokenRights uikit.TokenRights,
 	attentionRows []uikit.DashboardAttentionRow,
 	focus uikit.DashboardPane,
 	selectedProjectID int64,
@@ -44,7 +45,7 @@ func (s DefaultScreen) Render(
 
 	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolDashboard, "Team lead dashboard", nil)
 	left := components.NewBox(s.palette, s.borderColor(focus == uikit.DashboardPaneSummary)).
-		Render(leftContentWidth, contentHeight, leftTitle, s.renderDashboardContent(leftContentWidth, contentHeight, stackCount))
+		Render(leftContentWidth, contentHeight, leftTitle, s.renderDashboardContent(leftContentWidth, contentHeight, stackCount, tokenRights))
 	count := len(attentionRows)
 	rightTitle := uikit.BoldText(
 		s.palette,
@@ -66,8 +67,9 @@ func (s DefaultScreen) borderColor(active bool) lipgloss.Color {
 	return s.palette.Hint
 }
 
-func (s DefaultScreen) renderDashboardContent(width, height int, stackCount int) string {
+func (s DefaultScreen) renderDashboardContent(width, height int, stackCount int, tokenRights uikit.TokenRights) string {
 	counter := uikit.Text(s.palette, s.palette.Primary, "Stacks: "+uikit.FormatInt(stackCount))
+	rights := s.tokenRightsLine(tokenRights)
 	lines := make([]string, 0, height)
 	counterRow := height / 2
 	for row := range height {
@@ -75,9 +77,27 @@ func (s DefaultScreen) renderDashboardContent(width, height int, stackCount int)
 			lines = append(lines, uikit.CenterLine(s.palette, width, counter))
 			continue
 		}
+		if row == counterRow+1 {
+			lines = append(lines, uikit.CenterLine(s.palette, width, rights))
+			continue
+		}
 		lines = append(lines, uikit.BackgroundSpaces(s.palette, width))
 	}
 	return fillLines(s.palette, lines, width, height)
+}
+
+func (s DefaultScreen) tokenRightsLine(tokenRights uikit.TokenRights) string {
+	value := "unknown"
+	color := s.palette.Hint
+	if tokenRights.Checked {
+		value = "false"
+		color = s.palette.Error
+		if tokenRights.Maintainer {
+			value = "true"
+			color = s.palette.Primary
+		}
+	}
+	return uikit.Text(s.palette, color, "Token has maintainer right: "+value)
 }
 
 func (s DefaultScreen) renderAttentionContent(width, height int, rows []uikit.DashboardAttentionRow, selectedProjectID int64) string {
