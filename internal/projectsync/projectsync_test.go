@@ -811,99 +811,139 @@ func TestNightlyScheduleCheckFailsWhenMissing(t *testing.T) {
 	}
 }
 
-func TestCISettingsChecksPassWhenConfigured(t *testing.T) {
+func TestSeparatedCachesCheckPassesWhenConfigured(t *testing.T) {
 	service := CheckService{SourceClient: &fakeSourceClient{}}
-	settings := CISettings{
-		SeparatedCaches:                 false,
-		ResourceGroupDefaultProcessMode: processModeOldestFirst,
-	}
+	settings := CISettings{SeparatedCaches: false}
 
-	for _, checkID := range []string{checkProcessMode, checkSeparatedCaches} {
-		state, err := service.runCheck(
-			context.Background(),
-			Source{Type: storage.SourceTypeGitLab},
-			Project{ProviderID: "group/repo"},
-			checkID,
-			nil,
-			false,
-			nil,
-			false,
-			settings,
-			true,
-			nil,
-			false,
-			false,
-		)
-		if err != nil {
-			t.Fatalf("run %s check: %v", checkID, err)
-		}
-		if state != CheckStatePass {
-			t.Fatalf("%s check state = %q, want %q", checkID, state, CheckStatePass)
-		}
+	state, err := service.runCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+		checkSeparatedCaches,
+		nil,
+		false,
+		nil,
+		false,
+		settings,
+		true,
+		nil,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("run %s check: %v", checkSeparatedCaches, err)
+	}
+	if state != CheckStatePass {
+		t.Fatalf("%s check state = %q, want %q", checkSeparatedCaches, state, CheckStatePass)
 	}
 }
 
-func TestCISettingsChecksFailWhenMisconfigured(t *testing.T) {
+func TestSeparatedCachesCheckFailsWhenMisconfigured(t *testing.T) {
 	service := CheckService{SourceClient: &fakeSourceClient{}}
-	settings := CISettings{
-		SeparatedCaches:                 true,
-		ResourceGroupDefaultProcessMode: "unordered",
-	}
+	settings := CISettings{SeparatedCaches: true}
 
-	for _, checkID := range []string{checkProcessMode, checkSeparatedCaches} {
-		state, err := service.runCheck(
-			context.Background(),
-			Source{Type: storage.SourceTypeGitLab},
-			Project{ProviderID: "group/repo"},
-			checkID,
-			nil,
-			false,
-			nil,
-			false,
-			settings,
-			true,
-			nil,
-			false,
-			false,
-		)
-		if err != nil {
-			t.Fatalf("run %s check: %v", checkID, err)
-		}
-		if state != CheckStateFail {
-			t.Fatalf("%s check state = %q, want %q", checkID, state, CheckStateFail)
-		}
+	state, err := service.runCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+		checkSeparatedCaches,
+		nil,
+		false,
+		nil,
+		false,
+		settings,
+		true,
+		nil,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("run %s check: %v", checkSeparatedCaches, err)
+	}
+	if state != CheckStateFail {
+		t.Fatalf("%s check state = %q, want %q", checkSeparatedCaches, state, CheckStateFail)
 	}
 }
 
-func TestCISettingsChecksFailWhenSettingsAreUnavailable(t *testing.T) {
+func TestSeparatedCachesCheckFailsWhenSettingsAreUnavailable(t *testing.T) {
 	service := CheckService{SourceClient: &fakeSourceClient{}}
 
-	for _, checkID := range []string{checkProcessMode, checkSeparatedCaches} {
-		state, err := service.runCheck(
-			context.Background(),
-			Source{Type: storage.SourceTypeGitLab},
-			Project{ProviderID: "group/repo"},
-			checkID,
-			nil,
-			false,
-			nil,
-			false,
-			CISettings{},
-			false,
-			nil,
-			false,
-			false,
-		)
-		if err != nil {
-			t.Fatalf("run %s check: %v", checkID, err)
-		}
-		if state != CheckStateFail {
-			t.Fatalf("%s check state = %q, want %q", checkID, state, CheckStateFail)
-		}
+	state, err := service.runCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+		checkSeparatedCaches,
+		nil,
+		false,
+		nil,
+		false,
+		CISettings{},
+		false,
+		nil,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("run %s check: %v", checkSeparatedCaches, err)
+	}
+	if state != CheckStateFail {
+		t.Fatalf("%s check state = %q, want %q", checkSeparatedCaches, state, CheckStateFail)
 	}
 }
 
-func TestCISettingsChecksNotApplicableForNonGitLabSources(t *testing.T) {
+func TestProcessModeCheckUsesReleaseCandidateResourceGroup(t *testing.T) {
+	client := &fakeSourceClient{
+		numericProjectID: 1986,
+		resourceGroupModes: map[string]string{
+			"application-rc-1986": processModeOldestFirst,
+		},
+	}
+	service := CheckService{SourceClient: client}
+
+	state, err := service.runProcessModeCheck(
+		context.Background(),
+		Source{Type: storage.SourceTypeGitLab},
+		Project{ProviderID: "group/repo"},
+	)
+	if err != nil {
+		t.Fatalf("run process mode check: %v", err)
+	}
+	if state != CheckStatePass {
+		t.Fatalf("process mode state = %q, want %q", state, CheckStatePass)
+	}
+	if client.requestedResourceGroup != "application-rc-1986" {
+		t.Fatalf("requested resource group = %q, want application-rc-1986", client.requestedResourceGroup)
+	}
+}
+
+func TestProcessModeCheckFailsForWrongOrMissingResourceGroup(t *testing.T) {
+	tests := []struct {
+		name  string
+		modes map[string]string
+	}{
+		{name: "wrong mode", modes: map[string]string{"application-rc-7": "unordered"}},
+		{name: "missing group"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := CheckService{SourceClient: &fakeSourceClient{resourceGroupModes: test.modes}}
+			state, err := service.runProcessModeCheck(
+				context.Background(),
+				Source{Type: storage.SourceTypeGitLab},
+				Project{ProviderID: "7"},
+			)
+			if err != nil {
+				t.Fatalf("run process mode check: %v", err)
+			}
+			if state != CheckStateFail {
+				t.Fatalf("process mode state = %q, want %q", state, CheckStateFail)
+			}
+		})
+	}
+}
+
+func TestGitLabSettingsChecksNotApplicableForNonGitLabSources(t *testing.T) {
 	service := CheckService{SourceClient: &fakeSourceClient{}}
 
 	for _, checkID := range []string{checkProcessMode, checkSeparatedCaches} {
@@ -1002,8 +1042,7 @@ func TestGitLabClientReadsCISettings(t *testing.T) {
 			t.Fatalf("PRIVATE-TOKEN = %q, want secret", r.Header.Get("PRIVATE-TOKEN"))
 		}
 		_, _ = w.Write([]byte(`{
-			"ci_separated_caches": true,
-			"resource_group_default_process_mode": "oldest_first"
+			"ci_separated_caches": true
 		}`))
 	}))
 	defer server.Close()
@@ -1019,12 +1058,38 @@ func TestGitLabClientReadsCISettings(t *testing.T) {
 	if !settings.SeparatedCaches {
 		t.Fatal("separated caches = false, want true")
 	}
-	if settings.ResourceGroupDefaultProcessMode != processModeOldestFirst {
-		t.Fatalf("process mode = %q, want %q", settings.ResourceGroupDefaultProcessMode, processModeOldestFirst)
+}
+
+func TestGitLabClientReadsResourceGroupProcessMode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %q, want GET", r.Method)
+		}
+		if r.URL.EscapedPath() != "/api/v4/projects/group%2Frepo/resource_groups/application-rc-1986" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("PRIVATE-TOKEN") != "secret" {
+			t.Fatalf("PRIVATE-TOKEN = %q, want secret", r.Header.Get("PRIVATE-TOKEN"))
+		}
+		_, _ = w.Write([]byte(`{"key":"application-rc-1986","process_mode":"oldest_first"}`))
+	}))
+	defer server.Close()
+
+	client := GitLabClient{HTTPClient: server.Client()}
+	source := Source{Type: storage.SourceTypeGitLab, URL: server.URL, PATToken: "secret"}
+	project := Project{ProviderID: "group/repo"}
+
+	processMode, err := client.ResourceGroupProcessMode(context.Background(), source, project, "application-rc-1986")
+	if err != nil {
+		t.Fatalf("read resource group process mode: %v", err)
+	}
+	if processMode != processModeOldestFirst {
+		t.Fatalf("process mode = %q, want %q", processMode, processModeOldestFirst)
 	}
 }
 
-func TestCheckServiceRunsCISettingsChecks(t *testing.T) {
+func TestCheckServiceRunsCIAndResourceGroupSettingsChecks(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
 	if err != nil {
@@ -1034,10 +1099,13 @@ func TestCheckServiceRunsCISettingsChecks(t *testing.T) {
 		_ = store.Close()
 	}()
 
-	client := &fakeSourceClient{ciSettings: CISettings{
-		SeparatedCaches:                 false,
-		ResourceGroupDefaultProcessMode: processModeOldestFirst,
-	}}
+	client := &fakeSourceClient{
+		ciSettings:       CISettings{SeparatedCaches: false},
+		numericProjectID: 1986,
+		resourceGroupModes: map[string]string{
+			"application-rc-1986": processModeOldestFirst,
+		},
+	}
 	service := CheckService{
 		Cache:        store.Cache(),
 		SourceClient: client,
@@ -1230,11 +1298,14 @@ func TestGitLabClientUsesInjectedHTTPClient(t *testing.T) {
 }
 
 type fakeSourceClient struct {
-	files      map[string][]byte
-	fetches    map[string]int
-	divergence BranchDivergence
-	schedules  []PipelineSchedule
-	ciSettings CISettings
+	files                  map[string][]byte
+	fetches                map[string]int
+	divergence             BranchDivergence
+	schedules              []PipelineSchedule
+	ciSettings             CISettings
+	numericProjectID       int64
+	resourceGroupModes     map[string]string
+	requestedResourceGroup string
 }
 
 func (c *fakeSourceClient) ResolveHead(context.Context, Source, Project) (Commit, error) {
@@ -1281,4 +1352,20 @@ func (c *fakeSourceClient) PipelineSchedules(_ context.Context, _ Source, _ Proj
 
 func (c *fakeSourceClient) CISettings(_ context.Context, _ Source, _ Project) (CISettings, error) {
 	return c.ciSettings, nil
+}
+
+func (c *fakeSourceClient) NumericProjectID(_ context.Context, _ Source, _ Project) (int64, error) {
+	if c.numericProjectID == 0 {
+		return 1, nil
+	}
+	return c.numericProjectID, nil
+}
+
+func (c *fakeSourceClient) ResourceGroupProcessMode(_ context.Context, _ Source, _ Project, resourceGroup string) (string, error) {
+	c.requestedResourceGroup = resourceGroup
+	processMode, found := c.resourceGroupModes[resourceGroup]
+	if !found {
+		return "", ErrFileNotFound
+	}
+	return processMode, nil
 }

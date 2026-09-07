@@ -33,6 +33,30 @@ func TestSettingsScreenRendersWarningInWarningColor(t *testing.T) {
 	}
 }
 
+func TestSettingsScreenMarksSelectedAndSortedHeader(t *testing.T) {
+	palette := uikit.NewPalette()
+	screen := NewSettingsScreen(palette)
+	state := uikit.SettingsTableState{
+		SelectedColumn: 1,
+		SortColumn:     1,
+		SortDescending: true,
+		SortActive:     true,
+	}
+
+	selected := screen.headerCell("master", settingsCheckColumnWidth, 1, state)
+	if selected.Foreground != palette.Primary {
+		t.Fatalf("selected header color = %q, want %q", selected.Foreground, palette.Primary)
+	}
+	if selected.Value != uikit.SymbolSortDescending+"master" {
+		t.Fatalf("selected header = %q, want descending marker", selected.Value)
+	}
+
+	unselected := screen.headerCell("project", settingsProjectColumnWidth, 0, state)
+	if unselected.Foreground != palette.Hint {
+		t.Fatalf("unselected header color = %q, want %q", unselected.Foreground, palette.Hint)
+	}
+}
+
 func TestSettingsScreenUsesGreenProjectIconWhenAllApplicableChecksPass(t *testing.T) {
 	palette := uikit.NewPalette()
 	screen := NewSettingsScreen(palette)

@@ -52,7 +52,8 @@ func ciComponentCheckID(path string) string {
 	switch {
 	case strings.Contains(path, "/shared/ci-ntfy/"):
 		return checkNtfy
-	case strings.HasSuffix(path, "/dtrack"):
+	case strings.HasSuffix(path, "/shared/ci-security/dtrack-image"),
+		strings.HasSuffix(path, "/shared/ci-security/dtrack-fs"):
 		return checkDtrack
 	case strings.Contains(path, "/shared/ci-mr/create-mr"):
 		return checkCremr

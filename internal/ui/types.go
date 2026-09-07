@@ -136,6 +136,7 @@ type DeleteConfirm = uikit.DeleteConfirm
 type ProjectCheck = uikit.ProjectCheck
 type CheckState = uikit.CheckState
 type ProjectCheckRow = uikit.ProjectCheckRow
+type SettingsTableState = uikit.SettingsTableState
 type SettingsStatus = uikit.SettingsStatus
 type SettingsOperation = uikit.SettingsOperation
 type ReleaseRow = uikit.ReleaseRow
@@ -201,6 +202,8 @@ var (
 	KeyRefreshAll       = uikit.KeyRefreshAll
 	KeyUpdatePins       = uikit.KeyUpdatePins
 	KeyOperations       = uikit.KeyOperations
+	KeySort             = uikit.KeySort
+	KeyColumnPick       = uikit.KeyColumnPick
 	KeyVulnMode         = uikit.KeyVulnMode
 	KeyPrev             = uikit.KeyPrev
 	KeyNext             = uikit.KeyNext

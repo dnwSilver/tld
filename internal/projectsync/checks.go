@@ -18,7 +18,6 @@ const (
 const (
 	ciTemplatesMarker = "spectrum-frontend/ci-templates"
 	ntfyMarker        = "$CI_SERVER_FQDN/shared/ci-ntfy/"
-	dtrackMarker      = "/dtrack@"
 	cremrMarker       = "$CI_SERVER_FQDN/shared/ci-mr/create-mr@"
 )
 
@@ -186,15 +185,15 @@ func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source
 }
 
 func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, ciSettings CISettings, ciSettingsFound bool, nextConfigContent []byte, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
-	if checkID == checkProcessMode || checkID == checkSeparatedCaches {
+	if checkID == checkProcessMode {
+		return s.runProcessModeCheck(ctx, source, project)
+	}
+	if checkID == checkSeparatedCaches {
 		if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
 			return CheckStateNotApplicable, nil
 		}
 		if !ciSettingsFound {
 			return CheckStateFail, nil
-		}
-		if checkID == checkProcessMode {
-			return checkState(ciSettings.ResourceGroupDefaultProcessMode == processModeOldestFirst), nil
 		}
 		// Feature branches must share one runner cache with dev/master,
 		// so separated caches being disabled is the healthy state.
@@ -254,7 +253,8 @@ func (s CheckService) runCheck(ctx context.Context, source Source, project Proje
 	case "ntfy":
 		pass = ciFound && strings.Contains(string(ciContent), ntfyMarker)
 	case "dtrack":
-		pass = ciFound && strings.Contains(string(ciContent), dtrackMarker)
+		_, pass = ciComponentVersions(ciContent)[checkDtrack]
+		pass = ciFound && pass
 	case "cremr":
 		pass = ciFound && strings.Contains(string(ciContent), cremrMarker)
 	case "protect":
@@ -266,6 +266,29 @@ func (s CheckService) runCheck(ctx context.Context, source Source, project Proje
 		return CheckStateFail, err
 	}
 	return checkState(pass), nil
+}
+
+func (s CheckService) runProcessModeCheck(ctx context.Context, source Source, project Project) (CheckState, error) {
+	if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
+		return CheckStateNotApplicable, nil
+	}
+	client, ok := s.SourceClient.(ResourceGroupSourceClient)
+	if !ok {
+		return CheckStateFail, errors.New("resource groups source client is not supported")
+	}
+	resourceGroup, err := releaseCandidateResourceGroup(ctx, client, source, project)
+	if err != nil {
+		return CheckStateFail, err
+	}
+	processMode, err := client.ResourceGroupProcessMode(ctx, source, project, resourceGroup)
+	if errors.Is(err, ErrFileNotFound) {
+		return CheckStateFail, nil
+	}
+	if err != nil {
+		return CheckStateFail, err
+	}
+
+	return checkState(processMode == processModeOldestFirst), nil
 }
 
 func checkState(pass bool) CheckState {

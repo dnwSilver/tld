@@ -59,7 +59,7 @@ func (s OperationService) Run(ctx context.Context, source Source, project Projec
 
 // The resource group name always contains the numeric project id, even when
 // the provider id is configured as a group/repo path.
-func releaseCandidateResourceGroup(ctx context.Context, client ProjectOperationSourceClient, source Source, project Project) (string, error) {
+func releaseCandidateResourceGroup(ctx context.Context, client NumericProjectIDSourceClient, source Source, project Project) (string, error) {
 	providerID := strings.TrimSpace(project.ProviderID)
 	if numericID, err := strconv.ParseInt(providerID, 10, 64); err == nil {
 		return releaseCandidateResourceGroupPrefix + strconv.FormatInt(numericID, 10), nil

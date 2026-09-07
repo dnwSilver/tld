@@ -57,8 +57,7 @@ type PipelineSchedule struct {
 }
 
 type CISettings struct {
-	SeparatedCaches                 bool
-	ResourceGroupDefaultProcessMode string
+	SeparatedCaches bool
 }
 
 type File struct {
@@ -88,8 +87,17 @@ type CISettingsSourceClient interface {
 	CISettings(ctx context.Context, source Source, project Project) (CISettings, error)
 }
 
-type ProjectOperationSourceClient interface {
+type NumericProjectIDSourceClient interface {
 	NumericProjectID(ctx context.Context, source Source, project Project) (int64, error)
+}
+
+type ResourceGroupSourceClient interface {
+	NumericProjectIDSourceClient
+	ResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string) (string, error)
+}
+
+type ProjectOperationSourceClient interface {
+	NumericProjectIDSourceClient
 	SetSeparatedCaches(ctx context.Context, source Source, project Project, separated bool) error
 	SetResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string, processMode string) error
 }

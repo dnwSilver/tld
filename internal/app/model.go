@@ -64,6 +64,7 @@ type model struct {
 	checkColumns             []ui.ProjectCheck
 	projectCheckRows         []ui.ProjectCheckRow
 	selectedCheckProjectID   int64
+	settingsTableState       ui.SettingsTableState
 	checksStatus             ui.SettingsStatus
 	checksSyncCh             <-chan checkSyncMsg
 	releaseRows              []ui.ReleaseRow
@@ -380,6 +381,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.screen == ui.ScreenSettings && !m.checksStatus.Running {
 				m = m.openOperationsModal()
+			}
+		case ui.KeyColumnPick.Matches(key):
+			if m.screen == ui.ScreenSettings {
+				if key == "shift+left" {
+					m.selectPreviousCheckColumn()
+				} else {
+					m.selectNextCheckColumn()
+				}
+				return m, nil
+			}
+		case ui.KeySort.Matches(key):
+			if m.screen == ui.ScreenSettings {
+				m.sortProjectChecksBySelectedColumn()
+				return m, nil
 			}
 		case ui.KeyPrev.Matches(key):
 			if m.screen == ui.ScreenView {
@@ -702,6 +717,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		if msg.err == nil {
 			m.projectCheckRows = msg.rows
+			m.applyProjectCheckSort()
 			m.ensureSelectedCheckProject()
 		}
 	case operationAppliedMsg:
@@ -878,6 +894,7 @@ func (m model) View() string {
 		m.checkColumns,
 		m.projectCheckRows,
 		m.selectedCheckProjectID,
+		m.settingsTableState,
 		m.checksStatus,
 		m.releaseRows,
 		m.selectedReleaseProjectID,

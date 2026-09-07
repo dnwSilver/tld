@@ -384,6 +384,13 @@ type ProjectCheckRow struct {
 	Versions         map[string]string
 }
 
+type SettingsTableState struct {
+	SelectedColumn int
+	SortColumn     int
+	SortDescending bool
+	SortActive     bool
+}
+
 type SettingsStatus struct {
 	Message string
 	Running bool

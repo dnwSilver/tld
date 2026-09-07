@@ -1,9 +1,12 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dnwSilver/tld/internal/projectsync"
@@ -180,4 +183,85 @@ func (m *model) selectPreviousCheckProject() {
 
 func (m *model) selectNextCheckProject() {
 	m.selectedCheckProjectID = selectNext(m.projectCheckRows, m.selectedCheckProjectID, projectCheckRowID)
+}
+
+func (m *model) selectPreviousCheckColumn() {
+	if m.settingsTableState.SelectedColumn > 0 {
+		m.settingsTableState.SelectedColumn--
+	}
+}
+
+func (m *model) selectNextCheckColumn() {
+	if m.settingsTableState.SelectedColumn < len(m.checkColumns) {
+		m.settingsTableState.SelectedColumn++
+	}
+}
+
+func (m *model) sortProjectChecksBySelectedColumn() {
+	if m.settingsTableState.SortActive && m.settingsTableState.SortColumn == m.settingsTableState.SelectedColumn {
+		m.settingsTableState.SortDescending = !m.settingsTableState.SortDescending
+	} else {
+		m.settingsTableState.SortActive = true
+		m.settingsTableState.SortColumn = m.settingsTableState.SelectedColumn
+		m.settingsTableState.SortDescending = false
+	}
+
+	m.applyProjectCheckSort()
+}
+
+func (m *model) applyProjectCheckSort() {
+	if !m.settingsTableState.SortActive || len(m.projectCheckRows) < 2 {
+		return
+	}
+
+	column := m.settingsTableState.SortColumn
+	descending := m.settingsTableState.SortDescending
+	sort.SliceStable(m.projectCheckRows, func(i, j int) bool {
+		comparison := compareProjectCheckRows(m.projectCheckRows[i], m.projectCheckRows[j], m.checkColumns, column)
+		if descending {
+			return comparison > 0
+		}
+		return comparison < 0
+	})
+}
+
+func compareProjectCheckRows(left, right ui.ProjectCheckRow, columns []ui.ProjectCheck, column int) int {
+	if column > 0 && column <= len(columns) {
+		checkID := columns[column-1].ID
+		if comparison := cmp.Compare(checkStateSortRank(left.Results[checkID]), checkStateSortRank(right.Results[checkID])); comparison != 0 {
+			return comparison
+		}
+		if comparison := compareFoldedStrings(left.Versions[checkID], right.Versions[checkID]); comparison != 0 {
+			return comparison
+		}
+	}
+
+	if comparison := compareFoldedStrings(left.ProjectName, right.ProjectName); comparison != 0 {
+		return comparison
+	}
+	return cmp.Compare(left.ProjectID, right.ProjectID)
+}
+
+func checkStateSortRank(state ui.CheckState) int {
+	switch state {
+	case ui.CheckStateFail:
+		return 0
+	case ui.CheckStateWarning:
+		return 1
+	case ui.CheckStateUnknown:
+		return 2
+	case ui.CheckStatePass:
+		return 3
+	case ui.CheckStateNotApplicable:
+		return 4
+	default:
+		return 2
+	}
+}
+
+func compareFoldedStrings(left, right string) int {
+	if comparison := strings.Compare(strings.ToLower(left), strings.ToLower(right)); comparison != 0 {
+		return comparison
+	}
+	return strings.Compare(left, right)
 }

@@ -372,17 +372,26 @@ func (c GitLabClient) PipelineSchedules(ctx context.Context, source Source, proj
 // the Maintainer role, otherwise the field is omitted and decodes as false.
 func (c GitLabClient) CISettings(ctx context.Context, source Source, project Project) (CISettings, error) {
 	var raw struct {
-		SeparatedCaches                 bool   `json:"ci_separated_caches"`
-		ResourceGroupDefaultProcessMode string `json:"resource_group_default_process_mode"`
+		SeparatedCaches bool `json:"ci_separated_caches"`
 	}
 	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID), &raw); err != nil {
 		return CISettings{}, err
 	}
 
 	return CISettings{
-		SeparatedCaches:                 raw.SeparatedCaches,
-		ResourceGroupDefaultProcessMode: raw.ResourceGroupDefaultProcessMode,
+		SeparatedCaches: raw.SeparatedCaches,
 	}, nil
+}
+
+func (c GitLabClient) ResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string) (string, error) {
+	var raw struct {
+		ProcessMode string `json:"process_mode"`
+	}
+	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID, "resource_groups", resourceGroup), &raw); err != nil {
+		return "", err
+	}
+
+	return raw.ProcessMode, nil
 }
 
 // HasMaintainerRights reports whether the token grants at least the

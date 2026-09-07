@@ -86,6 +86,7 @@ func (c Creator) Render(
 	checkColumns []uikit.ProjectCheck,
 	projectCheckRows []uikit.ProjectCheckRow,
 	selectedCheckProjectID int64,
+	settingsTableState uikit.SettingsTableState,
 	settingsStatus uikit.SettingsStatus,
 	releaseRows []uikit.ReleaseRow,
 	selectedReleaseProjectID int64,
@@ -206,7 +207,7 @@ func (c Creator) Render(
 		body = c.viewScreen.Render(width, bodyHeight, stacks, dependencyView.StackID, dependencyView, selectedViewProjectID, viewColumnOffset, projectSyncStatus)
 	}
 	if screen == uikit.ScreenSettings {
-		body = c.settingsScreen.Render(width, bodyHeight, checkColumns, projectCheckRows, selectedCheckProjectID, settingsStatus)
+		body = c.settingsScreen.Render(width, bodyHeight, checkColumns, projectCheckRows, selectedCheckProjectID, settingsTableState, settingsStatus)
 	}
 	if screen == uikit.ScreenReleases {
 		body = c.releasesScreen.Render(width, bodyHeight, releaseRows, selectedReleaseProjectID, releasePeriod, releasesStatus)

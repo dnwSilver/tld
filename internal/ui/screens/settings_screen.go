@@ -25,6 +25,7 @@ func (s SettingsScreen) Render(
 	checkColumns []uikit.ProjectCheck,
 	rows []uikit.ProjectCheckRow,
 	selectedProjectID int64,
+	tableState uikit.SettingsTableState,
 	status uikit.SettingsStatus,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
@@ -32,7 +33,7 @@ func (s SettingsScreen) Render(
 	contentWidth := uikit.Max(width-2, 1)
 	count := len(rows)
 	title := components.ScreenTitle(s.palette, uikit.SymbolSettings, "Settings", &count)
-	body := s.renderContent(contentWidth, contentHeight, checkColumns, rows, selectedProjectID)
+	body := s.renderContent(contentWidth, contentHeight, checkColumns, rows, selectedProjectID, tableState)
 	box := components.NewBox(s.palette, s.palette.Primary).Render(contentWidth, contentHeight, title, body)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 	if status.Message != "" || status.Error != "" {
@@ -47,9 +48,10 @@ func (s SettingsScreen) renderContent(
 	checkColumns []uikit.ProjectCheck,
 	rows []uikit.ProjectCheckRow,
 	selectedProjectID int64,
+	tableState uikit.SettingsTableState,
 ) string {
 	lines := make([]string, 0, height)
-	lines = append(lines, s.tableHeader(width, checkColumns))
+	lines = append(lines, s.tableHeader(width, checkColumns, tableState))
 	if len(rows) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No projects yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
@@ -61,19 +63,35 @@ func (s SettingsScreen) renderContent(
 	return fillLines(s.palette, lines, width, height)
 }
 
-func (s SettingsScreen) tableHeader(width int, checkColumns []uikit.ProjectCheck) string {
+func (s SettingsScreen) tableHeader(width int, checkColumns []uikit.ProjectCheck, tableState uikit.SettingsTableState) string {
 	cells := []components.TableCell{
-		{Value: "project", Width: settingsProjectColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		s.headerCell("project", settingsProjectColumnWidth, 0, tableState),
 	}
-	for _, check := range checkColumns {
-		cells = append(cells, components.TableCell{
-			Value:      check.Title,
-			Width:      settingsCheckColumnWidth,
-			Foreground: s.palette.Hint,
-			Bold:       true,
-		})
+	for index, check := range checkColumns {
+		cells = append(cells, s.headerCell(check.Title, settingsCheckColumnWidth, index+1, tableState))
 	}
 	return components.RenderTableRow(s.palette, s.palette.Background, width, cells)
+}
+
+func (s SettingsScreen) headerCell(title string, width int, column int, tableState uikit.SettingsTableState) components.TableCell {
+	color := s.palette.Hint
+	if column == tableState.SelectedColumn {
+		color = s.palette.Primary
+	}
+	if tableState.SortActive && column == tableState.SortColumn {
+		symbol := uikit.SymbolSortAscending
+		if tableState.SortDescending {
+			symbol = uikit.SymbolSortDescending
+		}
+		title = symbol + title
+	}
+
+	return components.TableCell{
+		Value:      title,
+		Width:      width,
+		Foreground: color,
+		Bold:       true,
+	}
 }
 
 func (s SettingsScreen) renderRow(width int, checkColumns []uikit.ProjectCheck, row uikit.ProjectCheckRow, selected bool) string {

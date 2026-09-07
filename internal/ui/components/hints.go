@@ -131,10 +131,10 @@ func (h Hints) vulnerabilityRows() []string {
 
 func (h Hints) settingsRows() []string {
 	return []string{
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyPrev, 20), h.fromBinding(h.palette.Hint, uikit.KeyNext, 20)),
+		h.row(hintSpec{h.palette.Hint, uikit.SymbolSelectNext, "[k/j] row", 20}, h.fromBinding(h.palette.Hint, uikit.KeyColumnPick, 20)),
 		h.row(h.fromBinding(h.palette.Primary, uikit.KeyRefreshDeps, 20), h.fromBinding(h.palette.Primary, uikit.KeyRefreshAll, 20)),
-		h.row(h.fromBinding(h.palette.Info, uikit.KeyOperations, 20), h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 20)),
-		h.row(h.fromBinding(h.palette.Hint, uikit.KeyQuit, 20), hintSpec{h.palette.Hint, "", "", 20}),
+		h.row(h.fromBinding(h.palette.Info, uikit.KeyOperations, 20), h.fromBinding(h.palette.Info, uikit.KeySort, 20)),
+		h.row(h.fromBinding(h.palette.Hint, uikit.KeyToggleHead, 20), h.fromBinding(h.palette.Hint, uikit.KeyQuit, 20)),
 	}
 }
 

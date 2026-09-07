@@ -19,4 +19,10 @@ func TestSettingsHintsIncludeOperations(t *testing.T) {
 	if !strings.Contains(hints, "[u] ops") {
 		t.Fatalf("settings hints do not include operations: %q", hints)
 	}
+	if !strings.Contains(hints, "[s] sort") {
+		t.Fatalf("settings hints do not include sorting: %q", hints)
+	}
+	if !strings.Contains(hints, "[Shift+←/→] field") {
+		t.Fatalf("settings hints do not include column navigation: %q", hints)
+	}
 }

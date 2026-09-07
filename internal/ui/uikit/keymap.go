@@ -38,6 +38,8 @@ var (
 	KeyRefreshAll       = Binding{Keys: []string{"R", "shift+r"}, Label: "refresh all", Symbol: SymbolDependency, Hint: "[R] refresh all"}
 	KeyUpdatePins       = Binding{Keys: []string{"u"}, Label: "update pins", Symbol: SymbolDependency, Hint: "[u] update pins"}
 	KeyOperations       = Binding{Keys: []string{"u"}, Label: "operations", Symbol: SymbolSettings, Hint: "[u] ops"}
+	KeySort             = Binding{Keys: []string{"s"}, Label: "sort", Symbol: SymbolSort, Hint: "[s] sort"}
+	KeyColumnPick       = Binding{Keys: []string{"shift+left", "shift+right"}, Label: "column", Symbol: SymbolColumnPick, Hint: "[Shift+←/→] field"}
 	KeyVulnMode         = Binding{Keys: []string{"m"}, Label: "vulnerability mode", Symbol: SymbolVulnerabilities, Hint: "[m] prod/dev"}
 	KeyPrev             = Binding{Keys: []string{"up", "k"}, Label: "prev", Symbol: SymbolSelectPrev, Hint: "[k] prev"}
 	KeyNext             = Binding{Keys: []string{"down", "j"}, Label: "next", Symbol: SymbolSelectNext, Hint: "[j] next"}
