@@ -8,60 +8,6 @@ import (
 	"github.com/dnwSilver/tld/internal/storage"
 )
 
-func TestNextConfigChecksPassForExpectedValues(t *testing.T) {
-	content := []byte(`
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  // reactStrictMode: false must not count when it is commented out.
-  distDir: 'dist',
-  output: "standalone",
-  experimental: {
-    validateRSCRequestHeaders: false,
-  },
-  sassOptions: {
-    charset: false,
-  },
-};
-
-export default nextConfig;
-`)
-
-	for _, checkID := range []string{
-		checkReactStrictMode,
-		checkDistDir,
-		checkOutput,
-		checkValidateRSCRequestHeaders,
-		checkSassCharset,
-	} {
-		if !nextConfigCheckPasses(content, checkID) {
-			t.Errorf("check %s failed, want pass", checkID)
-		}
-	}
-}
-
-func TestNextConfigChecksFailForUnexpectedValues(t *testing.T) {
-	content := []byte(`export default {
-  reactStrictMode: false,
-  distDir: '.next',
-  output: 'export',
-  validateRSCRequestHeaders: true,
-  sassOptions: { charset: true },
-}`)
-
-	for _, checkID := range []string{
-		checkReactStrictMode,
-		checkDistDir,
-		checkOutput,
-		checkValidateRSCRequestHeaders,
-		checkSassCharset,
-	} {
-		if nextConfigCheckPasses(content, checkID) {
-			t.Errorf("check %s passed, want fail", checkID)
-		}
-	}
-}
-
 func TestPackageJSONHasProductionNext(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -99,13 +45,7 @@ func TestCheckServiceCachesNextConfigResults(t *testing.T) {
 
 	client := &fakeSourceClient{files: map[string][]byte{
 		packageJSONFile: []byte(`{"dependencies":{"next":"^15.0.0"}}`),
-		nextConfigFile: []byte(`export default {
-  reactStrictMode: true,
-  distDir: 'dist',
-  output: 'standalone',
-  experimental: { validateRSCRequestHeaders: false },
-  sassOptions: { charset: false },
-}`),
+		nextConfigFile:  []byte(`export default {}`),
 	}}
 	service := CheckService{Cache: store.Cache(), SourceClient: client}
 	source := Source{Type: storage.SourceTypeGitLab}
@@ -115,17 +55,8 @@ func TestCheckServiceCachesNextConfigResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run project checks: %v", err)
 	}
-	for _, checkID := range []string{
-		checkNext,
-		checkReactStrictMode,
-		checkDistDir,
-		checkOutput,
-		checkValidateRSCRequestHeaders,
-		checkSassCharset,
-	} {
-		if results[checkID] != CheckStatePass {
-			t.Errorf("result %s = %q, want %q", checkID, results[checkID], CheckStatePass)
-		}
+	if results[checkNext] != CheckStatePass {
+		t.Errorf("result %s = %q, want %q", checkNext, results[checkNext], CheckStatePass)
 	}
 	if client.fetches[nextConfigFile] != 1 {
 		t.Fatalf("next.config.ts fetches = %d, want 1", client.fetches[nextConfigFile])
@@ -137,9 +68,6 @@ func TestCheckServiceCachesNextConfigResults(t *testing.T) {
 	loaded, err := service.LoadProject(ctx, source, project)
 	if err != nil {
 		t.Fatalf("load project checks: %v", err)
-	}
-	if loaded[checkSassCharset] != CheckStatePass {
-		t.Fatalf("loaded sass charset = %q, want %q", loaded[checkSassCharset], CheckStatePass)
 	}
 	if loaded[checkNext] != CheckStatePass {
 		t.Fatalf("loaded next = %q, want %q", loaded[checkNext], CheckStatePass)
@@ -170,9 +98,6 @@ func TestCheckServiceFailsNextCheckWhenConfigIsMissing(t *testing.T) {
 	if results[checkNext] != CheckStateFail {
 		t.Fatalf("next result = %q, want %q", results[checkNext], CheckStateFail)
 	}
-	if results[checkReactStrictMode] != CheckStateNotApplicable {
-		t.Fatalf("strict result = %q, want %q", results[checkReactStrictMode], CheckStateNotApplicable)
-	}
 }
 
 func TestCheckServiceMarksMissingNextConfigNotApplicable(t *testing.T) {
@@ -196,23 +121,12 @@ func TestCheckServiceMarksMissingNextConfigNotApplicable(t *testing.T) {
 	if results[checkNext] != CheckStateNotApplicable {
 		t.Errorf("result %s = %q, want %q", checkNext, results[checkNext], CheckStateNotApplicable)
 	}
-	for _, checkID := range []string{
-		checkReactStrictMode,
-		checkDistDir,
-		checkOutput,
-		checkValidateRSCRequestHeaders,
-		checkSassCharset,
-	} {
-		if results[checkID] != CheckStateNotApplicable {
-			t.Errorf("result %s = %q, want %q", checkID, results[checkID], CheckStateNotApplicable)
-		}
-	}
 
 	loaded, err := service.LoadProject(ctx, source, project)
 	if err != nil {
 		t.Fatalf("load project checks: %v", err)
 	}
-	if loaded[checkReactStrictMode] != CheckStateNotApplicable {
-		t.Fatalf("loaded strict mode = %q, want %q", loaded[checkReactStrictMode], CheckStateNotApplicable)
+	if loaded[checkNext] != CheckStateNotApplicable {
+		t.Errorf("loaded %s = %q, want %q", checkNext, loaded[checkNext], CheckStateNotApplicable)
 	}
 }

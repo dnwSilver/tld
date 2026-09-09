@@ -741,7 +741,6 @@ func TestNightlyScheduleCheckPassesWhenConfigured(t *testing.T) {
 		false,
 		CISettings{},
 		false,
-		nil,
 		false,
 		false,
 	)
@@ -773,7 +772,6 @@ func TestNightlyScheduleCheckWarnsWhenOwnerIsMisconfigured(t *testing.T) {
 		false,
 		CISettings{},
 		false,
-		nil,
 		false,
 		false,
 	)
@@ -799,7 +797,6 @@ func TestNightlyScheduleCheckFailsWhenMissing(t *testing.T) {
 		false,
 		CISettings{},
 		false,
-		nil,
 		false,
 		false,
 	)
@@ -826,7 +823,6 @@ func TestSeparatedCachesCheckPassesWhenConfigured(t *testing.T) {
 		false,
 		settings,
 		true,
-		nil,
 		false,
 		false,
 	)
@@ -853,7 +849,6 @@ func TestSeparatedCachesCheckFailsWhenMisconfigured(t *testing.T) {
 		false,
 		settings,
 		true,
-		nil,
 		false,
 		false,
 	)
@@ -879,7 +874,6 @@ func TestSeparatedCachesCheckFailsWhenSettingsAreUnavailable(t *testing.T) {
 		false,
 		CISettings{},
 		false,
-		nil,
 		false,
 		false,
 	)
@@ -958,7 +952,6 @@ func TestGitLabSettingsChecksNotApplicableForNonGitLabSources(t *testing.T) {
 			false,
 			CISettings{},
 			false,
-			nil,
 			false,
 			false,
 		)

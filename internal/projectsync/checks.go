@@ -67,14 +67,7 @@ const (
 	CheckStateNotApplicable CheckState = "not-applicable"
 )
 
-const (
-	checkNext                      = "next"
-	checkReactStrictMode           = "reactStrictMode"
-	checkDistDir                   = "distDir"
-	checkOutput                    = "output"
-	checkValidateRSCRequestHeaders = "validateRSCRequestHeaders"
-	checkSassCharset               = "sassOptions.charset"
-)
+const checkNext = "next"
 
 var ProjectChecks = []CheckDefinition{
 	{ID: "master", Title: "master"},
@@ -89,11 +82,6 @@ var ProjectChecks = []CheckDefinition{
 	{ID: "cremr", Title: "cremr"},
 	{ID: checkNightly, Title: "nightly"},
 	{ID: checkNext, Title: "next"},
-	{ID: checkReactStrictMode, Title: "strict"},
-	{ID: checkDistDir, Title: "dist"},
-	{ID: checkOutput, Title: "output"},
-	{ID: checkValidateRSCRequestHeaders, Title: "RSC"},
-	{ID: checkSassCharset, Title: "sass"},
 }
 
 type CheckService struct {
@@ -116,7 +104,7 @@ func (s CheckService) RunProject(ctx context.Context, source Source, project Pro
 	ciContent, ciFound := s.loadGitlabCI(ctx, source, project)
 	protectedBranches, protectedFound := s.loadProtectedBranches(ctx, source, project)
 	ciSettings, ciSettingsFound := s.loadCISettings(ctx, source, project)
-	packageJSONContent, packageJSONFound, nextConfigContent, nextConfigFound, err := s.loadNextProjectFiles(ctx, source, project)
+	packageJSONContent, packageJSONFound, nextConfigFound, err := s.loadNextProjectFiles(ctx, source, project)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +120,7 @@ func (s CheckService) RunProject(ctx context.Context, source Source, project Pro
 	versions := ciComponentVersions(ciContent)
 	for _, check := range ProjectChecks {
 		report(progress, fmt.Sprintf("Checking %s %s...", project.Name, check.Title))
-		state, err := s.runCheck(ctx, source, project, check.ID, ciContent, ciFound, protectedBranches, protectedFound, ciSettings, ciSettingsFound, nextConfigContent, nextConfigFound, hasProductionNext)
+		state, err := s.runCheck(ctx, source, project, check.ID, ciContent, ciFound, protectedBranches, protectedFound, ciSettings, ciSettingsFound, nextConfigFound, hasProductionNext)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +172,7 @@ func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source
 	return results, versions, nil
 }
 
-func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, ciSettings CISettings, ciSettingsFound bool, nextConfigContent []byte, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
+func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, ciSettings CISettings, ciSettingsFound bool, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
 	if checkID == checkProcessMode {
 		return s.runProcessModeCheck(ctx, source, project)
 	}
@@ -226,12 +214,6 @@ func (s CheckService) runCheck(ctx context.Context, source Source, project Proje
 			return CheckStateNotApplicable, nil
 		}
 		return checkState(nextConfigFound), nil
-	}
-	if isNextConfigCheck(checkID) {
-		if !nextConfigFound {
-			return CheckStateNotApplicable, nil
-		}
-		return checkState(nextConfigCheckPasses(nextConfigContent, checkID)), nil
 	}
 
 	var pass bool
@@ -324,10 +306,10 @@ func (s CheckService) loadGitlabCI(ctx context.Context, source Source, project P
 	return content, true
 }
 
-func (s CheckService) loadNextProjectFiles(ctx context.Context, source Source, project Project) ([]byte, bool, []byte, bool, error) {
+func (s CheckService) loadNextProjectFiles(ctx context.Context, source Source, project Project) ([]byte, bool, bool, error) {
 	commit, err := s.SourceClient.ResolveHead(ctx, source, project)
 	if err != nil {
-		return nil, false, nil, false, fmt.Errorf("resolve head for Next.js checks: %w", err)
+		return nil, false, false, fmt.Errorf("resolve head for Next.js checks: %w", err)
 	}
 
 	packageJSONContent, err := s.SourceClient.FetchFile(ctx, source, project, commit.SHA, packageJSONFile)
@@ -335,18 +317,18 @@ func (s CheckService) loadNextProjectFiles(ctx context.Context, source Source, p
 	if errors.Is(err, ErrFileNotFound) {
 		packageJSONFound = false
 	} else if err != nil {
-		return nil, false, nil, false, fmt.Errorf("fetch %s: %w", packageJSONFile, err)
+		return nil, false, false, fmt.Errorf("fetch %s: %w", packageJSONFile, err)
 	}
 
-	nextConfigContent, err := s.SourceClient.FetchFile(ctx, source, project, commit.SHA, nextConfigFile)
+	_, err = s.SourceClient.FetchFile(ctx, source, project, commit.SHA, nextConfigFile)
 	nextConfigFound := true
 	if errors.Is(err, ErrFileNotFound) {
 		nextConfigFound = false
 	} else if err != nil {
-		return nil, false, nil, false, fmt.Errorf("fetch %s: %w", nextConfigFile, err)
+		return nil, false, false, fmt.Errorf("fetch %s: %w", nextConfigFile, err)
 	}
 
-	return packageJSONContent, packageJSONFound, nextConfigContent, nextConfigFound, nil
+	return packageJSONContent, packageJSONFound, nextConfigFound, nil
 }
 
 func packageJSONHasProductionNext(content []byte) (bool, error) {
