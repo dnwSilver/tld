@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -15,6 +16,7 @@ type ReleasesScreen struct {
 const (
 	releasesStatusColumnWidth  = 2
 	releasesProjectColumnWidth = 24
+	releasesCountColumnWidth   = 3
 	releasesSeparator          = "│"
 )
 
@@ -69,7 +71,7 @@ func (s ReleasesScreen) renderContent(
 
 func (s ReleasesScreen) monthWidths(width int, monthCount int) []int {
 	widths := make([]int, monthCount)
-	available := uikit.Max(width-releasesStatusColumnWidth-1-releasesProjectColumnWidth-monthCount, monthCount)
+	available := uikit.Max(width-releasesStatusColumnWidth-1-releasesProjectColumnWidth-2*(releasesCountColumnWidth+1)-monthCount, monthCount)
 	base := available / monthCount
 	remainder := available % monthCount
 	for index := range widths {
@@ -88,6 +90,10 @@ func (s ReleasesScreen) tableHeader(width int, rows []uikit.ReleaseRow, monthWid
 		{Value: "", Width: releasesStatusColumnWidth, Foreground: s.palette.Hint},
 		s.separatorCell(),
 		{Value: "project", Width: releasesProjectColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		s.separatorCell(),
+		{Value: centerText(uikit.SymbolRocket, releasesCountColumnWidth), Width: releasesCountColumnWidth, Foreground: s.palette.Hint, Bold: true},
+		s.separatorCell(),
+		{Value: centerText(uikit.SymbolHotfix, releasesCountColumnWidth), Width: releasesCountColumnWidth, Foreground: s.palette.Hint, Bold: true},
 	}
 	for index, monthWidth := range monthWidths {
 		cells = append(cells, s.separatorCell())
@@ -144,6 +150,10 @@ func (s ReleasesScreen) renderRow(width int, row uikit.ReleaseRow, monthWidths [
 		{Value: s.statusCell(row, background), Width: releasesStatusColumnWidth},
 		s.separatorCell(),
 		{Value: projectCell, Width: releasesProjectColumnWidth, Foreground: projectColor},
+		s.separatorCell(),
+		{Value: releaseCountText(row.ReleaseCount), Width: releasesCountColumnWidth, Foreground: projectColor},
+		s.separatorCell(),
+		{Value: releaseCountText(row.HotfixCount), Width: releasesCountColumnWidth, Foreground: projectColor},
 	}
 	for index, monthWidth := range monthWidths {
 		cells = append(cells, s.separatorCell())
@@ -159,6 +169,13 @@ func (s ReleasesScreen) renderRow(width int, row uikit.ReleaseRow, monthWidths [
 	}
 
 	return components.RenderTableRow(s.palette, background, width, cells)
+}
+
+func releaseCountText(count int) string {
+	if count > 999 {
+		return "99+"
+	}
+	return centerText(strconv.Itoa(count), releasesCountColumnWidth)
 }
 
 func (s ReleasesScreen) separatorCell() components.TableCell {

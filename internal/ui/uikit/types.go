@@ -468,6 +468,8 @@ type ReleaseRow struct {
 	ProjectColor     string
 	ProjectFreezing  bool
 	ProjectEndOfLife bool
+	ReleaseCount     int
+	HotfixCount      int
 	HasReleases      bool
 	Months           []ReleaseMonth
 	Statuses         []ReleaseStatusIndicator

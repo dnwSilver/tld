@@ -62,3 +62,7 @@ components; unrelated tags and prerelease tags are excluded. When timeline
 marks overlap in one displayed cell, the hotfix icon takes precedence.
 Existing date-only cache entries remain readable as releases; refresh Releases
 to reload tag names and classify hotfixes.
+
+The rocket and ambulance columns between the project and the first month count
+release and hotfix tags in the selected timeline period. Each column is three
+characters wide. Multiple tags in the same timeline slot count separately.
