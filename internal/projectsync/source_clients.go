@@ -303,7 +303,7 @@ func (c GitLabClient) Tags(ctx context.Context, source Source, project Project) 
 }
 
 func (c GitLabClient) ProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, error) {
-	var raw []struct {
+	type rawBranch struct {
 		Name             string `json:"name"`
 		AllowForcePush   bool   `json:"allow_force_push"`
 		PushAccessLevels []struct {
@@ -313,8 +313,21 @@ func (c GitLabClient) ProtectedBranches(ctx context.Context, source Source, proj
 			AccessLevel int `json:"access_level"`
 		} `json:"merge_access_levels"`
 	}
-	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID, "protected_branches"), &raw); err != nil {
-		return nil, err
+	var raw []rawBranch
+	for page := 1; ; page++ {
+		requestURL := gitlabProjectAPIURL(source, project.ProviderID, "protected_branches")
+		values := requestURL.Query()
+		values.Set("page", fmt.Sprint(page))
+		values.Set("per_page", "100")
+		requestURL.RawQuery = values.Encode()
+		var batch []rawBranch
+		if err := c.getJSON(ctx, source, requestURL, &batch); err != nil {
+			return nil, err
+		}
+		raw = append(raw, batch...)
+		if len(batch) < 100 {
+			break
+		}
 	}
 
 	branches := make([]ProtectedBranch, 0, len(raw))
@@ -458,7 +471,11 @@ func (c GitLabClient) SetResourceGroupProcessMode(ctx context.Context, source So
 }
 
 func (c GitLabClient) putForm(ctx context.Context, source Source, requestURL url.URL, values url.Values) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, requestURL.String(), strings.NewReader(values.Encode()))
+	return c.writeForm(ctx, source, http.MethodPut, requestURL, values)
+}
+
+func (c GitLabClient) writeForm(ctx context.Context, source Source, method string, requestURL url.URL, values url.Values) error {
+	req, err := http.NewRequestWithContext(ctx, method, requestURL.String(), strings.NewReader(values.Encode()))
 	if err != nil {
 		return fmt.Errorf("create gitlab request: %w", err)
 	}

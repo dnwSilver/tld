@@ -64,16 +64,18 @@ func TestSettingsOperationsModalNavigationAndClose(t *testing.T) {
 		t.Fatalf("modal index after j = %d, want 1", updated.operationsModalIndex)
 	}
 
-	next, _ = updated.Update(key("j"))
-	updated = next.(model)
+	for i := 0; i < len(projectsync.ProjectOperations); i++ {
+		next, _ = updated.Update(key("j"))
+		updated = next.(model)
+	}
 	if updated.operationsModalIndex != len(projectsync.ProjectOperations)-1 {
 		t.Fatalf("modal index went past the last operation: %d", updated.operationsModalIndex)
 	}
 
 	next, _ = updated.Update(key("k"))
 	updated = next.(model)
-	if updated.operationsModalIndex != 0 {
-		t.Fatalf("modal index after k = %d, want 0", updated.operationsModalIndex)
+	if updated.operationsModalIndex != len(projectsync.ProjectOperations)-2 {
+		t.Fatalf("modal index after k = %d, want %d", updated.operationsModalIndex, len(projectsync.ProjectOperations)-2)
 	}
 
 	next, _ = updated.Update(key("u"))

@@ -76,6 +76,8 @@ var ProjectChecks = []CheckDefinition{
 	{ID: "protect", Title: "protect"},
 	{ID: checkProcessMode, Title: "process"},
 	{ID: checkSeparatedCaches, Title: "caches"},
+	{ID: checkProtectedBranches, Title: "branches"},
+	{ID: checkProtectedTags, Title: "tags"},
 	{ID: "ci/cd", Title: "ci/cd"},
 	{ID: "ntfy", Title: "ntfy"},
 	{ID: "dtrack", Title: "dtrack"},
@@ -173,6 +175,9 @@ func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source
 }
 
 func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, ciSettings CISettings, ciSettingsFound bool, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
+	if checkID == checkProtectedBranches || checkID == checkProtectedTags {
+		return s.runProtectionCheck(ctx, source, project, checkID)
+	}
 	if checkID == checkProcessMode {
 		return s.runProcessModeCheck(ctx, source, project)
 	}

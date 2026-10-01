@@ -39,3 +39,17 @@ The application stores its encrypted local database at the OS user config path:
 - Windows: `%AppData%\tld\tld.db`
 
 The database is opened with a passphrase entered interactively at startup. The passphrase is not stored by the application. If it is lost, the local database cannot be recovered.
+
+## GitLab protection in Settings
+
+The `branches` check requires explicit protected-branch rules for `master` and
+`dev`. The `tags` check requires all three protected-tag patterns:
+`release/*.*.*`, `hotfix/*.*.*`, and `v*.*.*`. These checks verify rule presence;
+`protect` continues to validate branch access levels and force-push settings.
+
+Press `u` on a selected project to open operations, then choose **Protect
+master/dev branches** or **Protect release/hotfix/version tags**. These operations
+create only missing rules and preserve existing rules. New branch rules allow
+Developer merges, Maintainer pushes, and disable force pushes. New tag rules
+allow Maintainers to create tags. The GitLab token needs Maintainer access and
+`api` scope. After applying an operation, project checks refresh automatically.

@@ -25,6 +25,8 @@ type OperationDefinition struct {
 var ProjectOperations = []OperationDefinition{
 	{ID: operationShareCICache, Title: "Share CI cache with all branches"},
 	{ID: operationProcessModeOldestFirst, Title: "Process RC queue oldest first"},
+	{ID: operationProtectBranches, Title: "Protect master/dev branches"},
+	{ID: operationProtectTags, Title: "Protect release/hotfix/version tags"},
 }
 
 type OperationService struct {
@@ -37,6 +39,9 @@ func (s OperationService) Run(ctx context.Context, source Source, project Projec
 	}
 	if project.ProviderID == "" {
 		return errors.New("operation provider project id is empty")
+	}
+	if operationID == operationProtectBranches || operationID == operationProtectTags {
+		return s.ensureProtection(ctx, source, project, operationID)
 	}
 	client, ok := s.SourceClient.(ProjectOperationSourceClient)
 	if !ok {
