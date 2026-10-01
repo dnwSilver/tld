@@ -218,6 +218,17 @@ func (s ReleasesScreen) monthCell(month uikit.ReleaseMonth, monthWidth int) stri
 		chars[position] = uikit.SymbolRocket
 	}
 
+	// In a compressed timeline, hotfixes take precedence when marks overlap.
+	for slot, hasHotfix := range month.HotfixMarks {
+		if !hasHotfix {
+			continue
+		}
+		position := slot * monthWidth / month.SlotCount
+		if position >= monthWidth {
+			position = monthWidth - 1
+		}
+		chars[position] = uikit.SymbolHotfix
+	}
 	return strings.Join(chars, "")
 }
 

@@ -64,7 +64,7 @@ func (m model) loadReleases() tea.Cmd {
 				return releasesLoadedMsg{err: err}
 			}
 			row.HasReleases = len(dates) > 0
-			row.Months = buildReleaseMonths(now, dates, period)
+			row.Months = buildReleaseEventMonths(now, dates, period)
 
 			statusService := projectsync.ReleaseStatusService{Cache: cache}
 			statuses, err := statusService.LoadProject(context.Background(), psSource, psProject)
@@ -177,6 +177,23 @@ func waitReleaseSync(ch <-chan releaseSyncMsg) tea.Cmd {
 		}
 		return msg
 	}
+}
+
+func buildReleaseEventMonths(now time.Time, releases []projectsync.Release, period ui.ReleasePeriod) []ui.ReleaseMonth {
+	var dates, hotfixDates []time.Time
+	for _, release := range releases {
+		if release.Kind == projectsync.ReleaseKindHotfix {
+			hotfixDates = append(hotfixDates, release.CreatedAt)
+		} else {
+			dates = append(dates, release.CreatedAt)
+		}
+	}
+	months := buildReleaseMonths(now, dates, period)
+	hotfixMonths := buildReleaseMonths(now, hotfixDates, period)
+	for index := range months {
+		months[index].HotfixMarks = hotfixMonths[index].Marks
+	}
+	return months
 }
 
 func buildReleaseMonths(now time.Time, dates []time.Time, period ui.ReleasePeriod) []ui.ReleaseMonth {

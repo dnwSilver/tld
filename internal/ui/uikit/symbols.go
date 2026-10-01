@@ -54,6 +54,7 @@ const SymbolCheckNotApplicable = "—"
 const (
 	SymbolReleases             = ""
 	SymbolRocket               = ""
+	SymbolHotfix               = "󰀯"
 	SymbolVulnerabilities      = "󰅴"
 	SymbolVulnCritical         = ""
 	SymbolVulnHigh             = "󰞏"

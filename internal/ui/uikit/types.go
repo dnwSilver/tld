@@ -446,9 +446,10 @@ func (p ReleasePeriod) Next() ReleasePeriod {
 }
 
 type ReleaseMonth struct {
-	Label     string
-	SlotCount int
-	Marks     []bool
+	Label       string
+	SlotCount   int
+	Marks       []bool
+	HotfixMarks []bool
 }
 
 type ReleaseStatusIndicator string

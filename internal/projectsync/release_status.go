@@ -102,7 +102,7 @@ func (s ReleaseStatusService) computeStatuses(ctx context.Context, source Source
 
 	statuses := make([]ReleaseStatusIndicator, 0, 2)
 
-	if !tagSet["v"+mainVersion] && !tagSet[mainVersion] {
+	if !tagSet["v"+mainVersion] && !tagSet["release/"+mainVersion] && !tagSet["hotfix/"+mainVersion] && !tagSet[mainVersion] {
 		statuses = append(statuses, ReleaseStatusUntaggedMain)
 	}
 

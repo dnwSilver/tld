@@ -53,3 +53,12 @@ create only missing rules and preserve existing rules. New branch rules allow
 Developer merges, Maintainer pushes, and disable force pushes. New tag rules
 allow Maintainers to create tags. The GitLab token needs Maintainer access and
 `api` scope. After applying an operation, project checks refresh automatically.
+
+## Release timeline
+
+Stable tags `vX.Y.Z` and `release/X.Y.Z` appear as releases (rocket).
+`hotfix/X.Y.Z` appears as a hotfix (`󰀯`). Versions contain three numeric
+components; unrelated tags and prerelease tags are excluded. When timeline
+marks overlap in one displayed cell, the hotfix icon takes precedence.
+Existing date-only cache entries remain readable as releases; refresh Releases
+to reload tag names and classify hotfixes.
