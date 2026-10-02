@@ -1,0 +1,117 @@
+package projectsync
+
+import (
+	"context"
+	"time"
+
+	"github.com/dnwSilver/tld/internal/storage"
+)
+
+const (
+	CacheNamespaceProjectFiles    = "project-files"
+	CacheNamespaceProjectChecks   = "project-checks"
+	CacheNamespaceProjectReleases = "project-releases"
+	CacheNamespaceProjectVulns    = "project-vulnerabilities"
+)
+
+const (
+	fileCacheTTL   = 30 * 24 * time.Hour
+	resultCacheTTL = 24 * time.Hour
+)
+
+type Project struct {
+	ID         int64
+	ProviderID string
+	Name       string
+	StackName  string
+}
+
+type ProjectSourceRef struct {
+	Source  Source
+	Project Project
+}
+
+type Source struct {
+	ID       int64
+	Type     string
+	URL      string
+	PATToken string
+}
+
+type Commit struct {
+	SHA      string
+	ShortSHA string
+}
+
+type Tag struct {
+	Name      string
+	CreatedAt time.Time
+}
+
+type BranchDivergence struct {
+	Ahead  int
+	Behind int
+}
+
+type ProtectedBranch struct {
+	Name              string
+	PushAccessLevels  []int
+	MergeAccessLevels []int
+	AllowForcePush    bool
+}
+
+type PipelineSchedule struct {
+	Description   string
+	Ref           string
+	OwnerUsername string
+}
+
+type CISettings struct {
+	SeparatedCaches bool
+}
+
+type File struct {
+	Path    string
+	Content []byte
+}
+
+type Dependency = storage.ProjectDependency
+
+type ProgressFunc func(message string)
+
+type SourceClient interface {
+	ResolveHead(ctx context.Context, source Source, project Project) (Commit, error)
+	FetchFile(ctx context.Context, source Source, project Project, commitSHA string, path string) ([]byte, error)
+	HasBranch(ctx context.Context, source Source, project Project, branch string) (bool, error)
+	CompareBranches(ctx context.Context, source Source, project Project, baseBranch string, headBranch string) (BranchDivergence, error)
+	DefaultBranch(ctx context.Context, source Source, project Project) (string, error)
+	ProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, error)
+	Tags(ctx context.Context, source Source, project Project) ([]Tag, error)
+}
+
+type PipelineScheduleSourceClient interface {
+	PipelineSchedules(ctx context.Context, source Source, project Project) ([]PipelineSchedule, error)
+}
+
+type CISettingsSourceClient interface {
+	CISettings(ctx context.Context, source Source, project Project) (CISettings, error)
+}
+
+type NumericProjectIDSourceClient interface {
+	NumericProjectID(ctx context.Context, source Source, project Project) (int64, error)
+}
+
+type ResourceGroupSourceClient interface {
+	NumericProjectIDSourceClient
+	ResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string) (string, error)
+}
+
+type ProjectOperationSourceClient interface {
+	NumericProjectIDSourceClient
+	SetSeparatedCaches(ctx context.Context, source Source, project Project, separated bool) error
+	SetResourceGroupProcessMode(ctx context.Context, source Source, project Project, resourceGroup string, processMode string) error
+}
+
+type MaintainerRightsSourceClient interface {
+	HasMaintainerRights(ctx context.Context, source Source, project Project) (bool, error)
+}

@@ -1,0 +1,298 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dnwSilver/tld/internal/projectsync"
+	"github.com/dnwSilver/tld/internal/storage"
+	"github.com/dnwSilver/tld/internal/ui"
+)
+
+type releasesLoadedMsg struct {
+	rows []ui.ReleaseRow
+	err  error
+}
+
+type releaseSyncMsg struct {
+	runID   uint64
+	message string
+	err     error
+	done    bool
+	step    bool
+	current int
+	total   int
+}
+
+func (m model) loadReleases() tea.Cmd {
+	projects := activeProjects(m.projects)
+	sources := m.sourcesWithCredentials()
+	return func() tea.Msg {
+		if m.store == nil {
+			return releasesLoadedMsg{rows: []ui.ReleaseRow{}}
+		}
+
+		cache := m.store.Cache()
+		now := time.Now().UTC()
+		period := m.releasePeriod
+		rows := make([]ui.ReleaseRow, 0, len(projects))
+		for _, project := range projects {
+			row := ui.ReleaseRow{
+				ProjectID:        project.ID,
+				ProjectIcon:      project.Icon,
+				ProjectName:      project.Name,
+				ProjectColor:     project.Color,
+				ProjectFreezing:  project.Freezing,
+				ProjectEndOfLife: project.EndOfLife,
+				Months:           buildReleaseMonths(now, nil, period),
+			}
+			source, ok := findByID(sources, project.SourceID, sourceID)
+			if !ok {
+				row.Statuses = []ui.ReleaseStatusIndicator{ui.ReleaseStatusUnknown}
+				rows = append(rows, row)
+				continue
+			}
+
+			psSource := projectsync.Source{ID: source.ID, Type: source.Type, URL: source.URL}
+			psProject := projectsync.Project{ProviderID: project.ProjectID, StackName: project.StackName}
+
+			releaseService := projectsync.ReleaseService{Cache: cache}
+			dates, err := releaseService.LoadProject(m.ctx, psSource, psProject)
+			if err != nil {
+				return releasesLoadedMsg{err: err}
+			}
+			row.HasReleases = len(dates) > 0
+			row.Months = buildReleaseEventMonths(now, dates, period)
+			row.ReleaseCount, row.HotfixCount = countReleases(now, dates, period)
+
+			statusService := projectsync.ReleaseStatusService{Cache: cache}
+			statuses, err := statusService.LoadProject(m.ctx, psSource, psProject)
+			if err != nil {
+				return releasesLoadedMsg{err: err}
+			}
+			row.Statuses = toUIReleaseStatuses(statuses)
+			rows = append(rows, row)
+		}
+
+		return releasesLoadedMsg{rows: rows}
+	}
+}
+
+func (m model) startReleasesRefresh(projects []ui.Project) (tea.Model, tea.Cmd) {
+	if m.releasesStatus.Running || len(projects) == 0 {
+		return m, nil
+	}
+
+	ch := make(chan releaseSyncMsg, 16)
+	jobCtx, cancel := context.WithCancel(m.ctx)
+	m.releasesCancel = cancel
+	m.releasesRunID++
+	m.releasesSyncCh = ch
+	m.releasesStatus = ui.SettingsStatus{
+		Message: "Loading releases...",
+		Running: true,
+	}
+
+	return m, tea.Batch(runReleasesRefresh(jobCtx, m.store, projects, m.sourcesWithCredentials(), ch), waitReleaseSync(ch, m.releasesRunID))
+}
+
+func (m model) selectedReleaseProjects() []ui.Project {
+	if project, ok := findByID(m.projects, m.selectedReleaseProjectID, projectID); ok && !project.EndOfLife {
+		return []ui.Project{project}
+	}
+
+	return nil
+}
+
+func runReleasesRefresh(ctx context.Context, store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- releaseSyncMsg) tea.Cmd {
+	return func() tea.Msg {
+		defer close(ch)
+		if store == nil {
+			sendJobMsg(ctx, ch, releaseSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true})
+			return nil
+		}
+
+		cache := store.Cache()
+		runProjectBatch(ctx, projects, "Releases", "Releases complete", func(ctx context.Context, project ui.Project, progress func(string)) error {
+			source, ok := findByID(sources, project.SourceID, sourceID)
+			if !ok {
+				return errors.New("source not found")
+			}
+
+			client, err := projectsync.NewSourceClient(source.Type, nil)
+			if err != nil {
+				return err
+			}
+
+			psSource := projectsync.Source{
+				ID:       source.ID,
+				Type:     source.Type,
+				URL:      source.URL,
+				PATToken: source.PATToken,
+			}
+			psProject := projectsync.Project{
+				ID:         project.ID,
+				ProviderID: project.ProjectID,
+				Name:       project.Name,
+				StackName:  project.StackName,
+			}
+			releaseService := projectsync.ReleaseService{
+				Cache:        cache,
+				SourceClient: client,
+			}
+			_, err = releaseService.RunProject(ctx, psSource, psProject, progress)
+			if err != nil {
+				return err
+			}
+
+			statusService := projectsync.ReleaseStatusService{
+				Cache:        cache,
+				SourceClient: client,
+			}
+			_, err = statusService.RunProject(ctx, psSource, psProject, progress)
+			return err
+		}, func(event projectJobEvent) {
+			sendJobMsg(ctx, ch, releaseSyncMsg{message: event.message, err: event.err, done: event.done, step: event.step, current: event.current, total: event.total})
+		})
+		return nil
+	}
+}
+
+func waitReleaseSync(ch <-chan releaseSyncMsg, runID uint64) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		msg.runID = runID
+		return msg
+	}
+}
+
+func countReleases(now time.Time, releases []projectsync.Release, period ui.ReleasePeriod) (releaseCount, hotfixCount int) {
+	end := monthStart(now.UTC()).AddDate(0, 1, 0)
+	start := end.AddDate(0, -period.Months(), 0)
+	for _, release := range releases {
+		date := release.CreatedAt
+		if date.IsZero() || date.Before(start) || !date.Before(end) {
+			continue
+		}
+		if release.Kind == projectsync.ReleaseKindHotfix {
+			hotfixCount++
+		} else {
+			releaseCount++
+		}
+	}
+	return
+}
+
+func buildReleaseEventMonths(now time.Time, releases []projectsync.Release, period ui.ReleasePeriod) []ui.ReleaseMonth {
+	var dates, hotfixDates []time.Time
+	for _, release := range releases {
+		if release.Kind == projectsync.ReleaseKindHotfix {
+			hotfixDates = append(hotfixDates, release.CreatedAt)
+		} else {
+			dates = append(dates, release.CreatedAt)
+		}
+	}
+	months := buildReleaseMonths(now, dates, period)
+	hotfixMonths := buildReleaseMonths(now, hotfixDates, period)
+	for index := range months {
+		months[index].HotfixMarks = hotfixMonths[index].Marks
+	}
+	return months
+}
+
+func buildReleaseMonths(now time.Time, dates []time.Time, period ui.ReleasePeriod) []ui.ReleaseMonth {
+	count := period.Months()
+	months := make([]ui.ReleaseMonth, count)
+	starts := make([]time.Time, count)
+	base := monthStart(now)
+	for index := range months {
+		starts[index] = base.AddDate(0, -(count - 1 - index), 0)
+		slotCount := monthSlotCount(starts[index], period)
+		months[index] = ui.ReleaseMonth{
+			Label:     starts[index].Format("Jan 06"),
+			SlotCount: slotCount,
+			Marks:     make([]bool, slotCount),
+		}
+	}
+
+	for _, date := range dates {
+		if date.IsZero() {
+			continue
+		}
+		date = date.UTC()
+		for index := range months {
+			next := starts[index].AddDate(0, 1, 0)
+			if !date.Before(starts[index]) && date.Before(next) {
+				slot := daySlot(date.Day(), period)
+				if slot >= 0 && slot < months[index].SlotCount {
+					months[index].Marks[slot] = true
+				}
+				break
+			}
+		}
+	}
+
+	return months
+}
+
+func monthSlotCount(value time.Time, period ui.ReleasePeriod) int {
+	if period == ui.ReleasePeriodQuarter {
+		return daysInMonth(value)
+	}
+
+	return 4
+}
+
+func daySlot(day int, period ui.ReleasePeriod) int {
+	if period == ui.ReleasePeriodQuarter {
+		return day - 1
+	}
+	switch {
+	case day <= 7:
+		return 0
+	case day <= 15:
+		return 1
+	case day <= 23:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func daysInMonth(value time.Time) int {
+	return time.Date(value.Year(), value.Month()+1, 0, 0, 0, 0, 0, value.Location()).Day()
+}
+
+func monthStart(value time.Time) time.Time {
+	year, month, _ := value.Date()
+	return time.Date(year, month, 1, 0, 0, 0, 0, value.Location())
+}
+
+func (m *model) ensureSelectedReleaseProject() {
+	m.selectedReleaseProjectID = ensureSelected(m.releaseRows, m.selectedReleaseProjectID, releaseRowID)
+}
+
+func releaseRowID(row ui.ReleaseRow) int64 {
+	return row.ProjectID
+}
+
+func (m *model) selectPreviousReleaseProject() {
+	m.selectedReleaseProjectID = selectPrevious(m.releaseRows, m.selectedReleaseProjectID, releaseRowID)
+}
+
+func (m *model) selectNextReleaseProject() {
+	m.selectedReleaseProjectID = selectNext(m.releaseRows, m.selectedReleaseProjectID, releaseRowID)
+}
+
+func toUIReleaseStatuses(statuses []projectsync.ReleaseStatusIndicator) []ui.ReleaseStatusIndicator {
+	result := make([]ui.ReleaseStatusIndicator, len(statuses))
+	for i, s := range statuses {
+		result[i] = ui.ReleaseStatusIndicator(s)
+	}
+	return result
+}
