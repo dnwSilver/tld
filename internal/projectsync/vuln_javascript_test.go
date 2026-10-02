@@ -28,6 +28,7 @@ func TestParseNpmAudit(t *testing.T) {
 			}
 		},
 		"metadata": {
+			"dependencies": {"total": 17},
 			"vulnerabilities": {
 				"info": 1,
 				"low": 2,
@@ -44,6 +45,9 @@ func TestParseNpmAudit(t *testing.T) {
 	}
 	if !report.Scanned {
 		t.Fatal("expected scanned report")
+	}
+	if len(report.Coverage) != 1 || report.Coverage[0].Scanner != "npm audit" || report.Coverage[0].Packages != 17 {
+		t.Fatalf("coverage = %#v", report.Coverage)
 	}
 	if report.Counts.Critical != 5 || report.Counts.High != 4 || report.Counts.Medium != 3 || report.Counts.Low != 2 || report.Counts.None != 1 {
 		t.Fatalf("counts = %#v", report.Counts)

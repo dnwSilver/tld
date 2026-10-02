@@ -43,6 +43,7 @@ func (s StacksScreen) Render(
 	policies []uikit.Policy,
 	form uikit.StackForm,
 	deleteConfirm uikit.DeleteConfirm,
+	searchQuery string,
 ) string {
 	boxWidth := uikit.Max(width, 2)
 	boxHeight := uikit.Max(height-1, 3)
@@ -50,7 +51,7 @@ func (s StacksScreen) Render(
 	contentHeight := uikit.Max(boxHeight-2, 1)
 
 	count := len(stacks)
-	title := components.ScreenTitle(s.palette, s.symbol, s.screenTitle, &count)
+	title := components.ScreenTitle(s.palette, s.symbol, s.screenTitle, &count, searchQuery)
 	content := s.renderContent(contentWidth, contentHeight, stacks, selectedStackID, policies, form, deleteConfirm)
 	borderColor := s.palette.Primary
 	if form.Open || deleteConfirm.Open {
@@ -72,14 +73,15 @@ func (s StacksScreen) renderContent(
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	lines := make([]string, 0, height)
-	iconColumnWidth := components.ColumnWidth(stacks, func(stack uikit.Stack) string { return stack.Icon }, 2)
+	visibleStacks := visibleRowsByID(stacks, selectedStackID, height-1, func(stack uikit.Stack) int64 { return stack.ID })
+	iconColumnWidth := components.ColumnWidth(visibleStacks, func(stack uikit.Stack) string { return stack.Icon }, 2)
 	lines = append(lines, s.tableHeader(width, iconColumnWidth))
 
 	if len(stacks) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No "+strings.ToLower(s.screenTitle)+" yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, stack := range stacks {
+		for _, stack := range visibleStacks {
 			lines = append(lines, s.renderStackRow(width, stack, stack.ID == selectedStackID, iconColumnWidth))
 		}
 	}

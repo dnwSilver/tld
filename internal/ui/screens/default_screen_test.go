@@ -20,7 +20,7 @@ func TestDefaultScreenRendersAttentionTable(t *testing.T) {
 			SettingsErrors:   5,
 			SettingsWarnings: 6,
 		},
-	}, uikit.DashboardPaneAttention, 1)
+	}, uikit.DashboardPaneAttention, 1, "")
 
 	for _, expected := range []string{"Team lead dashboard", "Stacks: 4", "Token has maintainer right: true", "Attention [1]", "project", "crit", "high", "major", "min/patch", "errors", "warnings", "payments"} {
 		if !strings.Contains(content, expected) {
@@ -31,7 +31,7 @@ func TestDefaultScreenRendersAttentionTable(t *testing.T) {
 
 func TestDefaultScreenRendersEmptyAttentionState(t *testing.T) {
 	screen := NewDefaultScreen(uikit.Palette{})
-	content := screen.Render(100, 10, 0, uikit.TokenRights{}, nil, uikit.DashboardPaneSummary, 0)
+	content := screen.Render(100, 10, 0, uikit.TokenRights{}, nil, uikit.DashboardPaneSummary, 0, "")
 
 	if !strings.Contains(content, "No projects require attention") {
 		t.Fatalf("unexpected empty state:\n%s", content)
@@ -59,6 +59,20 @@ func TestDefaultScreenTokenRightsStates(t *testing.T) {
 				t.Fatalf("line does not contain %q: %q", testCase.value, line)
 			}
 		})
+	}
+}
+
+func TestDefaultScreenShowsRightsPerProject(t *testing.T) {
+	screen := NewDefaultScreen(uikit.NewPalette())
+	content := screen.Render(100, 12, 1, uikit.TokenRights{Projects: []uikit.ProjectRight{
+		{ProjectID: 1, ProjectName: "one", Checked: true, Maintainer: true},
+		{ProjectID: 2, ProjectName: "two", Checked: true, Maintainer: false},
+		{ProjectID: 3, ProjectName: "three"},
+	}}, nil, uikit.DashboardPaneSummary, 0, "")
+	for _, expected := range []string{"Maintainer for one: true", "Maintainer for two: false", "Maintainer for three: unknown"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("dashboard is missing %q", expected)
+		}
 	}
 }
 

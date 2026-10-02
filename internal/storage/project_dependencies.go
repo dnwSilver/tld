@@ -36,6 +36,7 @@ type ProjectDependency struct {
 	ProjectID      int64
 	RunID          int64
 	Name           string
+	Ecosystem      string
 	Version        string
 	DependencyType string
 	SourceFile     string
@@ -95,7 +96,7 @@ func (r ProjectDependencyRepository) ListByProject(ctx context.Context, projectI
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, run_id, name, version, dependency_type, source_file, created_at, updated_at
+		SELECT id, project_id, run_id, name, ecosystem, version, dependency_type, source_file, created_at, updated_at
 		FROM project_dependencies
 		WHERE project_id = ?
 		ORDER BY dependency_type ASC, name ASC
@@ -117,6 +118,7 @@ func (r ProjectDependencyRepository) ListByProject(ctx context.Context, projectI
 			&dependency.ProjectID,
 			&dependency.RunID,
 			&dependency.Name,
+			&dependency.Ecosystem,
 			&dependency.Version,
 			&dependency.DependencyType,
 			&dependency.SourceFile,
@@ -249,14 +251,15 @@ func (r ProjectDependencyRepository) ReplaceForProjectRun(ctx context.Context, p
 				project_id,
 				run_id,
 				name,
+				ecosystem,
 				version,
 				dependency_type,
 				source_file,
 				created_at,
 				updated_at
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`, projectID, runID, dependency.Name, dependency.Version, dependency.DependencyType, dependency.SourceFile, now, now); err != nil {
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, projectID, runID, dependency.Name, dependency.Ecosystem, dependency.Version, dependency.DependencyType, dependency.SourceFile, now, now); err != nil {
 			return ProjectDependencyRun{}, fmt.Errorf("insert project dependency: %w", err)
 		}
 	}

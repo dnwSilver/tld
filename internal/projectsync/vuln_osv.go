@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var androidVulnFiles = append(
@@ -19,9 +20,9 @@ var androidVulnFiles = append(
 )
 
 type osvVulnerability struct {
-	ID       string `json:"id"`
-	Summary  string `json:"summary"`
-	Details  string `json:"details"`
+	ID               string `json:"id"`
+	Summary          string `json:"summary"`
+	Details          string `json:"details"`
 	DatabaseSpecific struct {
 		Severity string `json:"severity"`
 	} `json:"database_specific"`
@@ -42,38 +43,65 @@ type osvVulnerability struct {
 }
 
 func runOsvScan(dir string, files []File, strategy StackStrategy) (VulnReport, error) {
-	if report, err := scanOsvAPI(context.Background(), files, strategy); err == nil {
+	return runOsvScanContext(context.Background(), dir, files, strategy)
+}
+
+func runOsvScanContext(ctx context.Context, dir string, files []File, strategy StackStrategy) (VulnReport, error) {
+	report, apiErr := scanOsvAPI(ctx, files, strategy)
+	if apiErr == nil {
 		return report, nil
 	}
+	if ctx.Err() != nil {
+		return VulnReport{}, ctx.Err()
+	}
 
-	output, cliErr := runOsvScannerCLI(dir)
+	output, cliErr := runOsvScannerCLIContext(ctx, dir)
+	var coverageErr error
 	if cliErr == nil && len(bytes.TrimSpace(output)) > 0 {
 		report, parseErr := parseOsvScanner(output)
-		if parseErr == nil && !shouldUseOsvAPIFallback(output) {
+		if parseErr != nil {
+			coverageErr = fmt.Errorf("parse OSV CLI output: %w", parseErr)
+		} else if count, covered := osvCLICoverageCount(output, files, strategy); !covered {
+			coverageErr = errors.New("OSV CLI did not cover every parsed dependency")
+		} else {
+			report.Coverage = []ScannerCoverage{{Scanner: "osv-scanner", Method: "parsed package match", Packages: count}}
 			return report, nil
 		}
 	}
 	if cliErr != nil {
-		return VulnReport{}, cliErr
+		return VulnReport{}, errors.Join(apiErr, cliErr)
 	}
-	return VulnReport{}, errors.New("osv-scanner returned empty output")
+	if coverageErr != nil {
+		return VulnReport{}, errors.Join(apiErr, coverageErr)
+	}
+	return VulnReport{}, errors.Join(apiErr, errors.New("osv-scanner returned empty output"))
 }
 
 func runOsvScannerCLI(dir string) ([]byte, error) {
+	return runOsvScannerCLIContext(context.Background(), dir)
+}
+
+func runOsvScannerCLIContext(ctx context.Context, dir string) ([]byte, error) {
 	binary, err := exec.LookPath("osv-scanner")
 	if err != nil {
 		return nil, errors.New("osv-scanner is required: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	for _, args := range [][]string{
 		{"scan", "source", "--format", "json", "-r", dir},
 		{"scan", "--format", "json", "-r", dir},
 	} {
 		cmd := exec.CommandContext(ctx, binary, args...)
-		var stderr bytes.Buffer
+		var stdout, stderr scannerOutput
+		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
-		output, err := cmd.Output()
+		err := cmd.Run()
+		if errors.Is(err, errScannerOutputLimit) {
+			return nil, err
+		}
+		output := stdout.Bytes()
 		if len(bytes.TrimSpace(output)) > 0 {
 			if err != nil {
 				var scanErr *exec.ExitError
@@ -84,7 +112,7 @@ func runOsvScannerCLI(dir string) ([]byte, error) {
 			return extractJSONPayload(output), nil
 		}
 		if err != nil {
-			message := strings.TrimSpace(stderr.String())
+			message := strings.TrimSpace(string(stderr.Bytes()))
 			if isBenignOsvScannerMessage(message) {
 				return nil, nil
 			}
@@ -112,23 +140,48 @@ func extractJSONPayload(output []byte) []byte {
 	return trimmed
 }
 
-func shouldUseOsvAPIFallback(output []byte) bool {
+func osvCLIHasCoverage(output []byte, files []File, strategy StackStrategy) bool {
+	_, covered := osvCLICoverageCount(output, files, strategy)
+	return covered
+}
+
+func osvCLICoverageCount(output []byte, files []File, strategy StackStrategy) (int, bool) {
 	var payload struct {
 		Results []struct {
-			Packages []json.RawMessage `json:"packages"`
+			Packages []struct {
+				Package struct {
+					Name    string `json:"name"`
+					Version string `json:"version"`
+				} `json:"package"`
+			} `json:"packages"`
 		} `json:"results"`
 	}
 	if err := json.Unmarshal(extractJSONPayload(output), &payload); err != nil {
-		return true
+		return 0, false
 	}
-	if len(payload.Results) == 0 {
-		return true
-	}
-	totalPackages := 0
+	covered := make(map[string]struct{})
 	for _, result := range payload.Results {
-		totalPackages += len(result.Packages)
+		for _, pkg := range result.Packages {
+			covered[pkg.Package.Name+"\x00"+pkg.Package.Version] = struct{}{}
+		}
 	}
-	return totalPackages == 0
+	expected := 0
+	for _, file := range files {
+		dependencies, err := strategy.Parse(file.Path, file.Content)
+		if err != nil {
+			return 0, false
+		}
+		for _, dependency := range dependencies {
+			if dependency.Name == "" || dependency.Version == "" {
+				return 0, false
+			}
+			expected++
+			if _, ok := covered[dependency.Name+"\x00"+dependency.Version]; !ok {
+				return 0, false
+			}
+		}
+	}
+	return expected, expected > 0
 }
 
 func writeOsvScanFiles(dir string, files []File) error {

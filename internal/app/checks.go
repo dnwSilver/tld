@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -20,6 +19,7 @@ type projectChecksLoadedMsg struct {
 }
 
 type checkSyncMsg struct {
+	runID   uint64
 	message string
 	err     error
 	done    bool
@@ -38,13 +38,31 @@ func defaultCheckColumns() []ui.ProjectCheck {
 
 func (m model) loadProjectChecks() tea.Cmd {
 	projects := activeProjects(m.projects)
-	sources := m.sources
+	sources := m.sourcesWithCredentials()
 	return func() tea.Msg {
 		if m.store == nil {
 			return projectChecksLoadedMsg{rows: []ui.ProjectCheckRow{}}
 		}
 
 		cache := m.store.Cache()
+		refs := make([]projectsync.ProjectSourceRef, 0, len(projects))
+		reportIndex := make(map[int64]int, len(projects))
+		for _, project := range projects {
+			source, ok := findByID(sources, project.SourceID, sourceID)
+			if !ok {
+				continue
+			}
+			reportIndex[project.ID] = len(refs)
+			refs = append(refs, projectsync.ProjectSourceRef{
+				Source:  projectsync.Source{ID: source.ID, Type: source.Type, URL: source.URL},
+				Project: projectsync.Project{ProviderID: project.ProjectID},
+			})
+		}
+		service := projectsync.CheckService{Cache: cache}
+		allResults, allVersions, err := service.LoadProjectsWithVersions(m.ctx, refs)
+		if err != nil {
+			return projectChecksLoadedMsg{err: err}
+		}
 		rows := make([]ui.ProjectCheckRow, 0, len(projects))
 		for _, project := range projects {
 			row := ui.ProjectCheckRow{
@@ -57,7 +75,7 @@ func (m model) loadProjectChecks() tea.Cmd {
 				Results:          make(map[string]ui.CheckState, len(projectsync.ProjectChecks)),
 				Versions:         make(map[string]string, len(projectsync.ProjectChecks)),
 			}
-			source, ok := findByID(sources, project.SourceID, sourceID)
+			index, ok := reportIndex[project.ID]
 			if !ok {
 				for _, check := range projectsync.ProjectChecks {
 					row.Results[check.ID] = ui.CheckStateUnknown
@@ -66,15 +84,10 @@ func (m model) loadProjectChecks() tea.Cmd {
 				continue
 			}
 
-			service := projectsync.CheckService{Cache: cache}
-			results, versions, err := service.LoadProjectWithVersions(context.Background(), projectsync.Source{Type: source.Type}, projectsync.Project{ProviderID: project.ProjectID})
-			if err != nil {
-				return projectChecksLoadedMsg{err: err}
-			}
-			for checkID, state := range results {
+			for checkID, state := range allResults[index] {
 				row.Results[checkID] = ui.CheckState(state)
 			}
-			for checkID, version := range versions {
+			for checkID, version := range allVersions[index] {
 				row.Versions[checkID] = version
 			}
 			rows = append(rows, row)
@@ -90,13 +103,16 @@ func (m model) startProjectChecksRefresh(projects []ui.Project) (tea.Model, tea.
 	}
 
 	ch := make(chan checkSyncMsg, 16)
+	jobCtx, cancel := context.WithCancel(m.ctx)
+	m.checksCancel = cancel
+	m.checksRunID++
 	m.checksSyncCh = ch
 	m.checksStatus = ui.SettingsStatus{
 		Message: "Running checks...",
 		Running: true,
 	}
 
-	return m, tea.Batch(runProjectChecksRefresh(m.store, projects, m.sources, ch), waitCheckSync(ch))
+	return m, tea.Batch(runProjectChecksRefresh(jobCtx, m.store, projects, m.sourcesWithCredentials(), ch), waitCheckSync(ch, m.checksRunID))
 }
 
 func (m model) selectedCheckProjects() []ui.Project {
@@ -107,34 +123,31 @@ func (m model) selectedCheckProjects() []ui.Project {
 	return nil
 }
 
-func runProjectChecksRefresh(store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- checkSyncMsg) tea.Cmd {
+func runProjectChecksRefresh(ctx context.Context, store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- checkSyncMsg) tea.Cmd {
 	return func() tea.Msg {
 		defer close(ch)
 		if store == nil {
-			ch <- checkSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			sendJobMsg(ctx, ch, checkSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true})
 			return nil
 		}
 
 		cache := store.Cache()
-		total := len(projects)
-		for index, project := range projects {
+		runProjectBatch(ctx, projects, "Checks", "Checks complete", func(ctx context.Context, project ui.Project, progress func(string)) error {
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
-				ch <- checkSyncMsg{message: fmt.Sprintf("Skipping %s: source not found", project.Name), current: index, total: total}
-				continue
+				return errors.New("source not found")
 			}
 
 			client, err := projectsync.NewSourceClient(source.Type, nil)
 			if err != nil {
-				ch <- checkSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
+				return err
 			}
 
 			service := projectsync.CheckService{
 				Cache:        cache,
 				SourceClient: client,
 			}
-			_, err = service.RunProject(context.Background(), projectsync.Source{
+			_, err = service.RunProject(ctx, projectsync.Source{
 				ID:       source.ID,
 				Type:     source.Type,
 				URL:      source.URL,
@@ -143,28 +156,22 @@ func runProjectChecksRefresh(store *storage.Store, projects []ui.Project, source
 				ID:         project.ID,
 				ProviderID: project.ProjectID,
 				Name:       project.Name,
-			}, func(message string) {
-				ch <- checkSyncMsg{message: project.Name + ": " + message, current: index, total: total}
-			})
-			if err != nil {
-				ch <- checkSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
-			}
-
-			ch <- checkSyncMsg{message: project.Name, step: true, current: index + 1, total: total}
-		}
-
-		ch <- checkSyncMsg{message: "Checks complete", done: true, current: total, total: total}
+			}, progress)
+			return err
+		}, func(event projectJobEvent) {
+			sendJobMsg(ctx, ch, checkSyncMsg{message: event.message, err: event.err, done: event.done, step: event.step, current: event.current, total: event.total})
+		})
 		return nil
 	}
 }
 
-func waitCheckSync(ch <-chan checkSyncMsg) tea.Cmd {
+func waitCheckSync(ch <-chan checkSyncMsg, runID uint64) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
 			return nil
 		}
+		msg.runID = runID
 		return msg
 	}
 }

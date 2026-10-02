@@ -42,6 +42,8 @@ type ReleaseService struct {
 }
 
 func (s ReleaseService) RunProject(ctx context.Context, source Source, project Project, progress ProgressFunc) ([]Release, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	if s.SourceClient == nil {
 		return nil, errors.New("release source client is empty")
 	}
@@ -72,7 +74,7 @@ func (s ReleaseService) RunProject(ctx context.Context, source Source, project P
 }
 
 func (s ReleaseService) LoadProject(ctx context.Context, source Source, project Project) ([]Release, error) {
-	key := releaseCacheKey(source.Type, project.ProviderID)
+	key := releaseSourceCacheKey(source, project.ProviderID)
 	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectReleases, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrCacheMiss) {
@@ -102,11 +104,11 @@ func (s ReleaseService) cacheDates(ctx context.Context, source Source, project P
 	if err != nil {
 		return fmt.Errorf("encode releases: %w", err)
 	}
-	key := releaseCacheKey(source.Type, project.ProviderID)
+	key := releaseSourceCacheKey(source, project.ProviderID)
 
-	return s.Cache.Set(ctx, CacheNamespaceProjectReleases, key, payload, "application/json", 0)
+	return s.Cache.Set(ctx, CacheNamespaceProjectReleases, key, payload, "application/json", resultCacheTTL)
 }
 
-func releaseCacheKey(sourceType string, projectID string) string {
-	return cacheKey(sourceType, projectID, "tags", "releases")
+func releaseSourceCacheKey(source Source, projectID string) string {
+	return sourceCacheKey(source, projectID, "tags", "releases")
 }

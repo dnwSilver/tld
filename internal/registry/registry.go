@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/dnwSilver/tld/internal/sourceurl"
 	"io"
 	"net/http"
 	"net/url"
@@ -46,12 +47,25 @@ func (c Client) LatestStable(ctx context.Context, source Source, packageName str
 	if strings.TrimSpace(source.URL) == "" {
 		return "", errors.New("registry URL is empty")
 	}
+	if _, err := sourceurl.Parse(source.URL); err != nil {
+		return "", err
+	}
 	packageName = strings.TrimSpace(packageName)
 	if packageName == "" {
 		return "", errors.New("registry package name is empty")
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 20 * time.Second}
+	}
+	if client, ok := c.HTTPClient.(*http.Client); ok {
+		copy := *client
+		copy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if len(via) == 0 {
+				return nil
+			}
+			return sourceurl.SameOrigin(via[0].URL, req.URL)
+		}
+		c.HTTPClient = &copy
 	}
 
 	var versions []string

@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,7 +13,7 @@ import (
 
 func TestOpenCreatesEncryptedDatabase(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "tld.db")
+	path := filepath.Join(t.TempDir(), "private", "tld.db")
 
 	store, err := Open(ctx, path, "secret")
 	if err != nil {
@@ -34,6 +35,60 @@ func TestOpenCreatesEncryptedDatabase(t *testing.T) {
 	if bytes.Contains(raw, []byte("kv_cache")) {
 		t.Fatal("database file contains plaintext schema")
 	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("database mode = %v, %v", info, err)
+	}
+	if info, err := os.Stat(filepath.Dir(path)); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("database directory mode = %v, %v", info, err)
+	}
+}
+
+func TestOpenDoesNotChangeExistingCustomParentMode(t *testing.T) {
+	ctx := context.Background()
+	parent := filepath.Join(t.TempDir(), "shared")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(parent, "tld.db"), "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	info, err := os.Stat(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("custom parent mode = %o, want 755", info.Mode().Perm())
+	}
+}
+
+func TestOpenHandlesQuotedPassphraseAndAppliesCipherSettings(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "quoted.db")
+	passphrase := `quote ' " & ? / #`
+	store, err := Open(ctx, path, passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kdfIter, pageSize int
+	if err := store.db.QueryRowContext(ctx, "PRAGMA kdf_iter").Scan(&kdfIter); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(ctx, "PRAGMA cipher_page_size").Scan(&pageSize); err != nil {
+		t.Fatal(err)
+	}
+	if kdfIter != databaseKDFIter || pageSize != databasePageSize {
+		t.Fatalf("cipher settings = %d/%d", kdfIter, pageSize)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, path, passphrase)
+	if err != nil {
+		t.Fatalf("reopen with quoted passphrase: %v", err)
+	}
+	defer reopened.Close()
 }
 
 func TestOpenRejectsWrongPassphrase(t *testing.T) {
@@ -51,6 +106,108 @@ func TestOpenRejectsWrongPassphrase(t *testing.T) {
 	if _, err := Open(ctx, path, "wrong-secret"); err == nil {
 		t.Fatal("expected wrong passphrase to fail")
 	}
+}
+
+func TestOpenBacksUpAndMigratesV14Database(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := openSchemaV14(ctx, path, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack, err := (StackRepository{db: db}).Create(ctx, "S", "JavaScript", "#FFFFFF")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := (PolicyRepository{db: db}).Create(ctx, "policy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	namespace, err := (NamespaceRepository{db: db}).SaveWithPolicy(ctx, 0, "N", "namespace", "#FFFFFF", policy.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := (SourceRepository{db: db}).Create(ctx, "GitHub", "token", "https://github.com", SourceTypeGitHub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, err := (ProjectRepository{db: db}).Create(ctx, "owner/repo", namespace.ID, source.ID, stack.ID, "P", "repo", "#FFFFFF", false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := db.ExecContext(ctx, `INSERT INTO project_dependency_runs (project_id, commit_short_sha, commit_sha, status, started_at, finished_at) VALUES (?, 'abcdef12', 'abcdef1234567890', 'success', 1, 1)`, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID, _ := result.LastInsertId()
+	if _, err := db.ExecContext(ctx, `INSERT INTO project_dependencies (project_id, run_id, name, version, dependency_type, source_file) VALUES (?, ?, 'react', '19.0.0', 'dependencies', 'package.json')`, project.ID, runID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, path, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backup := store.MigrationBackupPath()
+	dependencies, err := store.ProjectDependencies().ListByProject(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dependencies) != 1 || dependencies[0].Ecosystem != "npm" {
+		t.Fatalf("migrated dependencies = %#v", dependencies)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if backup == "" {
+		t.Fatal("migration backup path is empty")
+	}
+	if info, err := os.Stat(backup); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("migration backup = %q, %v", backup, err)
+	}
+	restored := filepath.Join(t.TempDir(), "restored.db")
+	if err := copyDatabaseFile(backup, restored); err != nil {
+		t.Fatal(err)
+	}
+	restoredStore, err := Open(ctx, restored, "secret")
+	if err != nil {
+		t.Fatalf("open restored backup: %v", err)
+	}
+	defer restoredStore.Close()
+	restoredDependencies, err := restoredStore.ProjectDependencies().ListByProject(ctx, project.ID)
+	if err != nil || len(restoredDependencies) != 1 || restoredDependencies[0].Ecosystem != "npm" {
+		t.Fatalf("restored dependencies = %#v, %v", restoredDependencies, err)
+	}
+}
+
+func openSchemaV14(ctx context.Context, path, passphrase string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", buildDSN(path, passphrase))
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`); err != nil {
+		return nil, err
+	}
+	migrations := []func(context.Context, *sql.Tx) error{migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9, migrateV10, migrateV11, migrateV12, migrateV13, migrateV14}
+	for _, migrate := range migrations {
+		if err := migrate(ctx, tx); err != nil {
+			_ = tx.Rollback()
+			_ = db.Close()
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
 }
 
 func TestCachePersistsAcrossOpen(t *testing.T) {
@@ -114,6 +271,103 @@ func TestCacheTTL(t *testing.T) {
 
 	if err := cache.DeleteExpired(ctx); err != nil {
 		t.Fatalf("delete expired cache: %v", err)
+	}
+}
+
+func TestCacheGetManyOmitsMissingExpiredAndOtherNamespaces(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "tld.db"), "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cache := store.Cache()
+	for _, item := range []struct{ namespace, key string }{
+		{"checks", "fresh"}, {"checks", "expired"}, {"other", "fresh"},
+	} {
+		if err := cache.Set(ctx, item.namespace, item.key, []byte(item.namespace), "", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE kv_cache SET expires_at = ? WHERE namespace = ? AND key = ?", time.Now().Add(-time.Minute).Unix(), "checks", "expired"); err != nil {
+		t.Fatal(err)
+	}
+	keys := make([]string, 501)
+	for index := range keys {
+		keys[index] = "missing"
+	}
+	keys[0], keys[500] = "fresh", "expired"
+	entries, err := cache.GetMany(ctx, "checks", keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || string(entries["fresh"].Value) != "checks" {
+		t.Fatalf("entries = %#v", entries)
+	}
+}
+
+func TestCacheByteBudgetEvictsOldestPayload(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "budget.db"), "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cache := store.Cache()
+	for _, key := range []string{"old", "new"} {
+		if err := cache.Set(ctx, "files", key, []byte("1234"), "", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE kv_cache SET updated_at = ? WHERE namespace = ? AND key = ?", time.Now().Add(-time.Hour).Unix(), "files", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.EnforceByteBudget(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Get(ctx, "files", "old"); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("old entry remains: %v", err)
+	}
+	if _, err := cache.Get(ctx, "files", "new"); err != nil {
+		t.Fatalf("new entry evicted: %v", err)
+	}
+}
+
+func TestCacheSetEnforcesBudgetAtomically(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "set-budget.db"), "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cache := store.Cache()
+	cache.maxBytes = 6
+	if err := cache.Set(ctx, "files", "a", []byte("1234"), "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Set(ctx, "files", "b", []byte("5678"), "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Get(ctx, "files", "a"); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("old entry should be evicted: %v", err)
+	}
+	if _, err := cache.Get(ctx, "files", "b"); err != nil {
+		t.Fatalf("new entry should remain: %v", err)
+	}
+	if err := cache.Set(ctx, "files", "0", []byte("abcd"), "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Get(ctx, "files", "b"); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("previous entry should be evicted: %v", err)
+	}
+	if _, err := cache.Get(ctx, "files", "0"); err != nil {
+		t.Fatalf("just-written entry should remain: %v", err)
+	}
+	if err := cache.Set(ctx, "files", "oversize", []byte("1234567"), "", 0); err == nil {
+		t.Fatal("oversize payload was accepted")
+	}
+	if _, err := cache.Get(ctx, "files", "0"); err != nil {
+		t.Fatalf("rejected write changed cache: %v", err)
 	}
 }
 
@@ -614,7 +868,7 @@ func TestDependencyViewByStack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "React Native", "#61DAFB")
+	dependency, err := store.Dependencies().CreateWithRegistryName(ctx, stack.ID, "", "React Native", "#61DAFB", "react-native")
 	if err != nil {
 		t.Fatalf("create dependency: %v", err)
 	}
@@ -705,7 +959,7 @@ func TestDependencyViewByStackMatchesScopedJavaScriptPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	dependency, err := store.Dependencies().Create(ctx, stack.ID, "", "Spectrum UI Kit", "#84BA64")
+	dependency, err := store.Dependencies().CreateWithRegistryName(ctx, stack.ID, "", "Spectrum UI Kit", "#84BA64", "@spectrum/ui-kit")
 	if err != nil {
 		t.Fatalf("create dependency: %v", err)
 	}

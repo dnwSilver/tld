@@ -3,6 +3,7 @@ package projectsync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,19 @@ func (c *fakeSourceClient) ProtectedTags(context.Context, Source, Project) ([]st
 }
 func (c *fakeSourceClient) ProtectBranch(context.Context, Source, Project, string) error { return nil }
 func (c *fakeSourceClient) ProtectTag(context.Context, Source, Project, string) error    { return nil }
+
+type partialProtectionClient struct {
+	*fakeSourceClient
+	applied int
+}
+
+func (c *partialProtectionClient) ProtectBranch(context.Context, Source, Project, string) error {
+	if c.applied == 1 {
+		return errors.New("denied")
+	}
+	c.applied++
+	return nil
+}
 
 func TestProtectionChecksAndOperations(t *testing.T) {
 	for _, tags := range []bool{false, true} {
@@ -89,6 +103,19 @@ func TestProtectionChecksAndOperations(t *testing.T) {
 				t.Fatalf("after: %s %v", state, err)
 			}
 		})
+	}
+}
+
+func TestProtectionOperationReturnsTypedPartialResult(t *testing.T) {
+	client := &partialProtectionClient{fakeSourceClient: &fakeSourceClient{}}
+	result, err := (OperationService{SourceClient: client}).RunAndVerify(
+		context.Background(), Source{Type: SourceTypeGitLab}, Project{ProviderID: "42"}, operationProtectBranches,
+	)
+	if err == nil {
+		t.Fatal("expected second protection to fail")
+	}
+	if result.Outcome != OperationOutcomePartial || result.Applied != 1 || result.Total != len(requiredProtectedBranches) {
+		t.Fatalf("result = %#v", result)
 	}
 }
 

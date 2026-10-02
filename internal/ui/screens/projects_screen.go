@@ -14,15 +14,15 @@ type ProjectsScreen struct {
 }
 
 const (
-	projectFormLabelWidth       = 10
-	projectFormValueWidth       = 24
-	projectNameColumnMinWidth   = 8
-	projectNamespaceColumnMin   = 8
-	projectSourceColumnMin      = 6
-	projectTailColumnWidth      = 5
-	projectIconSlotWidth        = 2
-	projectIconColumnWidth      = projectIconSlotWidth * 2
-	projectDepVersionWidth      = 12
+	projectFormLabelWidth     = 10
+	projectFormValueWidth     = 24
+	projectNameColumnMinWidth = 8
+	projectNamespaceColumnMin = 8
+	projectSourceColumnMin    = 6
+	projectTailColumnWidth    = 5
+	projectIconSlotWidth      = 2
+	projectIconColumnWidth    = projectIconSlotWidth * 2
+	projectDepVersionWidth    = 12
 )
 
 type projectTableColumns struct {
@@ -104,6 +104,7 @@ func (s ProjectsScreen) Render(
 	stacks []uikit.Stack,
 	form uikit.ProjectForm,
 	deleteConfirm uikit.DeleteConfirm,
+	searchQuery string,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
@@ -114,16 +115,26 @@ func (s ProjectsScreen) Render(
 	rightContentWidth := uikit.Max(rightTotalWidth-2, 1)
 
 	count := len(projects)
-	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolProject, "Projects", &count)
+	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolProject, "Projects", &count, searchQuery)
 	leftBorder := s.borderForPane(!modalOpen && focus == uikit.ProjectPaneProjects)
 	if modalOpen {
 		leftBorder = s.palette.Hint
 	}
 	left := components.NewBox(s.palette, leftBorder).Render(leftContentWidth, contentHeight, leftTitle, s.renderProjectsContent(leftContentWidth, contentHeight, projects, selectedProjectID))
-	rightTitle := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Dependencies", intPtr(len(projectDependencies)))
+	rightTitle := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Dependencies", intPtr(len(projectDependencies)), "")
 	rightBorder := s.borderForPane(!modalOpen && focus == uikit.ProjectPaneDependencies)
 	right := components.NewBox(s.palette, rightBorder).Render(rightContentWidth, contentHeight, rightTitle, s.renderDependencyPanel(rightContentWidth, contentHeight, projectDependencies, selectedProjectDepID, projectLatestRun))
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	if width < narrowLayoutWidth {
+		paneContentWidth := uikit.Max(width-2, 1)
+		if focus == uikit.ProjectPaneDependencies && !modalOpen {
+			right = components.NewBox(s.palette, s.palette.Primary).Render(paneContentWidth, contentHeight, rightTitle, s.renderDependencyPanel(paneContentWidth, contentHeight, projectDependencies, selectedProjectDepID, projectLatestRun))
+			body = right
+		} else {
+			left = components.NewBox(s.palette, leftBorder).Render(paneContentWidth, contentHeight, leftTitle, s.renderProjectsContent(paneContentWidth, contentHeight, projects, selectedProjectID))
+			body = left
+		}
+	}
 	lines := strings.Split(body, uikit.SymbolLineBreak)
 	if form.Open {
 		lines = s.renderModal(lines, width, boxHeight, namespaces, sources, stacks, form)
@@ -154,15 +165,16 @@ func (s ProjectsScreen) renderProjectsContent(
 	selectedProjectID int64,
 ) string {
 	lines := make([]string, 0, height)
-	iconColumnWidth := components.ColumnWidth(projects, projectIcons, projectIconColumnWidth)
-	columns := projectTableColumnsFor(width, iconColumnWidth, projects)
+	visibleProjects := visibleRowsByID(projects, selectedProjectID, height-1, func(project uikit.Project) int64 { return project.ID })
+	iconColumnWidth := components.ColumnWidth(visibleProjects, projectIcons, projectIconColumnWidth)
+	columns := projectTableColumnsFor(width, iconColumnWidth, visibleProjects)
 	lines = append(lines, s.tableHeader(width, iconColumnWidth, columns))
 
 	if len(projects) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No projects yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, project := range projects {
+		for _, project := range visibleProjects {
 			lines = append(lines, s.renderProjectRow(width, project, project.ID == selectedProjectID, iconColumnWidth, columns))
 		}
 	}
@@ -298,7 +310,11 @@ func (s ProjectsScreen) dependencyPanelTitle(width int, count int, latestRun uik
 }
 
 func (s ProjectsScreen) progressLine(width int, status uikit.ProjectSyncStatus) string {
-	return components.RenderProgress(s.palette, width, uikit.SymbolDependency, status.Message, status.Error, status.Running, status.Current, status.Total)
+	message := status.Message
+	if status.Running {
+		message += " [Esc] cancel"
+	}
+	return components.RenderProgress(s.palette, width, uikit.SymbolDependency, message, status.Error, status.Running, status.Current, status.Total)
 }
 
 func (s ProjectsScreen) renderModal(lines []string, width, height int, namespaces []uikit.Namespace, sources []uikit.Source, stacks []uikit.Stack, form uikit.ProjectForm) []string {

@@ -373,10 +373,10 @@ func TestServiceCachesSwiftLocks(t *testing.T) {
 	if client.fetches["Gemfile.lock"] != 1 || client.fetches["Podfile.lock"] != 1 {
 		t.Fatalf("fetches = %#v", client.fetches)
 	}
-	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, "github:owner/ios:abcdef12:Gemfile.lock"); err != nil {
+	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, sourceCacheKey(Source{Type: storage.SourceTypeGitHub}, "owner/ios", "abcdef1234567890", "Gemfile.lock")); err != nil {
 		t.Fatalf("get Gemfile.lock cache: %v", err)
 	}
-	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, "github:owner/ios:abcdef12:Podfile.lock"); err != nil {
+	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, sourceCacheKey(Source{Type: storage.SourceTypeGitHub}, "owner/ios", "abcdef1234567890", "Podfile.lock")); err != nil {
 		t.Fatalf("get Podfile.lock cache: %v", err)
 	}
 }
@@ -439,7 +439,7 @@ require github.com/charmbracelet/lipgloss v1.1.0
 	if client.fetches["go.mod"] != 1 || client.fetches["go.sum"] != 1 {
 		t.Fatalf("fetches = %#v", client.fetches)
 	}
-	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, "github:owner/go:abcdef12:go.sum"); err != nil {
+	if _, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, sourceCacheKey(Source{Type: storage.SourceTypeGitHub}, "owner/go", "abcdef1234567890", "go.sum")); err != nil {
 		t.Fatalf("get go.sum cache: %v", err)
 	}
 }
@@ -498,7 +498,7 @@ func TestServiceCachesPackageLock(t *testing.T) {
 		t.Fatalf("package-lock fetches = %d, want 1", client.fetches["package-lock.json"])
 	}
 
-	entry, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, "github:owner/repo:abcdef12:package-lock.json")
+	entry, err := store.Cache().Get(ctx, CacheNamespaceProjectFiles, sourceCacheKey(Source{Type: storage.SourceTypeGitHub}, "owner/repo", "abcdef1234567890", "package-lock.json"))
 	if err != nil {
 		t.Fatalf("get package-lock cache: %v", err)
 	}
@@ -1012,7 +1012,12 @@ func TestCheckServiceCachesWarningState(t *testing.T) {
 	service := CheckService{Cache: store.Cache()}
 	source := Source{Type: storage.SourceTypeGitLab}
 	project := Project{ProviderID: "group/repo"}
-	if err := service.cacheResult(ctx, source, project, checkNightly, CheckStateWarning, ""); err != nil {
+	results := make(ProjectCheckResults, len(ProjectChecks))
+	for _, check := range ProjectChecks {
+		results[check.ID] = CheckStateUnknown
+	}
+	results[checkNightly] = CheckStateWarning
+	if err := service.cacheSnapshot(ctx, source, project, results, nil); err != nil {
 		t.Fatalf("cache warning state: %v", err)
 	}
 
@@ -1293,6 +1298,9 @@ func TestGitLabClientUsesInjectedHTTPClient(t *testing.T) {
 type fakeSourceClient struct {
 	files                  map[string][]byte
 	fetches                map[string]int
+	fetchErr               error
+	protectedBranchesErr   error
+	ciSettingsErr          error
 	divergence             BranchDivergence
 	schedules              []PipelineSchedule
 	ciSettings             CISettings
@@ -1306,6 +1314,9 @@ func (c *fakeSourceClient) ResolveHead(context.Context, Source, Project) (Commit
 }
 
 func (c *fakeSourceClient) FetchFile(_ context.Context, _ Source, _ Project, _ string, path string) ([]byte, error) {
+	if c.fetchErr != nil {
+		return nil, c.fetchErr
+	}
 	if c.fetches == nil {
 		c.fetches = map[string]int{}
 	}
@@ -1332,6 +1343,9 @@ func (c *fakeSourceClient) DefaultBranch(_ context.Context, _ Source, _ Project)
 }
 
 func (c *fakeSourceClient) ProtectedBranches(_ context.Context, _ Source, _ Project) ([]ProtectedBranch, error) {
+	if c.protectedBranchesErr != nil {
+		return nil, c.protectedBranchesErr
+	}
 	return nil, nil
 }
 
@@ -1344,6 +1358,9 @@ func (c *fakeSourceClient) PipelineSchedules(_ context.Context, _ Source, _ Proj
 }
 
 func (c *fakeSourceClient) CISettings(_ context.Context, _ Source, _ Project) (CISettings, error) {
+	if c.ciSettingsErr != nil {
+		return CISettings{}, c.ciSettingsErr
+	}
 	return c.ciSettings, nil
 }
 

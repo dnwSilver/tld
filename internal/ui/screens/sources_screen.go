@@ -34,6 +34,7 @@ func (s SourcesScreen) Render(
 	selectedSourceID int64,
 	form uikit.SourceForm,
 	deleteConfirm uikit.DeleteConfirm,
+	searchQuery string,
 ) string {
 	boxWidth := uikit.Max(width, 2)
 	boxHeight := uikit.Max(height-1, 3)
@@ -41,7 +42,7 @@ func (s SourcesScreen) Render(
 	contentHeight := uikit.Max(boxHeight-2, 1)
 
 	count := len(sources)
-	title := components.ScreenTitle(s.palette, uikit.SymbolSource, "Sources", &count)
+	title := components.ScreenTitle(s.palette, uikit.SymbolSource, "Sources", &count, searchQuery)
 	content := s.renderContent(contentWidth, contentHeight, sources, selectedSourceID, form, deleteConfirm)
 	borderColor := s.palette.Primary
 	if form.Open || deleteConfirm.Open {
@@ -62,15 +63,16 @@ func (s SourcesScreen) renderContent(
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	lines := make([]string, 0, height)
-	typeColumnWidth := components.ColumnWidth(sources, func(source uikit.Source) string { return s.sourceType(source) }, sourceTypeColumnMinWidth)
-	urlColumnWidth := components.ColumnWidth(sources, func(source uikit.Source) string { return source.URL }, sourceURLColumnMinWidth)
+	visibleSources := visibleRowsByID(sources, selectedSourceID, height-1, func(source uikit.Source) int64 { return source.ID })
+	typeColumnWidth := components.ColumnWidth(visibleSources, func(source uikit.Source) string { return s.sourceType(source) }, sourceTypeColumnMinWidth)
+	urlColumnWidth := components.ColumnWidth(visibleSources, func(source uikit.Source) string { return source.URL }, sourceURLColumnMinWidth)
 	lines = append(lines, s.tableHeader(width, typeColumnWidth, urlColumnWidth))
 
 	if len(sources) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No sources yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, source := range sources {
+		for _, source := range visibleSources {
 			lines = append(lines, s.renderSourceRow(width, source, source.ID == selectedSourceID, typeColumnWidth, urlColumnWidth))
 		}
 	}

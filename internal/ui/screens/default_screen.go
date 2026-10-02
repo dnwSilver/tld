@@ -35,6 +35,7 @@ func (s DefaultScreen) Render(
 	attentionRows []uikit.DashboardAttentionRow,
 	focus uikit.DashboardPane,
 	selectedProjectID int64,
+	searchQuery string,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
@@ -43,21 +44,31 @@ func (s DefaultScreen) Render(
 	leftContentWidth := uikit.Max(leftTotalWidth-2, 1)
 	rightContentWidth := uikit.Max(rightTotalWidth-2, 1)
 
-	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolDashboard, "Team lead dashboard", nil)
+	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolDashboard, "Team lead dashboard", nil, "")
 	left := components.NewBox(s.palette, s.borderColor(focus == uikit.DashboardPaneSummary)).
 		Render(leftContentWidth, contentHeight, leftTitle, s.renderDashboardContent(leftContentWidth, contentHeight, stackCount, tokenRights))
 	count := len(attentionRows)
-	rightTitle := uikit.BoldText(
-		s.palette,
-		s.palette.Warning,
-		uikit.SymbolCheckWarning+" Attention ["+uikit.FormatInt(count)+"]",
-	)
+	rightTitle := components.ScreenTitle(s.palette, uikit.SymbolCheckWarning, "Attention", &count, searchQuery) +
+		uikit.BoldText(s.palette, s.palette.Warning, "  ? incomplete")
 	right := components.NewBox(s.palette, s.borderColor(focus == uikit.DashboardPaneAttention)).
 		Render(rightContentWidth, contentHeight, rightTitle, s.renderAttentionContent(rightContentWidth, contentHeight, attentionRows, selectedProjectID))
 
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	if width < narrowLayoutWidth {
+		paneContentWidth := uikit.Max(width-2, 1)
+		if focus == uikit.DashboardPaneAttention {
+			right = components.NewBox(s.palette, s.palette.Primary).
+				Render(paneContentWidth, contentHeight, rightTitle, s.renderAttentionContent(paneContentWidth, contentHeight, attentionRows, selectedProjectID))
+			body = right
+		} else {
+			left = components.NewBox(s.palette, s.palette.Primary).
+				Render(paneContentWidth, contentHeight, leftTitle, s.renderDashboardContent(paneContentWidth, contentHeight, stackCount, tokenRights))
+			body = left
+		}
+	}
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 
-	return lipgloss.JoinVertical(lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Top, left, right), footer)
+	return lipgloss.JoinVertical(lipgloss.Left, body, footer)
 }
 
 func (s DefaultScreen) borderColor(active bool) lipgloss.Color {
@@ -69,21 +80,47 @@ func (s DefaultScreen) borderColor(active bool) lipgloss.Color {
 
 func (s DefaultScreen) renderDashboardContent(width, height int, stackCount int, tokenRights uikit.TokenRights) string {
 	counter := uikit.Text(s.palette, s.palette.Primary, "Stacks: "+uikit.FormatInt(stackCount))
-	rights := s.tokenRightsLine(tokenRights)
+	rights := s.tokenRightsLines(tokenRights)
 	lines := make([]string, 0, height)
-	counterRow := height / 2
+	counterRow := uikit.Max((height-len(rights)-1)/2, 0)
 	for row := range height {
 		if row == counterRow {
 			lines = append(lines, uikit.CenterLine(s.palette, width, counter))
 			continue
 		}
-		if row == counterRow+1 {
-			lines = append(lines, uikit.CenterLine(s.palette, width, rights))
+		rightsIndex := row - counterRow - 1
+		if rightsIndex >= 0 && rightsIndex < len(rights) {
+			lines = append(lines, uikit.CenterLine(s.palette, width, rights[rightsIndex]))
 			continue
 		}
 		lines = append(lines, uikit.BackgroundSpaces(s.palette, width))
 	}
 	return fillLines(s.palette, lines, width, height)
+}
+
+func (s DefaultScreen) tokenRightsLines(tokenRights uikit.TokenRights) []string {
+	if len(tokenRights.Projects) == 0 {
+		return []string{s.tokenRightsLine(tokenRights)}
+	}
+	lines := make([]string, 0, len(tokenRights.Projects))
+	for _, project := range tokenRights.Projects {
+		lines = append(lines, s.projectRightLine(project))
+	}
+	return lines
+}
+
+func (s DefaultScreen) projectRightLine(right uikit.ProjectRight) string {
+	value := "unknown"
+	color := s.palette.Hint
+	if right.Checked {
+		value = "false"
+		color = s.palette.Error
+		if right.Maintainer {
+			value = "true"
+			color = s.palette.Primary
+		}
+	}
+	return uikit.Text(s.palette, color, "Maintainer for "+right.ProjectName+": "+value)
 }
 
 func (s DefaultScreen) tokenRightsLine(tokenRights uikit.TokenRights) string {
@@ -97,7 +134,11 @@ func (s DefaultScreen) tokenRightsLine(tokenRights uikit.TokenRights) string {
 			color = s.palette.Primary
 		}
 	}
-	return uikit.Text(s.palette, color, "Token has maintainer right: "+value)
+	label := "Token has maintainer right"
+	if tokenRights.ProjectName != "" {
+		label += " for " + tokenRights.ProjectName
+	}
+	return uikit.Text(s.palette, color, label+": "+value)
 }
 
 func (s DefaultScreen) renderAttentionContent(width, height int, rows []uikit.DashboardAttentionRow, selectedProjectID int64) string {
@@ -124,6 +165,9 @@ func dashboardTableColumnsFor(width int, rows []uikit.DashboardAttentionRow) das
 	fixedWidth := dashboardFixedColumnsWidth()
 	available := uikit.Max(width-fixedWidth, 1)
 	projectNeed := components.ColumnWidth(rows, func(row uikit.DashboardAttentionRow) string {
+		if row.DataUnknown {
+			return "? " + row.ProjectName
+		}
 		return row.ProjectName
 	}, dashboardProjectColumnMinWidth)
 	projectWidth := uikit.Min(projectNeed+dashboardProjectColumnPadding, available)
@@ -147,7 +191,11 @@ func (s DefaultScreen) attentionTableRow(width int, columns dashboardTableColumn
 	if selected {
 		background = s.palette.Hover
 	}
-	projectName := lipgloss.NewStyle().MaxWidth(columns.project).Render(row.ProjectName)
+	projectName := row.ProjectName
+	if row.DataUnknown {
+		projectName = "? " + projectName
+	}
+	projectName = lipgloss.NewStyle().MaxWidth(columns.project).Render(projectName)
 	return components.RenderTableRow(s.palette, background, width, []components.TableCell{
 		{Value: projectName, Width: columns.project, Foreground: s.palette.Text},
 		s.attentionCountCell(row.Critical, dashboardCriticalColumnWidth, s.palette.Critical),

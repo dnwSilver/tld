@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 14
+const currentSchemaVersion = 15
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -102,6 +102,11 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 14 {
 		if err := migrateV14(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if version < 15 {
+		if err := migrateV15(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -696,6 +701,28 @@ func migrateV14(ctx context.Context, tx *sql.Tx) error {
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema v14: %w", err)
+		}
+	}
+	return nil
+}
+
+func migrateV15(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		"ALTER TABLE project_dependencies ADD COLUMN ecosystem TEXT NOT NULL DEFAULT ''",
+		`UPDATE project_dependencies SET ecosystem = CASE
+			WHEN dependency_type IN ('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies') THEN 'npm'
+			WHEN dependency_type IN ('engines', 'nvmrc') THEN 'node'
+			WHEN dependency_type = 'require' THEN 'go'
+			WHEN dependency_type IN ('library', 'plugin') THEN 'maven'
+			WHEN dependency_type = 'cocoapods' THEN 'cocoapods'
+			WHEN dependency_type = 'bundler' THEN 'rubygems'
+			ELSE '' END`,
+		"CREATE INDEX IF NOT EXISTS idx_project_dependencies_identity ON project_dependencies (project_id, ecosystem, name)",
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (15)",
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply schema v15: %w", err)
 		}
 	}
 	return nil

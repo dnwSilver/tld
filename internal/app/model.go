@@ -6,86 +6,114 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dnwSilver/tld/internal/projectsync"
 	"github.com/dnwSilver/tld/internal/registry"
+	"github.com/dnwSilver/tld/internal/safetext"
 	"github.com/dnwSilver/tld/internal/storage"
 	"github.com/dnwSilver/tld/internal/ui"
 )
 
 type model struct {
-	width                    int
-	height                   int
-	creator                  ui.Creator
-	store                    *storage.Store
-	screen                   ui.Screen
-	stacks                   []ui.Stack
-	dashboard                dashboardState
-	selectedStackID          int64
-	namespaces               []ui.Namespace
-	selectedNamespaceID      int64
-	dependencies             []ui.Dependency
-	selectedDependencyID     int64
-	projects                 []ui.Project
-	selectedProjectID        int64
-	projectDependencies      []ui.ProjectDependency
-	selectedProjectDepID     int64
-	projectLatestRun         ui.ProjectDependencyRun
-	projectSyncStatus        ui.ProjectSyncStatus
-	projectSyncCh            <-chan projectSyncMsg
-	projectFocus             ui.ProjectPane
-	sources                  []ui.Source
-	selectedSourceID         int64
-	policies                 []ui.Policy
-	selectedPolicyID         int64
-	policyValues             []ui.PolicyValue
-	selectedPolicyValueID    int64
-	policyFocus              ui.PolicyPane
-	policyUpdateForm         ui.PolicyUpdateForm
-	policyUpdateStatus       ui.SettingsStatus
-	dependencyView           ui.DependencyView
-	viewStackID              int64
-	selectedViewProjectID    int64
-	viewColumnOffset         int
-	form                     ui.StackForm
-	namespaceForm            ui.StackForm
-	dependencyForm           ui.DependencyForm
-	projectForm              ui.ProjectForm
-	sourceForm               ui.SourceForm
-	policyForm               ui.PolicyForm
-	policyValueForm          ui.PolicyValueForm
-	deleteConfirm            ui.DeleteConfirm
-	namespaceDeleteConfirm   ui.DeleteConfirm
-	dependencyDeleteConfirm  ui.DeleteConfirm
-	projectDeleteConfirm     ui.DeleteConfirm
-	sourceDeleteConfirm      ui.DeleteConfirm
-	policyDeleteConfirm      ui.DeleteConfirm
-	checkColumns             []ui.ProjectCheck
-	projectCheckRows         []ui.ProjectCheckRow
-	selectedCheckProjectID   int64
-	settingsTableState       ui.SettingsTableState
-	checksStatus             ui.SettingsStatus
-	checksSyncCh             <-chan checkSyncMsg
-	releaseRows              []ui.ReleaseRow
-	selectedReleaseProjectID int64
-	releasePeriod            ui.ReleasePeriod
-	releasesStatus           ui.SettingsStatus
-	releasesSyncCh           <-chan releaseSyncMsg
-	vulnRows                 []ui.VulnProjectRow
-	vulnItems                []ui.VulnerabilityItem
-	selectedVulnProjectID    int64
-	selectedVulnItemIndex    int
-	vulnFocus                ui.VulnPane
-	vulnMode                 ui.VulnMode
-	vulnsStatus              ui.SettingsStatus
-	vulnsSyncCh              <-chan vulnSyncMsg
-	navModalOpen             bool
-	navModalIndex            int
-	settingsOperations       []ui.SettingsOperation
-	operationsModalOpen      bool
-	operationsModalIndex     int
-	err                      error
+	width                       int
+	height                      int
+	creator                     ui.Creator
+	store                       *storage.Store
+	ctx                         context.Context
+	screen                      ui.Screen
+	stacks                      []ui.Stack
+	dashboard                   dashboardState
+	selectedStackID             int64
+	namespaces                  []ui.Namespace
+	selectedNamespaceID         int64
+	dependencies                []ui.Dependency
+	selectedDependencyID        int64
+	projects                    []ui.Project
+	projectsGeneration          *atomic.Uint64
+	selectedProjectID           int64
+	projectDependencies         []ui.ProjectDependency
+	projectDepsGeneration       *atomic.Uint64
+	selectedProjectDepID        int64
+	projectLatestRun            ui.ProjectDependencyRun
+	projectSyncStatus           ui.ProjectSyncStatus
+	projectSyncCh               <-chan projectSyncMsg
+	projectSyncCancel           context.CancelFunc
+	projectSyncRunID            uint64
+	projectFocus                ui.ProjectPane
+	sources                     []ui.Source
+	sourceTokens                map[int64]string
+	selectedSourceID            int64
+	policies                    []ui.Policy
+	selectedPolicyID            int64
+	policyValues                []ui.PolicyValue
+	policyValuesGeneration      *atomic.Uint64
+	selectedPolicyValueID       int64
+	policyFocus                 ui.PolicyPane
+	policyUpdateForm            ui.PolicyUpdateForm
+	policyUpdateStatus          ui.SettingsStatus
+	policyPinsSyncCh            <-chan policyPinsProgressMsg
+	policyPinsCancel            context.CancelFunc
+	policyPinsRunID             uint64
+	dependencyView              ui.DependencyView
+	dependencyViewGeneration    *atomic.Uint64
+	viewStackID                 int64
+	selectedViewProjectID       int64
+	viewColumnOffset            int
+	form                        ui.StackForm
+	namespaceForm               ui.StackForm
+	dependencyForm              ui.DependencyForm
+	projectForm                 ui.ProjectForm
+	sourceForm                  ui.SourceForm
+	policyForm                  ui.PolicyForm
+	policyValueForm             ui.PolicyValueForm
+	policyValueLatestGeneration *atomic.Uint64
+	deleteConfirm               ui.DeleteConfirm
+	namespaceDeleteConfirm      ui.DeleteConfirm
+	dependencyDeleteConfirm     ui.DeleteConfirm
+	projectDeleteConfirm        ui.DeleteConfirm
+	sourceDeleteConfirm         ui.DeleteConfirm
+	policyDeleteConfirm         ui.DeleteConfirm
+	checkColumns                []ui.ProjectCheck
+	projectCheckRows            []ui.ProjectCheckRow
+	selectedCheckProjectID      int64
+	settingsTableState          ui.SettingsTableState
+	checksStatus                ui.SettingsStatus
+	checksSyncCh                <-chan checkSyncMsg
+	checksCancel                context.CancelFunc
+	checksRunID                 uint64
+	releaseRows                 []ui.ReleaseRow
+	selectedReleaseProjectID    int64
+	releasePeriod               ui.ReleasePeriod
+	releasesStatus              ui.SettingsStatus
+	releasesSyncCh              <-chan releaseSyncMsg
+	releasesCancel              context.CancelFunc
+	releasesRunID               uint64
+	vulnRows                    []ui.VulnProjectRow
+	vulnItems                   []ui.VulnerabilityItem
+	vulnsGeneration             *atomic.Uint64
+	selectedVulnProjectID       int64
+	selectedVulnItemIndex       int
+	vulnFocus                   ui.VulnPane
+	vulnMode                    ui.VulnMode
+	vulnsStatus                 ui.SettingsStatus
+	vulnsSyncCh                 <-chan vulnSyncMsg
+	vulnsCancel                 context.CancelFunc
+	vulnsRunID                  uint64
+	navModalOpen                bool
+	navModalIndex               int
+	settingsOperations          []ui.SettingsOperation
+	operationsModalOpen         bool
+	operationsModalIndex        int
+	operationsConfirm           bool
+	searchOpen                  bool
+	searchQuery                 string
+	savePending                 bool
+	err                         error
+	lastError                   string
+	loadStates                  map[ui.Screen]ui.LoadState
+	loadPending                 map[ui.Screen]int
 }
 
 type stacksLoadedMsg struct {
@@ -104,17 +132,21 @@ type dependenciesLoadedMsg struct {
 }
 
 type projectsLoadedMsg struct {
-	projects []ui.Project
-	err      error
+	projects   []ui.Project
+	generation uint64
+	err        error
 }
 
 type projectDependenciesLoadedMsg struct {
+	projectID    int64
+	generation   uint64
 	dependencies []ui.ProjectDependency
 	latestRun    ui.ProjectDependencyRun
 	err          error
 }
 
 type projectSyncMsg struct {
+	runID     uint64
 	projectID int64
 	message   string
 	err       error
@@ -126,6 +158,7 @@ type projectSyncMsg struct {
 
 type sourcesLoadedMsg struct {
 	sources []ui.Source
+	tokens  map[int64]string
 	err     error
 }
 
@@ -135,13 +168,17 @@ type policiesLoadedMsg struct {
 }
 
 type policyValuesLoadedMsg struct {
-	values []ui.PolicyValue
-	err    error
+	policyID   int64
+	generation uint64
+	values     []ui.PolicyValue
+	err        error
 }
 
 type dependencyViewLoadedMsg struct {
-	view ui.DependencyView
-	err  error
+	stackID    int64
+	generation uint64
+	view       ui.DependencyView
+	err        error
 }
 
 type stackSavedMsg struct {
@@ -214,35 +251,54 @@ type policyValueDeletedMsg struct {
 	err     error
 }
 
-type policyPinsUpdatedMsg struct {
+type policyPinsProgressMsg struct {
+	runID    uint64
+	message  string
 	checked  int
 	updated  int
+	total    int
 	failures []string
 	err      error
+	done     bool
 }
 
 type policyValueLatestLoadedMsg struct {
-	version string
-	err     error
+	policyID     int64
+	valueID      int64
+	dependencyID int64
+	registryID   int64
+	generation   uint64
+	version      string
+	err          error
 }
 
 func newModel(store *storage.Store) model {
 	return model{
-		creator:            ui.NewCreator(),
-		store:              store,
-		screen:             ui.ScreenDefault,
-		stacks:             []ui.Stack{},
-		namespaces:         []ui.Namespace{},
-		dependencies:       []ui.Dependency{},
-		projects:           []ui.Project{},
-		projectFocus:       ui.ProjectPaneProjects,
-		sources:            []ui.Source{},
-		policies:           []ui.Policy{},
-		policyValues:       []ui.PolicyValue{},
-		policyFocus:        ui.PolicyPanePolicies,
-		checkColumns:       defaultCheckColumns(),
-		vulnFocus:          ui.VulnPaneProjects,
-		settingsOperations: settingsOperationItems(),
+		creator:                     ui.NewCreator(),
+		store:                       store,
+		ctx:                         context.Background(),
+		screen:                      ui.ScreenDefault,
+		stacks:                      []ui.Stack{},
+		namespaces:                  []ui.Namespace{},
+		dependencies:                []ui.Dependency{},
+		projects:                    []ui.Project{},
+		projectsGeneration:          new(atomic.Uint64),
+		projectFocus:                ui.ProjectPaneProjects,
+		projectDepsGeneration:       new(atomic.Uint64),
+		sources:                     []ui.Source{},
+		sourceTokens:                make(map[int64]string),
+		policies:                    []ui.Policy{},
+		policyValues:                []ui.PolicyValue{},
+		policyValuesGeneration:      new(atomic.Uint64),
+		policyValueLatestGeneration: new(atomic.Uint64),
+		dependencyViewGeneration:    new(atomic.Uint64),
+		policyFocus:                 ui.PolicyPanePolicies,
+		checkColumns:                defaultCheckColumns(),
+		vulnFocus:                   ui.VulnPaneProjects,
+		vulnsGeneration:             new(atomic.Uint64),
+		settingsOperations:          settingsOperationItems(),
+		loadStates:                  initialLoadStates(),
+		loadPending:                 initialLoadPending(),
 	}
 }
 
@@ -256,6 +312,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		if m.savePending {
+			return m, nil
+		}
+		if m.searchOpen {
+			return m.updateSearch(msg)
+		}
+		if msg.String() == "esc" && m.searchQuery != "" && !m.anyModalOpen() && !m.screenJobRunning() {
+			m.searchQuery = ""
+			return m.reconcileSearchSelection()
+		}
+		if msg.String() == "esc" && !m.anyModalOpen() && m.lastError != "" && !m.screenJobRunning() {
+			m.lastError = ""
+			return m, nil
+		}
 		if m.policyDeleteConfirm.Open {
 			return m.updatePolicyDeleteConfirm(msg)
 		}
@@ -306,82 +379,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		key := msg.String()
+		if key == "esc" {
+			if cmd, canceled := m.cancelScreenJob(); canceled {
+				return m, cmd
+			}
+		}
+		if action, ok := ui.ScreenActionForKey(m.screen, key); ok {
+			return m.dispatchScreenAction(action)
+		}
+		if action, ok := ui.GlobalActionForKey(key); ok {
+			return m.dispatchGlobalAction(action)
+		}
+		if m.searchQuery != "" && m.searchTargetPaneActive() {
+			if ui.KeyPrev.Matches(key) {
+				return m.stepSearchSelection(-1)
+			}
+			if ui.KeyNext.Matches(key) {
+				return m.stepSearchSelection(1)
+			}
+		}
 		switch {
-		case ui.KeyToggleHead.Matches(key):
-			m = m.openNavModal()
-		case ui.KeyHome.Matches(key):
-			return m.switchToScreen(ui.ScreenDefault)
-		case ui.KeyStacks.Matches(key):
-			return m.switchToScreen(ui.ScreenStacks)
-		case ui.KeyNamespaces.Matches(key):
-			return m.switchToScreen(ui.ScreenNamespaces)
-		case ui.KeyDependencies.Matches(key):
-			return m.switchToScreen(ui.ScreenDependencies)
-		case ui.KeyProjects.Matches(key):
-			return m.switchToScreen(ui.ScreenProjects)
-		case ui.KeySources.Matches(key):
-			return m.switchToScreen(ui.ScreenSources)
-		case ui.KeyPolicies.Matches(key):
-			return m.switchToScreen(ui.ScreenPolicies)
-		case ui.KeyView.Matches(key):
-			return m.switchToScreen(ui.ScreenView)
-		case ui.KeySettings.Matches(key):
-			return m.switchToScreen(ui.ScreenSettings)
-		case ui.KeyReleases.Matches(key):
-			return m.switchToScreen(ui.ScreenReleases)
-		case ui.KeyVulnerabilities.Matches(key):
-			return m.switchToScreen(ui.ScreenVulnerabilities)
-		case ui.KeyAdd.Matches(key):
-			m.openAddForm()
-		case ui.KeyEdit.Matches(key):
-			m.openEditForm()
-		case ui.KeyClone.Matches(key):
-			if m.screen == ui.ScreenProjects {
-				m.openCloneProjectForm()
-			}
-		case ui.KeyDelete.Matches(key):
-			m.openDelete()
-		case ui.KeyRefreshDeps.Matches(key):
-			switch m.screen {
-			case ui.ScreenProjects:
-				return m.startProjectDependencySync()
-			case ui.ScreenView:
-				return m.startViewDependencySync(false)
-			case ui.ScreenSettings:
-				return m.startProjectChecksRefresh(m.selectedCheckProjects())
-			case ui.ScreenReleases:
-				return m.startReleasesRefresh(m.selectedReleaseProjects())
-			case ui.ScreenVulnerabilities:
-				return m.startVulnsRefresh(m.selectedVulnProjects())
-			}
-		case ui.KeyRefreshAll.Matches(key):
-			switch m.screen {
-			case ui.ScreenProjects:
-				return m.startAllProjectsDependencySync()
-			case ui.ScreenView:
-				return m.startViewDependencySync(true)
-			case ui.ScreenSettings:
-				return m.startProjectChecksRefresh(activeProjects(m.projects))
-			case ui.ScreenReleases:
-				return m.startReleasesRefresh(activeProjects(m.projects))
-			case ui.ScreenVulnerabilities:
-				return m.startVulnsRefresh(activeProjects(m.projects))
-			}
-		case ui.KeyVulnMode.Matches(key):
-			if m.screen == ui.ScreenVulnerabilities && !m.vulnsStatus.Running {
-				m.vulnMode = m.vulnMode.Next()
-				m.selectedVulnItemIndex = 0
-				return m, m.loadVulnerabilities()
-			}
-		case ui.KeyUpdatePins.Matches(key):
-			if m.screen == ui.ScreenPolicies && !m.policyUpdateStatus.Running {
-				if m.policyFocus == ui.PolicyPaneValues {
-					return m.startSelectedPolicyValueUpdate()
-				}
-			}
-			if m.screen == ui.ScreenSettings && !m.checksStatus.Running {
-				m = m.openOperationsModal()
-			}
+		case key == "home" || key == "end" || key == "pgup" || key == "pgdown":
+			return m.jumpList(key)
 		case ui.KeyColumnPick.Matches(key):
 			if m.screen == ui.ScreenSettings {
 				if key == "shift+left" {
@@ -389,11 +408,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.selectNextCheckColumn()
 				}
-				return m, nil
-			}
-		case ui.KeySort.Matches(key):
-			if m.screen == ui.ScreenSettings {
-				m.sortProjectChecksBySelectedColumn()
 				return m, nil
 			}
 		case ui.KeyPrev.Matches(key):
@@ -468,93 +482,94 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectNextViewStack()
 				return m, m.loadDependencyView()
 			}
-		case key == "tab":
-			if m.screen == ui.ScreenDefault {
-				m.toggleDashboardPane()
-				return m, nil
-			}
-			if m.screen == ui.ScreenView {
-				m.selectNextViewStack()
-				return m, m.loadDependencyView()
-			}
-			if m.screen == ui.ScreenProjects {
-				m.toggleProjectPane()
-				return m, nil
-			}
-			if m.screen == ui.ScreenReleases {
-				m.releasePeriod = m.releasePeriod.Next()
-				return m, m.loadReleases()
-			}
-			if m.screen == ui.ScreenVulnerabilities {
-				m.toggleVulnPane()
-				return m, nil
-			}
-			m.togglePolicyPane()
-		case ui.KeyQuit.Matches(key):
-			return m, tea.Quit
 		}
 	case stacksLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenStacks, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.stacks = msg.stacks
 			m.ensureSelectedStack()
 		}
 	case namespacesLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenNamespaces, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.namespaces = msg.namespaces
 			m.ensureSelectedNamespace()
 		}
 	case dependenciesLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenDependencies, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.dependencies = msg.dependencies
 			m.ensureSelectedDependency()
 		}
 	case projectsLoadedMsg:
-		m.err = msg.err
+		if m.projectsGeneration != nil && msg.generation != m.projectsGeneration.Load() {
+			break
+		}
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.projects = msg.projects
 			m.ensureSelectedProject()
 			if m.screen == ui.ScreenSettings {
 				return m, tea.Batch(m.loadProjectDependencies(), m.loadProjectChecks())
 			}
+			m.beginLoad(ui.ScreenProjects)
 			return m, m.loadProjectDependencies()
 		}
+		m.finishLoad(ui.ScreenProjects, msg.err)
 	case projectDependenciesLoadedMsg:
-		m.err = msg.err
+		if msg.projectID != m.selectedProjectID || (m.projectDepsGeneration != nil && msg.generation != m.projectDepsGeneration.Load()) {
+			break
+		}
+		m.finishLoad(ui.ScreenProjects, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.projectDependencies = msg.dependencies
 			m.ensureSelectedProjectDependency()
 			m.projectLatestRun = msg.latestRun
 		}
 	case sourcesLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenSources, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.sources = msg.sources
+			m.sourceTokens = msg.tokens
 			m.ensureSelectedSource()
 		}
 	case policiesLoadedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.policies = msg.policies
 			m.ensureSelectedPolicy()
+			m.beginLoad(ui.ScreenPolicies)
 			return m, m.loadPolicyValues()
 		}
+		m.finishLoad(ui.ScreenPolicies, msg.err)
 	case policyValuesLoadedMsg:
-		m.err = msg.err
+		if msg.policyID != m.selectedPolicyID || (m.policyValuesGeneration != nil && msg.generation != m.policyValuesGeneration.Load()) {
+			break
+		}
+		m.finishLoad(ui.ScreenPolicies, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.policyValues = msg.values
 			m.ensureSelectedPolicyValue()
 		}
 	case dependencyViewLoadedMsg:
-		m.err = msg.err
+		if msg.stackID != m.viewStackID || (m.dependencyViewGeneration != nil && msg.generation != m.dependencyViewGeneration.Load()) {
+			break
+		}
+		m.finishLoad(ui.ScreenView, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.dependencyView = msg.view
 			m.ensureSelectedViewProject()
 		}
 	case stackSavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedStackID = msg.stackID
 			m.form = ui.StackForm{}
@@ -562,7 +577,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.form.Error = msg.err.Error()
 	case namespaceSavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedNamespaceID = msg.namespaceID
 			m.namespaceForm = ui.StackForm{}
@@ -570,7 +586,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.namespaceForm.Error = msg.err.Error()
 	case dependencySavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedDependencyID = msg.dependencyID
 			m.dependencyForm = ui.DependencyForm{}
@@ -578,7 +595,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.dependencyForm.Error = msg.err.Error()
 	case projectSavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedProjectID = msg.projectID
 			m.projectForm = ui.ProjectForm{}
@@ -586,7 +604,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.projectForm.Error = msg.err.Error()
 	case sourceSavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedSourceID = msg.sourceID
 			m.sourceForm = ui.SourceForm{}
@@ -594,7 +613,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.sourceForm.Error = msg.err.Error()
 	case policySavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedPolicyID = msg.policyID
 			m.policyForm = ui.PolicyForm{}
@@ -602,7 +622,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.policyForm.Error = msg.err.Error()
 	case policyValueSavedMsg:
-		m.err = msg.err
+		m.savePending = false
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.selectedPolicyValueID = msg.valueID
 			m.policyValueForm = ui.PolicyValueForm{}
@@ -610,18 +631,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.policyValueForm.Error = msg.err.Error()
 	case dashboardAttentionLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenDefault, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.dashboard.attentionRows = msg.rows
 			m.ensureSelectedAttentionProject()
 		}
 	case tokenRightsLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenDefault, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.dashboard.tokenRights = msg.rights
 		}
 	case policyValueLatestLoadedMsg:
-		m.err = msg.err
+		if !m.policyValueForm.Open || msg.policyID != m.policyValueForm.PolicyID || msg.valueID != m.policyValueForm.PolicyValueID || msg.dependencyID != m.policyValueForm.DependencyID || msg.registryID != m.policyValueForm.RegistryID || (m.policyValueLatestGeneration != nil && msg.generation != m.policyValueLatestGeneration.Load()) {
+			break
+		}
+		m.recordError(msg.err)
 		if msg.err != nil {
 			m.policyValueForm.Error = msg.err.Error()
 			return m, nil
@@ -629,7 +655,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.policyValueForm.Version = msg.version
 		m.policyValueForm.Error = ""
 	case stackDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedStackID == msg.stackID {
 				m.selectedStackID = 0
@@ -639,7 +665,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.deleteConfirm.Error = msg.err.Error()
 	case namespaceDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedNamespaceID == msg.namespaceID {
 				m.selectedNamespaceID = 0
@@ -649,7 +675,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.namespaceDeleteConfirm.Error = msg.err.Error()
 	case dependencyDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedDependencyID == msg.dependencyID {
 				m.selectedDependencyID = 0
@@ -659,7 +685,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.dependencyDeleteConfirm.Error = msg.err.Error()
 	case projectDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedProjectID == msg.projectID {
 				m.selectedProjectID = 0
@@ -669,7 +695,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.projectDeleteConfirm.Error = msg.err.Error()
 	case sourceDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedSourceID == msg.sourceID {
 				m.selectedSourceID = 0
@@ -679,7 +705,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.sourceDeleteConfirm.Error = msg.err.Error()
 	case policyDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedPolicyID == msg.policyID {
 				m.selectedPolicyID = 0
@@ -691,7 +717,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.policyDeleteConfirm.Error = msg.err.Error()
 	case policyValueDeletedMsg:
-		m.err = msg.err
+		m.recordError(msg.err)
 		if msg.err == nil {
 			if m.selectedPolicyValueID == msg.valueID {
 				m.selectedPolicyValueID = 0
@@ -700,21 +726,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadPolicyValues()
 		}
 		m.policyDeleteConfirm.Error = msg.err.Error()
-	case policyPinsUpdatedMsg:
-		m.policyUpdateStatus.Running = false
+	case policyPinsProgressMsg:
+		if msg.runID != m.policyPinsRunID {
+			break
+		}
+		m.policyUpdateStatus.Message = msg.message
 		m.policyUpdateStatus.Current = msg.checked
-		m.policyUpdateStatus.Total = msg.checked
+		m.policyUpdateStatus.Total = msg.total
+		m.policyUpdateStatus.Running = !msg.done
 		if msg.err != nil {
-			m.err = msg.err
-			m.policyUpdateStatus.Message = "Pins update failed"
+			m.recordError(msg.err)
 			m.policyUpdateStatus.Error = msg.err.Error()
+		}
+		if msg.done {
+			if m.policyPinsCancel != nil {
+				m.policyPinsCancel()
+			}
+			m.policyPinsCancel = nil
+			m.policyPinsSyncCh = nil
+			if msg.err == nil {
+				m.policyUpdateStatus.Message = fmt.Sprintf("Updated %d of %d pins", msg.updated, msg.checked)
+				m.policyUpdateStatus.Error = strings.Join(msg.failures, "; ")
+			}
 			return m, m.loadPolicyValues()
 		}
-		m.policyUpdateStatus.Message = fmt.Sprintf("Updated %d of %d pins", msg.updated, msg.checked)
-		m.policyUpdateStatus.Error = strings.Join(msg.failures, "; ")
-		return m, m.loadPolicyValues()
+		if m.policyPinsSyncCh != nil {
+			return m, waitPolicyPins(m.policyPinsSyncCh, m.policyPinsRunID)
+		}
 	case projectChecksLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenSettings, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.projectCheckRows = msg.rows
 			m.applyProjectCheckSort()
@@ -723,8 +764,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case operationAppliedMsg:
 		m.checksStatus.Running = false
 		if msg.err != nil {
-			m.err = msg.err
-			m.checksStatus.Message = msg.title + " failed for " + msg.project
+			m.recordError(msg.err)
+			outcome := string(msg.result.Outcome)
+			if msg.result.Total > 0 {
+				outcome += fmt.Sprintf(" (%d/%d applied)", msg.result.Applied, msg.result.Total)
+			}
+			m.checksStatus.Message = msg.title + " " + outcome + " for " + msg.project
 			m.checksStatus.Error = msg.err.Error()
 			return m, nil
 		}
@@ -734,6 +779,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.startProjectChecksRefresh([]ui.Project{project})
 		}
 	case checkSyncMsg:
+		if msg.runID != m.checksRunID {
+			break
+		}
 		m.checksStatus.Message = msg.message
 		m.checksStatus.Running = !msg.done
 		m.checksStatus.Error = ""
@@ -742,28 +790,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.checksStatus.Total = msg.total
 		}
 		if msg.err != nil {
-			m.err = msg.err
+			if m.checksCancel != nil {
+				m.checksCancel()
+				m.checksCancel = nil
+			}
+			m.recordError(msg.err)
 			m.checksStatus.Error = msg.err.Error()
 			m.checksStatus.Running = false
+			m.checksSyncCh = nil
 			return m, m.loadProjectChecks()
 		}
 		if msg.done {
+			if m.checksCancel != nil {
+				m.checksCancel()
+				m.checksCancel = nil
+			}
 			m.checksSyncCh = nil
 			return m, m.loadProjectChecks()
 		}
 		if msg.step && m.checksSyncCh != nil {
-			return m, tea.Batch(m.loadProjectChecks(), waitCheckSync(m.checksSyncCh))
+			return m, waitCheckSync(m.checksSyncCh, m.checksRunID)
 		}
 		if m.checksSyncCh != nil {
-			return m, waitCheckSync(m.checksSyncCh)
+			return m, waitCheckSync(m.checksSyncCh, m.checksRunID)
 		}
 	case releasesLoadedMsg:
-		m.err = msg.err
+		m.finishLoad(ui.ScreenReleases, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.releaseRows = msg.rows
 			m.ensureSelectedReleaseProject()
 		}
 	case releaseSyncMsg:
+		if msg.runID != m.releasesRunID {
+			break
+		}
 		m.releasesStatus.Message = msg.message
 		m.releasesStatus.Running = !msg.done
 		m.releasesStatus.Error = ""
@@ -772,23 +833,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.releasesStatus.Total = msg.total
 		}
 		if msg.err != nil {
-			m.err = msg.err
+			if m.releasesCancel != nil {
+				m.releasesCancel()
+				m.releasesCancel = nil
+			}
+			m.recordError(msg.err)
 			m.releasesStatus.Error = msg.err.Error()
 			m.releasesStatus.Running = false
+			m.releasesSyncCh = nil
 			return m, m.loadReleases()
 		}
 		if msg.done {
+			if m.releasesCancel != nil {
+				m.releasesCancel()
+				m.releasesCancel = nil
+			}
 			m.releasesSyncCh = nil
 			return m, m.loadReleases()
 		}
 		if msg.step && m.releasesSyncCh != nil {
-			return m, tea.Batch(m.loadReleases(), waitReleaseSync(m.releasesSyncCh))
+			return m, waitReleaseSync(m.releasesSyncCh, m.releasesRunID)
 		}
 		if m.releasesSyncCh != nil {
-			return m, waitReleaseSync(m.releasesSyncCh)
+			return m, waitReleaseSync(m.releasesSyncCh, m.releasesRunID)
 		}
 	case vulnsLoadedMsg:
-		m.err = msg.err
+		if msg.selectedProjectID != m.selectedVulnProjectID || msg.mode != m.vulnMode || (m.vulnsGeneration != nil && msg.generation != m.vulnsGeneration.Load()) {
+			break
+		}
+		m.finishLoad(ui.ScreenVulnerabilities, msg.err)
+		m.recordError(msg.err)
 		if msg.err == nil {
 			m.vulnRows = msg.rows
 			m.vulnItems = msg.items
@@ -798,6 +872,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case vulnSyncMsg:
+		if msg.runID != m.vulnsRunID {
+			break
+		}
 		m.vulnsStatus.Message = msg.message
 		m.vulnsStatus.Running = !msg.done
 		m.vulnsStatus.Error = ""
@@ -806,24 +883,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.vulnsStatus.Total = msg.total
 		}
 		if msg.err != nil {
-			m.err = msg.err
+			if m.vulnsCancel != nil {
+				m.vulnsCancel()
+				m.vulnsCancel = nil
+			}
+			m.recordError(msg.err)
 			m.vulnsStatus.Error = msg.err.Error()
 			m.vulnsStatus.Running = false
+			m.vulnsSyncCh = nil
 			return m, m.loadVulnerabilities()
 		}
 		if msg.done {
+			if m.vulnsCancel != nil {
+				m.vulnsCancel()
+				m.vulnsCancel = nil
+			}
 			m.vulnsSyncCh = nil
 			return m, m.loadVulnerabilities()
 		}
 		if msg.step && m.vulnsSyncCh != nil {
-			return m, tea.Batch(m.loadVulnerabilities(), waitVulnSync(m.vulnsSyncCh))
+			return m, waitVulnSync(m.vulnsSyncCh, m.vulnsRunID)
 		}
 		if m.vulnsSyncCh != nil {
-			return m, waitVulnSync(m.vulnsSyncCh)
+			return m, waitVulnSync(m.vulnsSyncCh, m.vulnsRunID)
 		}
 	case projectSyncMsg:
-		if msg.projectID != 0 && msg.projectID != m.selectedProjectID {
-			return m, nil
+		if msg.runID != m.projectSyncRunID {
+			break
 		}
 		m.projectSyncStatus.ProjectID = msg.projectID
 		m.projectSyncStatus.Message = msg.message
@@ -834,23 +920,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.projectSyncStatus.Total = msg.total
 		}
 		if msg.err != nil {
-			m.err = msg.err
+			if m.projectSyncCancel != nil {
+				m.projectSyncCancel()
+				m.projectSyncCancel = nil
+			}
+			m.recordError(msg.err)
 			m.projectSyncStatus.Error = msg.err.Error()
 			m.projectSyncStatus.Running = false
+			m.projectSyncCh = nil
 			return m, m.loadProjectDependencies()
 		}
 		if msg.done {
+			if m.projectSyncCancel != nil {
+				m.projectSyncCancel()
+				m.projectSyncCancel = nil
+			}
 			m.projectSyncCh = nil
 			return m, m.reloadAfterProjectSync()
 		}
 		if msg.step && m.projectSyncCh != nil {
-			return m, tea.Batch(m.reloadAfterProjectSync(), waitProjectSync(m.projectSyncCh))
+			return m, waitProjectSync(m.projectSyncCh, m.projectSyncRunID)
 		}
 		if m.projectSyncCh != nil {
-			return m, waitProjectSync(m.projectSyncCh)
+			return m, waitProjectSync(m.projectSyncCh, m.projectSyncRunID)
 		}
 	}
 
+	if m.searchQuery != "" {
+		return m.reconcileSearchSelection()
+	}
 	return m, nil
 }
 
@@ -859,74 +957,79 @@ func (m model) View() string {
 		return ""
 	}
 
-	return m.creator.Render(
-		m.width,
-		m.height,
-		m.screen,
-		m.stacks,
-		m.dashboard.tokenRights,
-		m.dashboard.attentionRows,
-		m.dashboard.focus,
-		m.dashboard.selectedProjectID,
-		m.selectedStackID,
-		m.namespaces,
-		m.selectedNamespaceID,
-		m.dependencies,
-		m.selectedDependencyID,
-		m.projects,
-		m.selectedProjectID,
-		m.projectDependencies,
-		m.selectedProjectDepID,
-		m.projectLatestRun,
-		m.projectSyncStatus,
-		m.projectFocus,
-		m.sources,
-		m.selectedSourceID,
-		m.policies,
-		m.selectedPolicyID,
-		m.policyValues,
-		m.selectedPolicyValueID,
-		m.policyFocus,
-		m.policyUpdateStatus,
-		m.dependencyView,
-		m.selectedViewProjectID,
-		m.viewColumnOffset,
-		m.checkColumns,
-		m.projectCheckRows,
-		m.selectedCheckProjectID,
-		m.settingsTableState,
-		m.checksStatus,
-		m.releaseRows,
-		m.selectedReleaseProjectID,
-		m.releasePeriod,
-		m.releasesStatus,
-		m.vulnRows,
-		m.selectedVulnProjectID,
-		m.vulnItems,
-		m.selectedVulnItemIndex,
-		m.vulnFocus,
-		m.vulnMode,
-		m.vulnsStatus,
-		m.form,
-		m.namespaceForm,
-		m.dependencyForm,
-		m.projectForm,
-		m.sourceForm,
-		m.policyForm,
-		m.policyValueForm,
-		m.policyUpdateForm,
-		m.deleteConfirm,
-		m.namespaceDeleteConfirm,
-		m.dependencyDeleteConfirm,
-		m.projectDeleteConfirm,
-		m.sourceDeleteConfirm,
-		m.policyDeleteConfirm,
-		m.navModalOpen,
-		m.navModalIndex,
-		m.settingsOperations,
-		m.operationsModalOpen,
-		m.operationsModalIndex,
-	)
+	state := ui.RenderState{
+		Width: m.width, Height: m.height, Screen: m.screen,
+		Dashboard: ui.DashboardRenderState{
+			TokenRights: m.dashboard.tokenRights, AttentionRows: m.dashboard.attentionRows,
+			Focus: m.dashboard.focus, SelectedProjectID: m.dashboard.selectedProjectID,
+		},
+		Stacks: ui.StacksRenderState{
+			Items: m.stacks, SelectedID: m.selectedStackID, Form: m.form, Delete: m.deleteConfirm,
+		},
+		Namespaces: ui.NamespacesRenderState{
+			Items: m.namespaces, SelectedID: m.selectedNamespaceID,
+			Form: m.namespaceForm, Delete: m.namespaceDeleteConfirm,
+		},
+		Dependencies: ui.DependenciesRenderState{
+			Items: m.dependencies, SelectedID: m.selectedDependencyID,
+			Form: m.dependencyForm, Delete: m.dependencyDeleteConfirm,
+		},
+		Projects: ui.ProjectsRenderState{
+			Items: m.projects, SelectedID: m.selectedProjectID,
+			Dependencies: m.projectDependencies, SelectedDependencyID: m.selectedProjectDepID,
+			LatestRun: m.projectLatestRun, SyncStatus: m.projectSyncStatus,
+			Focus: m.projectFocus, Form: m.projectForm, Delete: m.projectDeleteConfirm,
+		},
+		Sources: ui.SourcesRenderState{
+			Items: m.sources, SelectedID: m.selectedSourceID, Form: m.sourceForm, Delete: m.sourceDeleteConfirm,
+		},
+		Policies: ui.PoliciesRenderState{
+			Items: m.policies, SelectedID: m.selectedPolicyID,
+			Values: m.policyValues, SelectedValueID: m.selectedPolicyValueID,
+			Focus: m.policyFocus, UpdateStatus: m.policyUpdateStatus,
+			Form: m.policyForm, ValueForm: m.policyValueForm,
+			UpdateForm: m.policyUpdateForm, Delete: m.policyDeleteConfirm,
+		},
+		View: ui.DependencyViewRenderState{
+			View: m.dependencyView, SelectedProjectID: m.selectedViewProjectID,
+			ColumnOffset: m.viewColumnOffset,
+		},
+		Settings: ui.SettingsRenderState{
+			Columns: m.checkColumns, Rows: m.projectCheckRows,
+			SelectedProjectID: m.selectedCheckProjectID,
+			TableState:        m.settingsTableState, Status: m.checksStatus,
+		},
+		Releases: ui.ReleasesRenderState{
+			Rows: m.releaseRows, SelectedProjectID: m.selectedReleaseProjectID,
+			Period: m.releasePeriod, Status: m.releasesStatus,
+		},
+		Vulnerabilities: ui.VulnerabilitiesRenderState{
+			Rows: m.vulnRows, SelectedProjectID: m.selectedVulnProjectID,
+			Items: m.vulnItems, SelectedItemIndex: m.selectedVulnItemIndex,
+			Focus: m.vulnFocus, Mode: m.vulnMode, Status: m.vulnsStatus,
+		},
+		Overlay: ui.OverlayRenderState{
+			NavigationOpen: m.navModalOpen, NavigationIndex: m.navModalIndex,
+			Operations: m.settingsOperations, OperationsOpen: m.operationsModalOpen,
+			OperationsIndex: m.operationsModalIndex, OperationsConfirm: m.operationsConfirm,
+			GlobalError:   m.lastError,
+			LoadState:     m.loadState(m.screen),
+			SearchEditing: m.searchOpen, SearchQuery: m.searchQuery, SearchCount: len(m.searchMatches()),
+		},
+	}
+	m.filterSearchRenderState(&state)
+	return m.creator.Render(state)
+}
+
+func (m *model) recordError(err error) {
+	m.err = err
+	if err != nil {
+		m.lastError = err.Error()
+	}
+}
+
+func (m model) anyModalOpen() bool {
+	return m.searchOpen || m.form.Open || m.namespaceForm.Open || m.dependencyForm.Open || m.projectForm.Open || m.sourceForm.Open || m.policyForm.Open || m.policyValueForm.Open || m.policyUpdateForm.Open || m.navModalOpen || m.operationsModalOpen || m.deleteConfirm.Open || m.namespaceDeleteConfirm.Open || m.dependencyDeleteConfirm.Open || m.projectDeleteConfirm.Open || m.sourceDeleteConfirm.Open || m.policyDeleteConfirm.Open
 }
 
 func (m model) updateStackForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1010,6 +1113,7 @@ func (m model) finishStackFormAction(action stackFormAction, save func() tea.Cmd
 	case stackFormActionQuit:
 		return m, tea.Quit
 	case stackFormActionSave:
+		m.savePending = true
 		return m, save()
 	default:
 		return m, nil
@@ -1070,7 +1174,7 @@ func (m model) updatePolicyUpdateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			Message: "Updating pinned deps",
 			Running: true,
 		}
-		return m, m.policyPinsUpdateCmd(form, registrySource)
+		return m.startPolicyPinsUpdate(form, registrySource)
 	default:
 		return m, nil
 	}
@@ -1143,7 +1247,7 @@ func updateProjectFormState(msg tea.KeyMsg, form ui.ProjectForm, namespaces []ui
 		case ui.ProjectFormFieldStack:
 			form.StackID = nextStackID(stacks, form.StackID)
 		}
-	case isOneOf(msg, " ", "space"):
+	case (form.Focus == ui.ProjectFormFieldFreezing || form.Focus == ui.ProjectFormFieldEndOfLife) && isOneOf(msg, " ", "space"):
 		switch form.Focus {
 		case ui.ProjectFormFieldFreezing:
 			form.Freezing = !form.Freezing
@@ -1558,6 +1662,9 @@ func (m model) startProjectDependencySync() (tea.Model, tea.Cmd) {
 	}
 
 	ch := make(chan projectSyncMsg, 16)
+	jobCtx, cancel := context.WithCancel(m.ctx)
+	m.projectSyncCancel = cancel
+	m.projectSyncRunID++
 	m.projectSyncCh = ch
 	m.projectSyncStatus = ui.ProjectSyncStatus{
 		ProjectID: project.ID,
@@ -1565,20 +1672,20 @@ func (m model) startProjectDependencySync() (tea.Model, tea.Cmd) {
 		Running:   true,
 	}
 
-	return m, tea.Batch(runProjectDependencySync(m.store, project, source, ch), waitProjectSync(ch))
+	return m, tea.Batch(runProjectDependencySync(jobCtx, m.store, project, m.sourceWithCredential(source), ch), waitProjectSync(ch, m.projectSyncRunID))
 }
 
-func runProjectDependencySync(store *storage.Store, project ui.Project, source ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
+func runProjectDependencySync(ctx context.Context, store *storage.Store, project ui.Project, source ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
 	return func() tea.Msg {
 		defer close(ch)
 		if store == nil {
-			ch <- projectSyncMsg{projectID: project.ID, message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			sendJobMsg(ctx, ch, projectSyncMsg{projectID: project.ID, message: "store is not ready", err: errors.New("store is not ready"), done: true})
 			return nil
 		}
 
 		client, err := projectsync.NewSourceClient(source.Type, nil)
 		if err != nil {
-			ch <- projectSyncMsg{projectID: project.ID, message: err.Error(), err: err, done: true}
+			sendJobMsg(ctx, ch, projectSyncMsg{projectID: project.ID, message: err.Error(), err: err, done: true})
 			return nil
 		}
 
@@ -1588,7 +1695,7 @@ func runProjectDependencySync(store *storage.Store, project ui.Project, source u
 			SourceClient: client,
 			Force:        true,
 		}
-		result, err := service.Sync(context.Background(), projectsync.Source{
+		result, err := service.Sync(ctx, projectsync.Source{
 			ID:       source.ID,
 			Type:     source.Type,
 			URL:      source.URL,
@@ -1599,10 +1706,10 @@ func runProjectDependencySync(store *storage.Store, project ui.Project, source u
 			Name:       project.Name,
 			StackName:  project.StackName,
 		}, func(message string) {
-			ch <- projectSyncMsg{projectID: project.ID, message: message}
+			sendJobMsg(ctx, ch, projectSyncMsg{projectID: project.ID, message: message})
 		})
 		if err != nil {
-			ch <- projectSyncMsg{projectID: project.ID, message: err.Error(), err: err, done: true}
+			sendJobMsg(ctx, ch, projectSyncMsg{projectID: project.ID, message: err.Error(), err: err, done: true})
 			return nil
 		}
 
@@ -1610,18 +1717,18 @@ func runProjectDependencySync(store *storage.Store, project ui.Project, source u
 		if result.UpToDate {
 			message = "already up to date"
 		}
-		ch <- projectSyncMsg{projectID: project.ID, message: message, done: true}
+		sendJobMsg(ctx, ch, projectSyncMsg{projectID: project.ID, message: message, done: true})
 		return nil
 	}
 }
 
-func waitProjectSync(ch <-chan projectSyncMsg) tea.Cmd {
+func waitProjectSync(ch <-chan projectSyncMsg, runID uint64) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
 			return nil
 		}
-
+		msg.runID = runID
 		return msg
 	}
 }
@@ -1657,13 +1764,16 @@ func (m model) startProjectsDependencySync(projects []ui.Project, message string
 	}
 
 	ch := make(chan projectSyncMsg, 16)
+	jobCtx, cancel := context.WithCancel(m.ctx)
+	m.projectSyncCancel = cancel
+	m.projectSyncRunID++
 	m.projectSyncCh = ch
 	m.projectSyncStatus = ui.ProjectSyncStatus{
 		Message: message,
 		Running: true,
 	}
 
-	return m, tea.Batch(runProjectsDependencySync(m.store, projects, m.sources, ch), waitProjectSync(ch))
+	return m, tea.Batch(runProjectsDependencySync(jobCtx, m.store, projects, m.sourcesWithCredentials(), ch), waitProjectSync(ch, m.projectSyncRunID))
 }
 
 func (m model) viewProjects(all bool) []ui.Project {
@@ -1695,26 +1805,23 @@ func activeProjects(projects []ui.Project) []ui.Project {
 	return result
 }
 
-func runProjectsDependencySync(store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
+func runProjectsDependencySync(ctx context.Context, store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- projectSyncMsg) tea.Cmd {
 	return func() tea.Msg {
 		defer close(ch)
 		if store == nil {
-			ch <- projectSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			sendJobMsg(ctx, ch, projectSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true})
 			return nil
 		}
 
-		total := len(projects)
-		for index, project := range projects {
+		runProjectBatch(ctx, projects, "Sync", "Sync complete", func(ctx context.Context, project ui.Project, progress func(string)) error {
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
-				ch <- projectSyncMsg{message: "Skipping " + project.Name + ": source not found", current: index, total: total}
-				continue
+				return errors.New("source not found")
 			}
 
 			client, err := projectsync.NewSourceClient(source.Type, nil)
 			if err != nil {
-				ch <- projectSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
+				return err
 			}
 
 			service := projectsync.Service{
@@ -1723,7 +1830,7 @@ func runProjectsDependencySync(store *storage.Store, projects []ui.Project, sour
 				SourceClient: client,
 				Force:        true,
 			}
-			_, err = service.Sync(context.Background(), projectsync.Source{
+			_, err = service.Sync(ctx, projectsync.Source{
 				ID:       source.ID,
 				Type:     source.Type,
 				URL:      source.URL,
@@ -1733,18 +1840,11 @@ func runProjectsDependencySync(store *storage.Store, projects []ui.Project, sour
 				ProviderID: project.ProjectID,
 				Name:       project.Name,
 				StackName:  project.StackName,
-			}, func(message string) {
-				ch <- projectSyncMsg{message: project.Name + ": " + message, current: index, total: total}
-			})
-			if err != nil {
-				ch <- projectSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
-			}
-
-			ch <- projectSyncMsg{message: project.Name, step: true, current: index + 1, total: total}
-		}
-
-		ch <- projectSyncMsg{message: "Sync complete", done: true, current: total, total: total}
+			}, progress)
+			return err
+		}, func(event projectJobEvent) {
+			sendJobMsg(ctx, ch, projectSyncMsg{message: event.message, err: event.err, done: event.done, step: event.step, current: event.current, total: event.total})
+		})
 		return nil
 	}
 }
@@ -1755,7 +1855,7 @@ func (m model) loadStacks() tea.Cmd {
 			return stacksLoadedMsg{stacks: []ui.Stack{}}
 		}
 
-		stacks, err := m.store.Stacks().List(context.Background())
+		stacks, err := m.store.Stacks().List(m.ctx)
 		if err != nil {
 			return stacksLoadedMsg{err: err}
 		}
@@ -1770,7 +1870,7 @@ func (m model) loadNamespaces() tea.Cmd {
 			return namespacesLoadedMsg{namespaces: []ui.Namespace{}}
 		}
 
-		namespaces, err := m.store.Namespaces().List(context.Background())
+		namespaces, err := m.store.Namespaces().List(m.ctx)
 		if err != nil {
 			return namespacesLoadedMsg{err: err}
 		}
@@ -1785,7 +1885,7 @@ func (m model) loadDependencies() tea.Cmd {
 			return dependenciesLoadedMsg{dependencies: []ui.Dependency{}}
 		}
 
-		dependencies, err := m.store.Dependencies().List(context.Background())
+		dependencies, err := m.store.Dependencies().List(m.ctx)
 		if err != nil {
 			return dependenciesLoadedMsg{err: err}
 		}
@@ -1795,37 +1895,47 @@ func (m model) loadDependencies() tea.Cmd {
 }
 
 func (m model) loadProjects() tea.Cmd {
+	var generation uint64
+	if m.projectsGeneration != nil {
+		generation = m.projectsGeneration.Add(1)
+	}
 	return func() tea.Msg {
 		if m.store == nil {
-			return projectsLoadedMsg{projects: []ui.Project{}}
+			return projectsLoadedMsg{projects: []ui.Project{}, generation: generation}
 		}
 
-		projects, err := m.store.Projects().List(context.Background())
+		projects, err := m.store.Projects().List(m.ctx)
 		if err != nil {
-			return projectsLoadedMsg{err: err}
+			return projectsLoadedMsg{generation: generation, err: err}
 		}
 
-		return projectsLoadedMsg{projects: toUIProjects(projects)}
+		return projectsLoadedMsg{projects: toUIProjects(projects), generation: generation}
 	}
 }
 
 func (m model) loadProjectDependencies() tea.Cmd {
 	projectID := m.selectedProjectID
+	var generation uint64
+	if m.projectDepsGeneration != nil {
+		generation = m.projectDepsGeneration.Add(1)
+	}
 	return func() tea.Msg {
 		if m.store == nil || projectID == 0 {
-			return projectDependenciesLoadedMsg{dependencies: []ui.ProjectDependency{}}
+			return projectDependenciesLoadedMsg{projectID: projectID, generation: generation, dependencies: []ui.ProjectDependency{}}
 		}
 
-		dependencies, err := m.store.ProjectDependencies().ListByProject(context.Background(), projectID)
+		dependencies, err := m.store.ProjectDependencies().ListByProject(m.ctx, projectID)
 		if err != nil {
-			return projectDependenciesLoadedMsg{err: err}
+			return projectDependenciesLoadedMsg{projectID: projectID, generation: generation, err: err}
 		}
-		latestRun, err := m.store.ProjectDependencies().LatestRun(context.Background(), projectID)
+		latestRun, err := m.store.ProjectDependencies().LatestRun(m.ctx, projectID)
 		if err != nil {
-			return projectDependenciesLoadedMsg{err: err}
+			return projectDependenciesLoadedMsg{projectID: projectID, generation: generation, err: err}
 		}
 
 		return projectDependenciesLoadedMsg{
+			projectID:    projectID,
+			generation:   generation,
 			dependencies: toUIProjectDependencies(dependencies),
 			latestRun:    toUIProjectDependencyRun(latestRun),
 		}
@@ -1835,15 +1945,15 @@ func (m model) loadProjectDependencies() tea.Cmd {
 func (m model) loadSources() tea.Cmd {
 	return func() tea.Msg {
 		if m.store == nil {
-			return sourcesLoadedMsg{sources: []ui.Source{}}
+			return sourcesLoadedMsg{sources: []ui.Source{}, tokens: map[int64]string{}}
 		}
 
-		sources, err := m.store.Sources().List(context.Background())
+		sources, err := m.store.Sources().List(m.ctx)
 		if err != nil {
 			return sourcesLoadedMsg{err: err}
 		}
 
-		return sourcesLoadedMsg{sources: toUISources(sources)}
+		return sourcesLoadedMsg{sources: toUISources(sources), tokens: sourceTokenMap(sources)}
 	}
 }
 
@@ -1853,7 +1963,7 @@ func (m model) loadPolicies() tea.Cmd {
 			return policiesLoadedMsg{policies: []ui.Policy{}}
 		}
 
-		policies, err := m.store.Policies().List(context.Background())
+		policies, err := m.store.Policies().List(m.ctx)
 		if err != nil {
 			return policiesLoadedMsg{err: err}
 		}
@@ -1864,33 +1974,41 @@ func (m model) loadPolicies() tea.Cmd {
 
 func (m model) loadPolicyValues() tea.Cmd {
 	policyID := m.selectedPolicyID
+	var generation uint64
+	if m.policyValuesGeneration != nil {
+		generation = m.policyValuesGeneration.Add(1)
+	}
 	return func() tea.Msg {
 		if m.store == nil {
-			return policyValuesLoadedMsg{values: []ui.PolicyValue{}}
+			return policyValuesLoadedMsg{policyID: policyID, generation: generation, values: []ui.PolicyValue{}}
 		}
 
-		values, err := m.store.Policies().ListValues(context.Background(), policyID)
+		values, err := m.store.Policies().ListValues(m.ctx, policyID)
 		if err != nil {
-			return policyValuesLoadedMsg{err: err}
+			return policyValuesLoadedMsg{policyID: policyID, generation: generation, err: err}
 		}
 
-		return policyValuesLoadedMsg{values: toUIPolicyValues(values)}
+		return policyValuesLoadedMsg{policyID: policyID, generation: generation, values: toUIPolicyValues(values)}
 	}
 }
 
 func (m model) loadDependencyView() tea.Cmd {
 	stackID := m.viewStackID
+	var generation uint64
+	if m.dependencyViewGeneration != nil {
+		generation = m.dependencyViewGeneration.Add(1)
+	}
 	return func() tea.Msg {
 		if m.store == nil || stackID == 0 {
-			return dependencyViewLoadedMsg{view: ui.DependencyView{StackID: stackID}}
+			return dependencyViewLoadedMsg{stackID: stackID, generation: generation, view: ui.DependencyView{StackID: stackID}}
 		}
 
-		view, err := m.store.ProjectDependencies().ViewByStack(context.Background(), stackID)
+		view, err := m.store.ProjectDependencies().ViewByStack(m.ctx, stackID)
 		if err != nil {
-			return dependencyViewLoadedMsg{err: err}
+			return dependencyViewLoadedMsg{stackID: stackID, generation: generation, err: err}
 		}
 
-		return dependencyViewLoadedMsg{view: toUIDependencyView(view)}
+		return dependencyViewLoadedMsg{stackID: stackID, generation: generation, view: toUIDependencyView(view)}
 	}
 }
 
@@ -1905,11 +2023,11 @@ func (m model) saveStack() tea.Cmd {
 		name := strings.TrimSpace(form.Name)
 		color := strings.TrimSpace(form.Color)
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Stacks().Update(context.Background(), form.StackID, icon, name, color)
+			err := m.store.Stacks().Update(m.ctx, form.StackID, icon, name, color)
 			return stackSavedMsg{stackID: form.StackID, err: err}
 		}
 
-		stack, err := m.store.Stacks().Create(context.Background(), icon, name, color)
+		stack, err := m.store.Stacks().Create(m.ctx, icon, name, color)
 		return stackSavedMsg{stackID: stack.ID, err: err}
 	}
 }
@@ -1924,19 +2042,11 @@ func (m model) saveNamespace() tea.Cmd {
 		icon := strings.TrimSpace(form.Icon)
 		name := strings.TrimSpace(form.Name)
 		color := strings.TrimSpace(form.Color)
+		id := int64(0)
 		if form.Mode == ui.StackFormModeEdit {
-			if err := m.store.Namespaces().Update(context.Background(), form.StackID, icon, name, color); err != nil {
-				return namespaceSavedMsg{namespaceID: form.StackID, err: err}
-			}
-			err := m.store.Namespaces().SetPolicy(context.Background(), form.StackID, form.PolicyID)
-			return namespaceSavedMsg{namespaceID: form.StackID, err: err}
+			id = form.StackID
 		}
-
-		namespace, err := m.store.Namespaces().Create(context.Background(), icon, name, color)
-		if err != nil {
-			return namespaceSavedMsg{err: err}
-		}
-		err = m.store.Namespaces().SetPolicy(context.Background(), namespace.ID, form.PolicyID)
+		namespace, err := m.store.Namespaces().SaveWithPolicy(m.ctx, id, icon, name, color, form.PolicyID)
 		return namespaceSavedMsg{namespaceID: namespace.ID, err: err}
 	}
 }
@@ -1954,11 +2064,11 @@ func (m model) saveDependency() tea.Cmd {
 		registryName := strings.TrimSpace(form.RegistryName)
 		registrySourceID := form.RegistryID
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Dependencies().UpdateWithRegistry(context.Background(), form.DependencyID, form.StackID, icon, name, color, registryName, registrySourceID)
+			err := m.store.Dependencies().UpdateWithRegistry(m.ctx, form.DependencyID, form.StackID, icon, name, color, registryName, registrySourceID)
 			return dependencySavedMsg{dependencyID: form.DependencyID, err: err}
 		}
 
-		dependency, err := m.store.Dependencies().CreateWithRegistry(context.Background(), form.StackID, icon, name, color, registryName, registrySourceID)
+		dependency, err := m.store.Dependencies().CreateWithRegistry(m.ctx, form.StackID, icon, name, color, registryName, registrySourceID)
 		return dependencySavedMsg{dependencyID: dependency.ID, err: err}
 	}
 }
@@ -1978,11 +2088,11 @@ func (m model) saveProject() tea.Cmd {
 			return projectSavedMsg{projectID: form.ID, err: errors.New("project PROJECT_ID is empty")}
 		}
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Projects().Update(context.Background(), form.ID, projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color, form.Freezing, form.EndOfLife)
+			err := m.store.Projects().Update(m.ctx, form.ID, projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color, form.Freezing, form.EndOfLife)
 			return projectSavedMsg{projectID: form.ID, err: err}
 		}
 
-		project, err := m.store.Projects().Create(context.Background(), projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color, form.Freezing, form.EndOfLife)
+		project, err := m.store.Projects().Create(m.ctx, projectID, form.NamespaceID, form.SourceID, form.StackID, icon, name, color, form.Freezing, form.EndOfLife)
 		return projectSavedMsg{projectID: project.ID, err: err}
 	}
 }
@@ -2000,11 +2110,11 @@ func (m model) saveSource() tea.Cmd {
 		sourceType := strings.TrimSpace(form.Type)
 		registryKind := strings.TrimSpace(form.RegistryKind)
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Sources().UpdateWithRegistryKind(context.Background(), form.SourceID, name, patToken, sourceURL, sourceType, registryKind)
+			err := m.store.Sources().UpdateWithRegistryKind(m.ctx, form.SourceID, name, patToken, sourceURL, sourceType, registryKind)
 			return sourceSavedMsg{sourceID: form.SourceID, err: err}
 		}
 
-		source, err := m.store.Sources().CreateWithRegistryKind(context.Background(), name, patToken, sourceURL, sourceType, registryKind)
+		source, err := m.store.Sources().CreateWithRegistryKind(m.ctx, name, patToken, sourceURL, sourceType, registryKind)
 		return sourceSavedMsg{sourceID: source.ID, err: err}
 	}
 }
@@ -2018,11 +2128,11 @@ func (m model) savePolicy() tea.Cmd {
 
 		name := strings.TrimSpace(form.Name)
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Policies().Update(context.Background(), form.PolicyID, name)
+			err := m.store.Policies().Update(m.ctx, form.PolicyID, name)
 			return policySavedMsg{policyID: form.PolicyID, err: err}
 		}
 
-		policy, err := m.store.Policies().Create(context.Background(), name)
+		policy, err := m.store.Policies().Create(m.ctx, name)
 		return policySavedMsg{policyID: policy.ID, err: err}
 	}
 }
@@ -2036,48 +2146,82 @@ func (m model) savePolicyValue() tea.Cmd {
 
 		version := strings.TrimSpace(form.Version)
 		if form.Mode == ui.StackFormModeEdit {
-			err := m.store.Policies().UpdateValue(context.Background(), form.PolicyValueID, form.DependencyID, version)
+			err := m.store.Policies().UpdateValue(m.ctx, form.PolicyValueID, form.DependencyID, version)
 			return policyValueSavedMsg{valueID: form.PolicyValueID, err: err}
 		}
 
-		value, err := m.store.Policies().CreateValue(context.Background(), form.PolicyID, form.DependencyID, version)
+		value, err := m.store.Policies().CreateValue(m.ctx, form.PolicyID, form.DependencyID, version)
 		return policyValueSavedMsg{valueID: value.ID, err: err}
 	}
 }
 
-func (m model) policyPinsUpdateCmd(form ui.PolicyUpdateForm, registrySource ui.Source) tea.Cmd {
-	return func() tea.Msg {
-		if m.store == nil {
-			return policyPinsUpdatedMsg{}
-		}
-		values, err := m.store.Policies().ListValuesByStack(context.Background(), form.PolicyID, form.StackID)
+func (m model) policyPinsUpdateWorker(ctx context.Context, runID uint64, form ui.PolicyUpdateForm, registrySource ui.Source, ch chan<- policyPinsProgressMsg) {
+	defer close(ch)
+	if m.store == nil {
+		sendJobMsg(ctx, ch, policyPinsProgressMsg{runID: runID, message: "Pins complete", done: true})
+		return
+	}
+	values, err := m.store.Policies().ListValuesByStack(ctx, form.PolicyID, form.StackID)
+	if err != nil {
+		sendJobMsg(ctx, ch, policyPinsProgressMsg{runID: runID, message: "Pins failed", err: err, done: true})
+		return
+	}
+	client := registry.Client{}
+	source := registry.Source{
+		URL:   registrySource.URL,
+		Token: registrySource.PATToken,
+		Kind:  registrySource.RegistryKind,
+	}
+	var updated atomic.Int64
+	result := runBatchConcurrent(ctx, values, 4, func(value storage.PolicyValue) string { return value.DependencyName }, "Pins", "Pins complete", func(ctx context.Context, value storage.PolicyValue, _ func(string)) error {
+		latest, err := client.LatestStable(ctx, source, value.RegistryName)
 		if err != nil {
-			return policyPinsUpdatedMsg{err: err}
+			return err
 		}
-		client := registry.Client{}
-		source := registry.Source{
-			URL:   registrySource.URL,
-			Token: registrySource.PATToken,
-			Kind:  registrySource.RegistryKind,
+		if latest == value.Version {
+			return nil
 		}
-		updated := 0
-		failures := make([]string, 0)
-		for _, value := range values {
-			latest, err := client.LatestStable(context.Background(), source, value.RegistryName)
-			if err != nil {
-				failures = append(failures, value.DependencyName+": "+err.Error())
-				continue
-			}
-			if latest == value.Version {
-				continue
-			}
-			if err := m.store.Policies().UpdateValueVersion(context.Background(), value.ID, latest); err != nil {
-				failures = append(failures, value.DependencyName+": "+err.Error())
-				continue
-			}
-			updated++
+		if err := m.store.Policies().UpdateValueVersion(ctx, value.ID, latest); err != nil {
+			return err
 		}
-		return policyPinsUpdatedMsg{checked: len(values), updated: updated, failures: failures}
+		updated.Add(1)
+		return nil
+	}, func(event projectJobEvent) {
+		if event.done {
+			return
+		}
+		sendJobMsg(ctx, ch, policyPinsProgressMsg{runID: runID, message: event.message, checked: event.current, updated: int(updated.Load()), total: event.total})
+	})
+	finalErr := ctx.Err()
+	message := "Pins complete"
+	if finalErr != nil {
+		message = "Pins canceled"
+	}
+	sendJobMsg(ctx, ch, policyPinsProgressMsg{runID: runID, message: message, checked: result.processed, updated: int(updated.Load()), total: len(values), failures: result.failures, err: finalErr, done: true})
+}
+
+func (m model) startPolicyPinsUpdate(form ui.PolicyUpdateForm, registrySource ui.Source) (tea.Model, tea.Cmd) {
+	registrySource = m.sourceWithCredential(registrySource)
+	if m.policyPinsCancel != nil {
+		m.policyPinsCancel()
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.policyPinsRunID++
+	m.policyPinsCancel = cancel
+	ch := make(chan policyPinsProgressMsg, 8)
+	m.policyPinsSyncCh = ch
+	runID := m.policyPinsRunID
+	go m.policyPinsUpdateWorker(ctx, runID, form, registrySource, ch)
+	return m, waitPolicyPins(ch, runID)
+}
+
+func waitPolicyPins(ch <-chan policyPinsProgressMsg, runID uint64) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return policyPinsProgressMsg{runID: runID, message: "Pins stopped", done: true}
+		}
+		return msg
 	}
 }
 
@@ -2101,61 +2245,87 @@ func (m model) startSelectedPolicyValueUpdate() (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	registrySource = m.sourceWithCredential(registrySource)
 	m.policyUpdateStatus = ui.SettingsStatus{
 		Message: "Updating " + value.DependencyName,
 		Running: true,
 		Current: 0,
 		Total:   1,
 	}
-	return m, m.selectedPolicyValueUpdateCmd(value, registrySource)
+	if m.policyPinsCancel != nil {
+		m.policyPinsCancel()
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.policyPinsRunID++
+	m.policyPinsCancel = cancel
+	ch := make(chan policyPinsProgressMsg, 2)
+	m.policyPinsSyncCh = ch
+	runID := m.policyPinsRunID
+	go m.selectedPolicyValueUpdateWorker(ctx, runID, value, registrySource, ch)
+	return m, waitPolicyPins(ch, runID)
 }
 
-func (m model) selectedPolicyValueUpdateCmd(value ui.PolicyValue, registrySource ui.Source) tea.Cmd {
-	return func() tea.Msg {
-		if m.store == nil {
-			return policyPinsUpdatedMsg{checked: 1}
-		}
-		client := registry.Client{}
-		latest, err := client.LatestStable(context.Background(), registry.Source{
-			URL:   registrySource.URL,
-			Token: registrySource.PATToken,
-			Kind:  registrySource.RegistryKind,
-		}, value.RegistryName)
-		if err != nil {
-			return policyPinsUpdatedMsg{checked: 1, err: fmt.Errorf("%s: %w", value.DependencyName, err)}
-		}
-		if latest == value.Version {
-			return policyPinsUpdatedMsg{checked: 1, updated: 0}
-		}
-		if err := m.store.Policies().UpdateValueVersion(context.Background(), value.ID, latest); err != nil {
-			return policyPinsUpdatedMsg{checked: 1, err: fmt.Errorf("%s: %w", value.DependencyName, err)}
-		}
-		return policyPinsUpdatedMsg{checked: 1, updated: 1}
+func (m model) selectedPolicyValueUpdateWorker(ctx context.Context, runID uint64, value ui.PolicyValue, registrySource ui.Source, ch chan<- policyPinsProgressMsg) {
+	defer close(ch)
+	if m.store == nil {
+		sendJobMsg(ctx, ch, policyPinsProgressMsg{runID: runID, message: "Pins complete", checked: 1, total: 1, done: true})
+		return
 	}
+	client := registry.Client{}
+	latest, err := client.LatestStable(ctx, registry.Source{
+		URL:   registrySource.URL,
+		Token: registrySource.PATToken,
+		Kind:  registrySource.RegistryKind,
+	}, value.RegistryName)
+	updated := 0
+	if err == nil && latest != value.Version {
+		err = m.store.Policies().UpdateValueVersion(ctx, value.ID, latest)
+		if err == nil {
+			updated = 1
+		}
+	}
+	if err != nil {
+		err = fmt.Errorf("%s: %w", value.DependencyName, err)
+	}
+	message := "Pins complete"
+	if errors.Is(err, context.Canceled) {
+		message = "Pins canceled"
+	}
+	sendJobMsg(ctx, ch, policyPinsProgressMsg{runID: runID, message: message, checked: 1, updated: updated, total: 1, err: err, done: true})
 }
 
 func (m model) loadPolicyValueLatest() tea.Cmd {
 	form := m.policyValueForm
+	var generation uint64
+	if m.policyValueLatestGeneration != nil {
+		generation = m.policyValueLatestGeneration.Add(1)
+	}
+	identity := policyValueLatestLoadedMsg{policyID: form.PolicyID, valueID: form.PolicyValueID, dependencyID: form.DependencyID, registryID: form.RegistryID, generation: generation}
 	dependency, ok := findByID(m.dependencies, form.DependencyID, dependencyID)
 	if !ok {
 		return func() tea.Msg {
-			return policyValueLatestLoadedMsg{err: errors.New("dependency is empty")}
+			identity.err = errors.New("dependency is empty")
+			return identity
 		}
 	}
 	registrySource, ok := findByID(registryUISources(m.sources), form.RegistryID, sourceID)
 	if !ok {
 		return func() tea.Msg {
-			return policyValueLatestLoadedMsg{err: errors.New("registry is empty")}
+			identity.err = errors.New("registry is empty")
+			return identity
 		}
 	}
+	registrySource = m.sourceWithCredential(registrySource)
 	return func() tea.Msg {
 		client := registry.Client{}
-		version, err := client.LatestStable(context.Background(), registry.Source{
+		version, err := client.LatestStable(m.ctx, registry.Source{
 			URL:   registrySource.URL,
 			Token: registrySource.PATToken,
 			Kind:  registrySource.RegistryKind,
 		}, dependency.RegistryName)
-		return policyValueLatestLoadedMsg{version: version, err: err}
+		identity.version = version
+		identity.err = err
+		return identity
 	}
 }
 
@@ -2166,7 +2336,7 @@ func (m model) deleteStack() tea.Cmd {
 			return stackDeletedMsg{stackID: confirm.StackID}
 		}
 
-		err := m.store.Stacks().Delete(context.Background(), confirm.StackID)
+		err := m.store.Stacks().Delete(m.ctx, confirm.StackID)
 		return stackDeletedMsg{stackID: confirm.StackID, err: err}
 	}
 }
@@ -2178,7 +2348,7 @@ func (m model) deleteNamespace() tea.Cmd {
 			return namespaceDeletedMsg{namespaceID: confirm.StackID}
 		}
 
-		err := m.store.Namespaces().Delete(context.Background(), confirm.StackID)
+		err := m.store.Namespaces().Delete(m.ctx, confirm.StackID)
 		return namespaceDeletedMsg{namespaceID: confirm.StackID, err: err}
 	}
 }
@@ -2190,7 +2360,7 @@ func (m model) deleteDependency() tea.Cmd {
 			return dependencyDeletedMsg{dependencyID: confirm.StackID}
 		}
 
-		err := m.store.Dependencies().Delete(context.Background(), confirm.StackID)
+		err := m.store.Dependencies().Delete(m.ctx, confirm.StackID)
 		return dependencyDeletedMsg{dependencyID: confirm.StackID, err: err}
 	}
 }
@@ -2202,7 +2372,7 @@ func (m model) deleteProject() tea.Cmd {
 			return projectDeletedMsg{projectID: confirm.StackID}
 		}
 
-		err := m.store.Projects().Delete(context.Background(), confirm.StackID)
+		err := m.store.Projects().Delete(m.ctx, confirm.StackID)
 		return projectDeletedMsg{projectID: confirm.StackID, err: err}
 	}
 }
@@ -2214,7 +2384,7 @@ func (m model) deleteSource() tea.Cmd {
 			return sourceDeletedMsg{sourceID: confirm.StackID}
 		}
 
-		err := m.store.Sources().Delete(context.Background(), confirm.StackID)
+		err := m.store.Sources().Delete(m.ctx, confirm.StackID)
 		return sourceDeletedMsg{sourceID: confirm.StackID, err: err}
 	}
 }
@@ -2226,7 +2396,7 @@ func (m model) deletePolicy() tea.Cmd {
 			return policyDeletedMsg{policyID: confirm.StackID}
 		}
 
-		err := m.store.Policies().Delete(context.Background(), confirm.StackID)
+		err := m.store.Policies().Delete(m.ctx, confirm.StackID)
 		return policyDeletedMsg{policyID: confirm.StackID, err: err}
 	}
 }
@@ -2238,7 +2408,7 @@ func (m model) deletePolicyValue() tea.Cmd {
 			return policyValueDeletedMsg{valueID: confirm.StackID}
 		}
 
-		err := m.store.Policies().DeleteValue(context.Background(), confirm.StackID)
+		err := m.store.Policies().DeleteValue(m.ctx, confirm.StackID)
 		return policyValueDeletedMsg{valueID: confirm.StackID, err: err}
 	}
 }
@@ -2322,10 +2492,10 @@ func toUIProjectDependencies(dependencies []storage.ProjectDependency) []ui.Proj
 	for _, dependency := range dependencies {
 		result = append(result, ui.ProjectDependency{
 			ID:             dependency.ID,
-			Name:           dependency.Name,
-			Version:        dependency.Version,
-			DependencyType: dependency.DependencyType,
-			SourceFile:     dependency.SourceFile,
+			Name:           safetext.Plain(dependency.Name),
+			Version:        safetext.Plain(dependency.Version),
+			DependencyType: safetext.Plain(dependency.DependencyType),
+			SourceFile:     safetext.Plain(dependency.SourceFile),
 		})
 	}
 
@@ -2358,13 +2528,35 @@ func toUISources(sources []storage.Source) []ui.Source {
 			Icon:         source.Icon,
 			Name:         source.Name,
 			Color:        source.Color,
-			PATToken:     source.PATToken,
 			URL:          source.URL,
 			Type:         source.Type,
 			RegistryKind: source.RegistryKind,
 		})
 	}
 
+	return result
+}
+
+func sourceTokenMap(sources []storage.Source) map[int64]string {
+	result := make(map[int64]string, len(sources))
+	for _, source := range sources {
+		result[source.ID] = source.PATToken
+	}
+	return result
+}
+
+func (m model) sourceWithCredential(source ui.Source) ui.Source {
+	if token := m.sourceTokens[source.ID]; token != "" {
+		source.PATToken = token
+	}
+	return source
+}
+
+func (m model) sourcesWithCredentials() []ui.Source {
+	result := make([]ui.Source, len(m.sources))
+	for index, source := range m.sources {
+		result[index] = m.sourceWithCredential(source)
+	}
 	return result
 }
 
@@ -2428,6 +2620,7 @@ func toUIDependencyView(view storage.DependencyView) ui.DependencyView {
 			ProjectFreezing:  row.ProjectFreezing,
 			ProjectEndOfLife: row.ProjectEndOfLife,
 			Versions:         row.Versions,
+			PolicyVersions:   row.PolicyVersions,
 		})
 	}
 
@@ -2666,7 +2859,7 @@ func (m *model) openEditSourceForm() {
 		Focus:        ui.SourceFormFieldName,
 		Name:         source.Name,
 		URL:          source.URL,
-		PATToken:     source.PATToken,
+		PATToken:     m.sourceWithCredential(source).PATToken,
 		Type:         source.Type,
 		RegistryKind: source.RegistryKind,
 	})

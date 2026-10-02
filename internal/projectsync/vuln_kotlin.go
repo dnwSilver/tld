@@ -1,6 +1,7 @@
 package projectsync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,10 @@ func (AndroidVulnStrategy) Files() []string {
 }
 
 func (AndroidVulnStrategy) Scan(files []File) (VulnReport, error) {
+	return (AndroidVulnStrategy{}).ScanContext(context.Background(), files)
+}
+
+func (AndroidVulnStrategy) ScanContext(ctx context.Context, files []File) (VulnReport, error) {
 	if !hasGradleBuildFile(files) {
 		return VulnReport{}, errors.New("gradle build file is required for android vulnerability scan")
 	}
@@ -29,5 +34,5 @@ func (AndroidVulnStrategy) Scan(files []File) (VulnReport, error) {
 		return VulnReport{}, err
 	}
 
-	return runMobileVulnScan(dir, files, KotlinStrategy{})
+	return runMobileVulnScanContext(ctx, dir, files, KotlinStrategy{})
 }

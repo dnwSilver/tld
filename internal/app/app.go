@@ -10,7 +10,8 @@ import (
 )
 
 func Run() error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	passphrase, err := readPassphrase(os.Stdin, os.Stderr)
 	if err != nil {
@@ -25,6 +26,9 @@ func Run() error {
 		_ = store.Close()
 	}()
 
-	_, err = tea.NewProgram(newModel(store), tea.WithAltScreen()).Run()
+	m := newModel(store)
+	m.ctx = ctx
+	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
+	cancel()
 	return err
 }

@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +17,7 @@ type releasesLoadedMsg struct {
 }
 
 type releaseSyncMsg struct {
+	runID   uint64
 	message string
 	err     error
 	done    bool
@@ -28,7 +28,7 @@ type releaseSyncMsg struct {
 
 func (m model) loadReleases() tea.Cmd {
 	projects := activeProjects(m.projects)
-	sources := m.sources
+	sources := m.sourcesWithCredentials()
 	return func() tea.Msg {
 		if m.store == nil {
 			return releasesLoadedMsg{rows: []ui.ReleaseRow{}}
@@ -55,11 +55,11 @@ func (m model) loadReleases() tea.Cmd {
 				continue
 			}
 
-			psSource := projectsync.Source{Type: source.Type}
+			psSource := projectsync.Source{ID: source.ID, Type: source.Type, URL: source.URL}
 			psProject := projectsync.Project{ProviderID: project.ProjectID, StackName: project.StackName}
 
 			releaseService := projectsync.ReleaseService{Cache: cache}
-			dates, err := releaseService.LoadProject(context.Background(), psSource, psProject)
+			dates, err := releaseService.LoadProject(m.ctx, psSource, psProject)
 			if err != nil {
 				return releasesLoadedMsg{err: err}
 			}
@@ -68,7 +68,7 @@ func (m model) loadReleases() tea.Cmd {
 			row.ReleaseCount, row.HotfixCount = countReleases(now, dates, period)
 
 			statusService := projectsync.ReleaseStatusService{Cache: cache}
-			statuses, err := statusService.LoadProject(context.Background(), psSource, psProject)
+			statuses, err := statusService.LoadProject(m.ctx, psSource, psProject)
 			if err != nil {
 				return releasesLoadedMsg{err: err}
 			}
@@ -86,13 +86,16 @@ func (m model) startReleasesRefresh(projects []ui.Project) (tea.Model, tea.Cmd) 
 	}
 
 	ch := make(chan releaseSyncMsg, 16)
+	jobCtx, cancel := context.WithCancel(m.ctx)
+	m.releasesCancel = cancel
+	m.releasesRunID++
 	m.releasesSyncCh = ch
 	m.releasesStatus = ui.SettingsStatus{
 		Message: "Loading releases...",
 		Running: true,
 	}
 
-	return m, tea.Batch(runReleasesRefresh(m.store, projects, m.sources, ch), waitReleaseSync(ch))
+	return m, tea.Batch(runReleasesRefresh(jobCtx, m.store, projects, m.sourcesWithCredentials(), ch), waitReleaseSync(ch, m.releasesRunID))
 }
 
 func (m model) selectedReleaseProjects() []ui.Project {
@@ -103,27 +106,24 @@ func (m model) selectedReleaseProjects() []ui.Project {
 	return nil
 }
 
-func runReleasesRefresh(store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- releaseSyncMsg) tea.Cmd {
+func runReleasesRefresh(ctx context.Context, store *storage.Store, projects []ui.Project, sources []ui.Source, ch chan<- releaseSyncMsg) tea.Cmd {
 	return func() tea.Msg {
 		defer close(ch)
 		if store == nil {
-			ch <- releaseSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			sendJobMsg(ctx, ch, releaseSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true})
 			return nil
 		}
 
 		cache := store.Cache()
-		total := len(projects)
-		for index, project := range projects {
+		runProjectBatch(ctx, projects, "Releases", "Releases complete", func(ctx context.Context, project ui.Project, progress func(string)) error {
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
-				ch <- releaseSyncMsg{message: fmt.Sprintf("Skipping %s: source not found", project.Name), current: index, total: total}
-				continue
+				return errors.New("source not found")
 			}
 
 			client, err := projectsync.NewSourceClient(source.Type, nil)
 			if err != nil {
-				ch <- releaseSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
+				return err
 			}
 
 			psSource := projectsync.Source{
@@ -138,44 +138,35 @@ func runReleasesRefresh(store *storage.Store, projects []ui.Project, sources []u
 				Name:       project.Name,
 				StackName:  project.StackName,
 			}
-			progress := func(message string) {
-				ch <- releaseSyncMsg{message: project.Name + ": " + message, current: index, total: total}
-			}
-
 			releaseService := projectsync.ReleaseService{
 				Cache:        cache,
 				SourceClient: client,
 			}
-			_, err = releaseService.RunProject(context.Background(), psSource, psProject, progress)
+			_, err = releaseService.RunProject(ctx, psSource, psProject, progress)
 			if err != nil {
-				ch <- releaseSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
+				return err
 			}
 
 			statusService := projectsync.ReleaseStatusService{
 				Cache:        cache,
 				SourceClient: client,
 			}
-			_, err = statusService.RunProject(context.Background(), psSource, psProject, progress)
-			if err != nil {
-				ch <- releaseSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
-			}
-
-			ch <- releaseSyncMsg{message: project.Name, step: true, current: index + 1, total: total}
-		}
-
-		ch <- releaseSyncMsg{message: "Releases complete", done: true, current: total, total: total}
+			_, err = statusService.RunProject(ctx, psSource, psProject, progress)
+			return err
+		}, func(event projectJobEvent) {
+			sendJobMsg(ctx, ch, releaseSyncMsg{message: event.message, err: event.err, done: event.done, step: event.step, current: event.current, total: event.total})
+		})
 		return nil
 	}
 }
 
-func waitReleaseSync(ch <-chan releaseSyncMsg) tea.Cmd {
+func waitReleaseSync(ch <-chan releaseSyncMsg, runID uint64) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
 			return nil
 		}
+		msg.runID = runID
 		return msg
 	}
 }

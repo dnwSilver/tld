@@ -1,17 +1,16 @@
 package app
 
 import (
-	"context"
 	"fmt"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dnwSilver/tld/internal/projectsync"
 	"github.com/dnwSilver/tld/internal/storage"
 	"github.com/dnwSilver/tld/internal/ui"
+	"github.com/dnwSilver/tld/internal/version"
 )
 
 type dashboardAttentionLoadedMsg struct {
@@ -38,7 +37,7 @@ func (m model) loadDashboardAttention() tea.Cmd {
 			return dashboardAttentionLoadedMsg{rows: []ui.DashboardAttentionRow{}}
 		}
 
-		ctx := context.Background()
+		ctx := m.ctx
 		projects, err := store.Projects().List(ctx)
 		if err != nil {
 			return dashboardAttentionLoadedMsg{err: err}
@@ -58,8 +57,8 @@ func (m model) loadDashboardAttention() tea.Cmd {
 		}
 
 		cache := store.Cache()
-		vulnerabilities := make(map[int64]projectsync.VulnCounts, len(projects))
-		checks := make(map[int64]projectsync.ProjectCheckResults, len(projects))
+		refs := make([]projectsync.ProjectSourceRef, 0, len(projects))
+		reportIndex := make(map[int64]int, len(projects))
 		for _, project := range projects {
 			if project.EndOfLife {
 				continue
@@ -68,38 +67,58 @@ func (m model) loadDashboardAttention() tea.Cmd {
 			if !ok {
 				continue
 			}
-			syncSource := projectsync.Source{Type: source.Type}
-			syncProject := projectsync.Project{
-				ProviderID: project.ProjectID,
-				Name:       project.Name,
-				StackName:  project.StackName,
+			reportIndex[project.ID] = len(refs)
+			refs = append(refs, projectsync.ProjectSourceRef{
+				Source: projectsync.Source{ID: source.ID, Type: source.Type, URL: source.URL},
+				Project: projectsync.Project{
+					ProviderID: project.ProjectID,
+					Name:       project.Name,
+					StackName:  project.StackName,
+				},
+			})
+		}
+		vulnReports, err := (projectsync.VulnScanService{Cache: cache, Mode: projectsync.VulnScanModeProd}).LoadProjects(ctx, refs)
+		if err != nil {
+			return dashboardAttentionLoadedMsg{err: fmt.Errorf("load vulnerability snapshots: %w", err)}
+		}
+		checkReports, _, err := (projectsync.CheckService{Cache: cache}).LoadProjectsWithVersions(ctx, refs)
+		if err != nil {
+			return dashboardAttentionLoadedMsg{err: fmt.Errorf("load check snapshots: %w", err)}
+		}
+		vulnerabilities := make(map[int64]projectsync.VulnCounts, len(projects))
+		vulnCoverage := make(map[int64]bool, len(projects))
+		checks := make(map[int64]projectsync.ProjectCheckResults, len(projects))
+		checkCoverage := make(map[int64]bool, len(projects))
+		for _, project := range projects {
+			if project.EndOfLife {
+				continue
 			}
-
-			report, err := (projectsync.VulnScanService{
-				Cache: cache,
-				Mode:  projectsync.VulnScanModeProd,
-			}).LoadProject(ctx, syncSource, syncProject)
-			if err != nil {
-				return dashboardAttentionLoadedMsg{err: fmt.Errorf("load vulnerabilities for %s: %w", project.Name, err)}
+			index, ok := reportIndex[project.ID]
+			if !ok {
+				continue
 			}
+			report := vulnReports[index]
 			vulnerabilities[project.ID] = report.Counts
+			vulnCoverage[project.ID] = report.Scanned
 
-			results, err := (projectsync.CheckService{Cache: cache}).LoadProject(ctx, syncSource, syncProject)
-			if err != nil {
-				return dashboardAttentionLoadedMsg{err: fmt.Errorf("load settings for %s: %w", project.Name, err)}
-			}
+			results := checkReports[index]
 			checks[project.ID] = results
+			complete := len(results) == len(projectsync.ProjectChecks)
+			for _, state := range results {
+				if state == projectsync.CheckStateUnknown {
+					complete = false
+					break
+				}
+			}
+			checkCoverage[project.ID] = complete
 		}
 
 		return dashboardAttentionLoadedMsg{
-			rows: buildDashboardAttentionRows(projects, vulnerabilities, checks, comparisons),
+			rows: buildDashboardAttentionRowsWithCoverage(projects, vulnerabilities, checks, comparisons, vulnCoverage, checkCoverage),
 		}
 	}
 }
 
-// loadTokenRights probes the first active GitLab project: the Maintainer
-// role is a per-project relation, so one representative project is enough
-// for a team-wide token.
 func (m model) loadTokenRights() tea.Cmd {
 	store := m.store
 	return func() tea.Msg {
@@ -107,7 +126,7 @@ func (m model) loadTokenRights() tea.Cmd {
 			return tokenRightsLoadedMsg{}
 		}
 
-		ctx := context.Background()
+		ctx := m.ctx
 		sources, err := store.Sources().List(ctx)
 		if err != nil {
 			return tokenRightsLoadedMsg{err: err}
@@ -117,58 +136,53 @@ func (m model) loadTokenRights() tea.Cmd {
 			return tokenRightsLoadedMsg{err: err}
 		}
 
-		source, project, ok := firstGitLabProject(sources, projects)
-		if !ok {
-			return tokenRightsLoadedMsg{}
+		type target struct {
+			index   int
+			source  storage.Source
+			project storage.Project
 		}
-
-		client, err := projectsync.NewSourceClient(source.Type, nil)
-		if err != nil {
-			return tokenRightsLoadedMsg{err: err}
+		sourcesByID := make(map[int64]storage.Source, len(sources))
+		for _, source := range sources {
+			sourcesByID[source.ID] = source
 		}
-		rightsClient, ok := client.(projectsync.MaintainerRightsSourceClient)
-		if !ok {
-			return tokenRightsLoadedMsg{}
+		targets := make([]target, 0)
+		for _, project := range projects {
+			source, ok := sourcesByID[project.SourceID]
+			if project.EndOfLife || !ok || !strings.EqualFold(strings.TrimSpace(source.Type), projectsync.SourceTypeGitLab) {
+				continue
+			}
+			targets = append(targets, target{index: len(targets), source: source, project: project})
 		}
-
-		maintainer, err := rightsClient.HasMaintainerRights(ctx, projectsync.Source{
-			ID:       source.ID,
-			Type:     source.Type,
-			URL:      source.URL,
-			PATToken: source.PATToken,
-		}, projectsync.Project{
-			ID:         project.ID,
-			ProviderID: project.ProjectID,
-			Name:       project.Name,
-		})
-		if err != nil {
-			return tokenRightsLoadedMsg{err: err}
+		rights := make([]ui.ProjectRight, len(targets))
+		jobs := make(chan target)
+		workers := min(4, len(targets))
+		var wg sync.WaitGroup
+		wg.Add(workers)
+		for range workers {
+			go func() {
+				defer wg.Done()
+				for item := range jobs {
+					result := ui.ProjectRight{ProjectID: item.project.ID, ProjectName: item.project.Name}
+					client, err := projectsync.NewSourceClient(item.source.Type, nil)
+					if err == nil {
+						if rightsClient, ok := client.(projectsync.MaintainerRightsSourceClient); ok {
+							result.Maintainer, err = rightsClient.HasMaintainerRights(ctx, projectsync.Source{
+								ID: item.source.ID, Type: item.source.Type, URL: item.source.URL, PATToken: item.source.PATToken,
+							}, projectsync.Project{ID: item.project.ID, ProviderID: item.project.ProjectID, Name: item.project.Name})
+							result.Checked = err == nil
+						}
+					}
+					rights[item.index] = result
+				}
+			}()
 		}
-
-		return tokenRightsLoadedMsg{rights: ui.TokenRights{Checked: true, Maintainer: maintainer}}
+		for _, item := range targets {
+			jobs <- item
+		}
+		close(jobs)
+		wg.Wait()
+		return tokenRightsLoadedMsg{rights: ui.TokenRights{Projects: rights}}
 	}
-}
-
-func firstGitLabProject(sources []storage.Source, projects []storage.Project) (storage.Source, storage.Project, bool) {
-	sourcesByID := make(map[int64]storage.Source, len(sources))
-	for _, source := range sources {
-		sourcesByID[source.ID] = source
-	}
-
-	for _, project := range projects {
-		if project.EndOfLife {
-			continue
-		}
-		source, ok := sourcesByID[project.SourceID]
-		if !ok {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(source.Type), projectsync.SourceTypeGitLab) {
-			return source, project, true
-		}
-	}
-
-	return storage.Source{}, storage.Project{}, false
 }
 
 func buildDashboardAttentionRows(
@@ -176,6 +190,17 @@ func buildDashboardAttentionRows(
 	vulnerabilities map[int64]projectsync.VulnCounts,
 	checks map[int64]projectsync.ProjectCheckResults,
 	comparisons []storage.PolicyVersionComparison,
+) []ui.DashboardAttentionRow {
+	return buildDashboardAttentionRowsWithCoverage(projects, vulnerabilities, checks, comparisons, nil, nil)
+}
+
+func buildDashboardAttentionRowsWithCoverage(
+	projects []storage.Project,
+	vulnerabilities map[int64]projectsync.VulnCounts,
+	checks map[int64]projectsync.ProjectCheckResults,
+	comparisons []storage.PolicyVersionComparison,
+	vulnCoverage map[int64]bool,
+	checkCoverage map[int64]bool,
 ) []ui.DashboardAttentionRow {
 	rowsByProject := make(map[int64]*ui.DashboardAttentionRow, len(projects))
 	for _, project := range projects {
@@ -185,6 +210,7 @@ func buildDashboardAttentionRows(
 		rowsByProject[project.ID] = &ui.DashboardAttentionRow{
 			ProjectID:   project.ID,
 			ProjectName: project.Name,
+			DataUnknown: (vulnCoverage != nil && !vulnCoverage[project.ID]) || (checkCoverage != nil && !checkCoverage[project.ID]),
 			Critical:    vulnerabilities[project.ID].Critical,
 			High:        vulnerabilities[project.ID].High,
 		}
@@ -213,7 +239,7 @@ func buildDashboardAttentionRows(
 
 	rows := make([]ui.DashboardAttentionRow, 0, len(rowsByProject))
 	for _, row := range rowsByProject {
-		if row.Critical == 0 &&
+		if !row.DataUnknown && row.Critical == 0 &&
 			row.High == 0 &&
 			row.Major == 0 &&
 			row.MinorPatch == 0 &&
@@ -245,58 +271,16 @@ const (
 	versionLagMinorPatch
 )
 
-var dashboardVersionNumberPattern = regexp.MustCompile(`\d+`)
-
 func dependencyVersionLag(actual, policy string) versionLag {
-	actualParts, actualOK := dashboardVersionParts(actual)
-	policyParts, policyOK := dashboardVersionParts(policy)
-	if !actualOK || !policyOK {
+	comparison, actualMajor, policyMajor, ok := version.CompareExact(actual, policy)
+	if !ok {
 		return versionLagNone
 	}
-	if actualParts[0] < policyParts[0] {
+	if actualMajor < policyMajor {
 		return versionLagMajor
 	}
-	if actualParts[0] == policyParts[0] && compareDashboardVersions(actualParts, policyParts) < 0 {
+	if actualMajor == policyMajor && comparison < 0 {
 		return versionLagMinorPatch
 	}
 	return versionLagNone
-}
-
-func dashboardVersionParts(version string) ([]int, bool) {
-	matches := dashboardVersionNumberPattern.FindAllString(strings.TrimSpace(version), -1)
-	if len(matches) == 0 {
-		return nil, false
-	}
-	parts := make([]int, 0, len(matches))
-	for _, match := range matches {
-		value, err := strconv.Atoi(match)
-		if err != nil {
-			return nil, false
-		}
-		parts = append(parts, value)
-	}
-	return parts, true
-}
-
-func compareDashboardVersions(left, right []int) int {
-	length := len(left)
-	if len(right) > length {
-		length = len(right)
-	}
-	for index := range length {
-		var leftValue, rightValue int
-		if index < len(left) {
-			leftValue = left[index]
-		}
-		if index < len(right) {
-			rightValue = right[index]
-		}
-		if leftValue < rightValue {
-			return -1
-		}
-		if leftValue > rightValue {
-			return 1
-		}
-	}
-	return 0
 }

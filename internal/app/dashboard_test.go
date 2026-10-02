@@ -16,7 +16,8 @@ func TestDependencyVersionLag(t *testing.T) {
 		policy string
 		want   versionLag
 	}{
-		{name: "major", actual: "^1.9.0", policy: "2.0.0", want: versionLagMajor},
+		{name: "major", actual: "1.9.0", policy: "2.0.0", want: versionLagMajor},
+		{name: "range is incomparable", actual: "^1.9.0", policy: "2.0.0", want: versionLagNone},
 		{name: "minor", actual: "1.8.0", policy: "1.9.0", want: versionLagMinorPatch},
 		{name: "patch", actual: "1.9.0", policy: "1.9.1", want: versionLagMinorPatch},
 		{name: "equal", actual: "1.9.1", policy: "1.9.1", want: versionLagNone},
@@ -30,6 +31,14 @@ func TestDependencyVersionLag(t *testing.T) {
 				t.Fatalf("dependencyVersionLag(%q, %q) = %v, want %v", test.actual, test.policy, got, test.want)
 			}
 		})
+	}
+}
+
+func TestDashboardShowsProjectsWithIncompleteScanData(t *testing.T) {
+	projects := []storage.Project{{ID: 42, Name: "unscanned"}}
+	rows := buildDashboardAttentionRowsWithCoverage(projects, nil, nil, nil, map[int64]bool{}, map[int64]bool{})
+	if len(rows) != 1 || !rows[0].DataUnknown || rows[0].ProjectID != 42 {
+		t.Fatalf("attention rows = %#v", rows)
 	}
 }
 

@@ -1,6 +1,7 @@
 package projectsync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,10 @@ func (IOSVulnStrategy) Files() []string {
 }
 
 func (IOSVulnStrategy) Scan(files []File) (VulnReport, error) {
+	return (IOSVulnStrategy{}).ScanContext(context.Background(), files)
+}
+
+func (IOSVulnStrategy) ScanContext(ctx context.Context, files []File) (VulnReport, error) {
 	if !hasIOSLockfile(files) {
 		return VulnReport{}, errors.New("Podfile.lock or Gemfile.lock is required for ios vulnerability scan")
 	}
@@ -29,7 +34,7 @@ func (IOSVulnStrategy) Scan(files []File) (VulnReport, error) {
 		return VulnReport{}, err
 	}
 
-	return runMobileVulnScan(dir, files, SwiftStrategy{})
+	return runMobileVulnScanContext(ctx, dir, files, SwiftStrategy{})
 }
 
 func hasIOSLockfile(files []File) bool {

@@ -26,3 +26,18 @@ func TestSettingsHintsIncludeOperations(t *testing.T) {
 		t.Fatalf("settings hints do not include column navigation: %q", hints)
 	}
 }
+
+func TestHintsOnlyShowActionsAvailableOnScreen(t *testing.T) {
+	h := NewHints(uikit.NewPalette())
+	for _, screen := range []uikit.Screen{uikit.ScreenView, uikit.ScreenReleases} {
+		text := h.Render(screen)
+		for _, unsupported := range []string{"[a] add", "[e] edit", "[d] delete", "[c] clone"} {
+			if strings.Contains(text, unsupported) {
+				t.Errorf("screen %v shows %q", screen, unsupported)
+			}
+		}
+	}
+	if strings.Contains(h.Render(uikit.ScreenPolicies), "[c] clone") {
+		t.Fatal("policies show unsupported clone")
+	}
+}

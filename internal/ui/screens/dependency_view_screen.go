@@ -1,13 +1,12 @@
 package screens
 
 import (
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dnwSilver/tld/internal/ui/components"
 	"github.com/dnwSilver/tld/internal/ui/uikit"
+	"github.com/dnwSilver/tld/internal/version"
 )
 
 const (
@@ -15,8 +14,6 @@ const (
 	viewVersionColumnWidth = 14
 	viewProjectIconWidth   = 2
 )
-
-var viewVersionNumberPattern = regexp.MustCompile(`\d+`)
 
 type DependencyViewScreen struct {
 	palette uikit.Palette
@@ -26,13 +23,13 @@ func NewDependencyViewScreen(palette uikit.Palette) DependencyViewScreen {
 	return DependencyViewScreen{palette: palette}
 }
 
-func (s DependencyViewScreen) Render(width int, height int, stacks []uikit.Stack, activeStackID int64, view uikit.DependencyView, selectedProjectID int64, columnOffset int, syncStatus uikit.ProjectSyncStatus) string {
+func (s DependencyViewScreen) Render(width int, height int, stacks []uikit.Stack, activeStackID int64, view uikit.DependencyView, selectedProjectID int64, columnOffset int, syncStatus uikit.ProjectSyncStatus, searchQuery string) string {
 	boxWidth := uikit.Max(width, 2)
 	boxHeight := uikit.Max(height-1, 3)
 	contentWidth := uikit.Max(boxWidth-2, 1)
 	contentHeight := uikit.Max(boxHeight-2, 1)
 
-	title := components.ScreenTitle(s.palette, uikit.SymbolDependency, "View", intPtr(len(view.Rows)))
+	title := components.ScreenTitle(s.palette, uikit.SymbolDependency, "View", intPtr(len(view.Rows)), searchQuery)
 	content := s.renderContent(contentWidth, contentHeight, view, selectedProjectID, columnOffset)
 	box := components.NewTabbedPanel(s.palette, s.palette.Primary).Render(contentWidth, contentHeight, title, stackTabs(stacks, activeStackID), content)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
@@ -44,7 +41,11 @@ func (s DependencyViewScreen) Render(width int, height int, stacks []uikit.Stack
 }
 
 func (s DependencyViewScreen) progressLine(width int, status uikit.ProjectSyncStatus) string {
-	return components.RenderProgress(s.palette, width, uikit.SymbolDependency, status.Message, status.Error, status.Running, status.Current, status.Total)
+	message := status.Message
+	if status.Running {
+		message += " [Esc] cancel"
+	}
+	return components.RenderProgress(s.palette, width, uikit.SymbolDependency, message, status.Error, status.Running, status.Current, status.Total)
 }
 
 func (s DependencyViewScreen) renderContent(width int, height int, view uikit.DependencyView, selectedProjectID int64, columnOffset int) string {
@@ -54,7 +55,7 @@ func (s DependencyViewScreen) renderContent(width int, height int, view uikit.De
 	if len(view.Rows) == 0 {
 		lines = append(lines, uikit.CenterLine(s.palette, width, uikit.Text(s.palette, s.palette.Hint, "No projects for stack")))
 	} else {
-		for _, row := range view.Rows {
+		for _, row := range visibleRowsByID(view.Rows, selectedProjectID, height-1, func(row uikit.DependencyViewRow) int64 { return row.ProjectID }) {
 			lines = append(lines, s.row(width, columns, row, row.ProjectID == selectedProjectID))
 		}
 	}
@@ -124,7 +125,7 @@ func (s DependencyViewScreen) row(width int, columns []uikit.DependencyViewColum
 		cells = append(cells, components.TableCell{
 			Value:      rightAligned(s.versionText(version), viewVersionColumnWidth),
 			Width:      viewVersionColumnWidth,
-			Foreground: s.versionColor(version, column.PolicyVersion),
+			Foreground: s.versionColor(version, row.PolicyVersions[column.DependencyID]),
 		})
 	}
 
@@ -187,14 +188,13 @@ func (s DependencyViewScreen) versionColor(actual string, policy string) lipglos
 	if actual == "" || policy == "" {
 		return s.palette.Hint
 	}
-	if actual == policy {
-		return s.palette.Hint
-	}
 
-	actualMajor, actualParts, actualOK := parseViewVersion(actual)
-	policyMajor, policyParts, policyOK := parseViewVersion(policy)
-	if !actualOK || !policyOK {
+	comparison, actualMajor, policyMajor, ok := version.CompareExact(actual, policy)
+	if !ok {
 		return s.palette.Text
+	}
+	if comparison == 0 {
+		return s.palette.Hint
 	}
 	if actualMajor > policyMajor {
 		return s.palette.Info
@@ -202,52 +202,9 @@ func (s DependencyViewScreen) versionColor(actual string, policy string) lipglos
 	if policyMajor-actualMajor > 1 {
 		return s.palette.Warning
 	}
-	if compareViewVersions(actualParts, policyParts) < 0 {
+	if comparison < 0 {
 		return s.palette.Primary
-	}
-	if compareViewVersions(actualParts, policyParts) == 0 {
-		return s.palette.Hint
 	}
 
 	return s.palette.Info
-}
-
-func parseViewVersion(version string) (int, []int, bool) {
-	matches := viewVersionNumberPattern.FindAllString(version, -1)
-	if len(matches) == 0 {
-		return 0, nil, false
-	}
-
-	parts := make([]int, 0, len(matches))
-	for _, match := range matches {
-		value, err := strconv.Atoi(match)
-		if err != nil {
-			return 0, nil, false
-		}
-		parts = append(parts, value)
-	}
-
-	return parts[0], parts, true
-}
-
-func compareViewVersions(left []int, right []int) int {
-	maxLength := uikit.Max(len(left), len(right))
-	for index := range maxLength {
-		leftValue := 0
-		if index < len(left) {
-			leftValue = left[index]
-		}
-		rightValue := 0
-		if index < len(right) {
-			rightValue = right[index]
-		}
-		if leftValue < rightValue {
-			return -1
-		}
-		if leftValue > rightValue {
-			return 1
-		}
-	}
-
-	return 0
 }

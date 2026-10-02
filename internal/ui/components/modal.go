@@ -54,6 +54,7 @@ func (m Modal) Overlay(lines []string, viewportWidth, viewportHeight int, block 
 		if target >= len(lines) {
 			break
 		}
+		row = ansi.Cut(row, 0, viewportWidth)
 
 		blockWidth := ansi.StringWidth(row)
 		left := uikit.Max((viewportWidth-blockWidth)/2, 0)
@@ -64,6 +65,28 @@ func (m Modal) Overlay(lines []string, viewportWidth, viewportHeight int, block 
 	}
 
 	return lines
+}
+
+// ModalWindow keeps the selected row visible when a modal is taller than the
+// terminal. Callers append their fixed footer after the returned rows.
+func ModalWindow(rows []string, selected, capacity int) []string {
+	if capacity <= 0 || len(rows) <= capacity {
+		return rows
+	}
+	if selected < 0 {
+		selected = 0
+	}
+	if selected >= len(rows) {
+		selected = len(rows) - 1
+	}
+	start := selected - capacity + 1
+	if start < 0 {
+		start = 0
+	}
+	if start+capacity > len(rows) {
+		start = len(rows) - capacity
+	}
+	return rows[start : start+capacity]
 }
 
 func (m Modal) Spaces(width int) string {
@@ -88,6 +111,7 @@ func (m Modal) Text(color lipgloss.Color, text string) string {
 }
 
 func (m Modal) topBorder(width int, title string) string {
+	title = ansi.Truncate(title, uikit.Max(width-2, 0), "…")
 	titleWidth := lipgloss.Width(title)
 	available := uikit.Max(width-titleWidth-2, 0)
 	left := int(math.Floor(float64(available) / 2))

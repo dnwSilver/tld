@@ -2,9 +2,11 @@ package projectsync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dnwSilver/tld/internal/storage"
 )
@@ -95,6 +97,15 @@ type ProjectCheckResults map[string]CheckState
 
 type ProjectCheckVersions map[string]string
 
+const checkSnapshotVersion = 1
+
+type checkSnapshot struct {
+	Version   int                  `json:"version"`
+	CheckedAt time.Time            `json:"checked_at"`
+	Results   ProjectCheckResults  `json:"results"`
+	Versions  ProjectCheckVersions `json:"versions"`
+}
+
 func (s CheckService) RunProject(ctx context.Context, source Source, project Project, progress ProgressFunc) (ProjectCheckResults, error) {
 	if s.SourceClient == nil {
 		return nil, errors.New("check source client is empty")
@@ -103,9 +114,30 @@ func (s CheckService) RunProject(ctx context.Context, source Source, project Pro
 		return nil, errors.New("check provider project id is empty")
 	}
 
-	ciContent, ciFound := s.loadGitlabCI(ctx, source, project)
-	protectedBranches, protectedFound := s.loadProtectedBranches(ctx, source, project)
-	ciSettings, ciSettingsFound := s.loadCISettings(ctx, source, project)
+	var ciContent []byte
+	var ciFound bool
+	var err error
+	gitlabSource := strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab)
+	if gitlabSource {
+		ciContent, ciFound, err = s.loadGitlabCI(ctx, source, project)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var protectedBranches []ProtectedBranch
+	var protectedFound bool
+	var ciSettings CISettings
+	var ciSettingsFound bool
+	if gitlabSource {
+		protectedBranches, protectedFound, err = s.loadProtectedBranches(ctx, source, project)
+		if err != nil {
+			return nil, err
+		}
+		ciSettings, ciSettingsFound, err = s.loadCISettings(ctx, source, project)
+		if err != nil {
+			return nil, err
+		}
+	}
 	packageJSONContent, packageJSONFound, nextConfigFound, err := s.loadNextProjectFiles(ctx, source, project)
 	if err != nil {
 		return nil, err
@@ -127,9 +159,9 @@ func (s CheckService) RunProject(ctx context.Context, source Source, project Pro
 			return nil, err
 		}
 		results[check.ID] = state
-		if err := s.cacheResult(ctx, source, project, check.ID, state, versions[check.ID]); err != nil {
-			return nil, err
-		}
+	}
+	if err := s.cacheSnapshot(ctx, source, project, results, versions); err != nil {
+		return nil, err
 	}
 
 	return results, nil
@@ -141,40 +173,81 @@ func (s CheckService) LoadProject(ctx context.Context, source Source, project Pr
 }
 
 func (s CheckService) LoadProjectWithVersions(ctx context.Context, source Source, project Project) (ProjectCheckResults, ProjectCheckVersions, error) {
+	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectChecks, checkSnapshotKey(source, project.ProviderID))
+	if errors.Is(err, storage.ErrCacheMiss) {
+		return unknownCheckResults(), make(ProjectCheckVersions), nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return decodeCheckSnapshot(entry.Value)
+}
+
+func (s CheckService) LoadProjectsWithVersions(ctx context.Context, refs []ProjectSourceRef) ([]ProjectCheckResults, []ProjectCheckVersions, error) {
+	results := make([]ProjectCheckResults, len(refs))
+	versions := make([]ProjectCheckVersions, len(refs))
+	keys := make([]string, len(refs))
+	for i, ref := range refs {
+		keys[i] = checkSnapshotKey(ref.Source, ref.Project.ProviderID)
+	}
+	entries, err := s.Cache.GetMany(ctx, CacheNamespaceProjectChecks, keys)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i, key := range keys {
+		entry, ok := entries[key]
+		if !ok {
+			results[i] = unknownCheckResults()
+			versions[i] = make(ProjectCheckVersions)
+			continue
+		}
+		results[i], versions[i], err = decodeCheckSnapshot(entry.Value)
+		if err != nil {
+			return nil, nil, fmt.Errorf("decode checks for project %q: %w", refs[i].Project.ProviderID, err)
+		}
+	}
+	return results, versions, nil
+}
+
+func unknownCheckResults() ProjectCheckResults {
+	results := make(ProjectCheckResults, len(ProjectChecks))
+	for _, check := range ProjectChecks {
+		results[check.ID] = CheckStateUnknown
+	}
+	return results
+}
+
+func decodeCheckSnapshot(value []byte) (ProjectCheckResults, ProjectCheckVersions, error) {
 	results := make(ProjectCheckResults, len(ProjectChecks))
 	versions := make(ProjectCheckVersions, len(ProjectChecks))
+	var snapshot checkSnapshot
+	if err := json.Unmarshal(value, &snapshot); err != nil {
+		return nil, nil, fmt.Errorf("decode project checks snapshot: %w", err)
+	}
+	if snapshot.Version != checkSnapshotVersion {
+		return nil, nil, fmt.Errorf("unsupported project checks snapshot version %d", snapshot.Version)
+	}
 	for _, check := range ProjectChecks {
-		key := checkCacheKey(source.Type, project.ProviderID, check.ID)
-		entry, err := s.Cache.Get(ctx, CacheNamespaceProjectChecks, key)
-		if err != nil {
-			if errors.Is(err, storage.ErrCacheMiss) {
-				results[check.ID] = CheckStateUnknown
-				continue
-			}
-			return nil, nil, err
+		state, ok := snapshot.Results[check.ID]
+		if !ok {
+			return nil, nil, fmt.Errorf("project checks snapshot is missing %s", check.ID)
 		}
-		stateValue, version := decodeCheckCacheValue(entry.Value)
-		switch stateValue {
-		case "true", string(CheckStatePass):
-			results[check.ID] = CheckStatePass
-		case string(CheckStateWarning):
-			results[check.ID] = CheckStateWarning
-		case "false", string(CheckStateFail):
-			results[check.ID] = CheckStateFail
-		case string(CheckStateNotApplicable):
-			results[check.ID] = CheckStateNotApplicable
+		switch state {
+		case CheckStatePass, CheckStateWarning, CheckStateFail, CheckStateNotApplicable, CheckStateUnknown:
+			results[check.ID] = state
 		default:
-			results[check.ID] = CheckStateUnknown
+			return nil, nil, fmt.Errorf("project checks snapshot has invalid state %q for %s", state, check.ID)
 		}
-		if version != "" {
-			versions[check.ID] = version
-		}
+		versions[check.ID] = snapshot.Versions[check.ID]
 	}
 
 	return results, versions, nil
 }
 
 func (s CheckService) runCheck(ctx context.Context, source Source, project Project, checkID string, ciContent []byte, ciFound bool, protectedBranches []ProtectedBranch, protectedFound bool, ciSettings CISettings, ciSettingsFound bool, nextConfigFound bool, hasProductionNext bool) (CheckState, error) {
+	if gitlabOnlyCheck(checkID) && !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
+		return CheckStateNotApplicable, nil
+	}
 	if checkID == checkProtectedBranches || checkID == checkProtectedTags {
 		return s.runProtectionCheck(ctx, source, project, checkID)
 	}
@@ -255,6 +328,16 @@ func (s CheckService) runCheck(ctx context.Context, source Source, project Proje
 	return checkState(pass), nil
 }
 
+func gitlabOnlyCheck(checkID string) bool {
+	switch checkID {
+	case checkProcessMode, checkSeparatedCaches, checkProtectedBranches, checkProtectedTags,
+		checkNightly, "ci/cd", "ntfy", "dtrack", "cremr", "protect":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s CheckService) runProcessModeCheck(ctx context.Context, source Source, project Project) (CheckState, error) {
 	if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
 		return CheckStateNotApplicable, nil
@@ -299,16 +382,19 @@ func nightlyScheduleConfigured(schedules []PipelineSchedule) bool {
 	return false
 }
 
-func (s CheckService) loadGitlabCI(ctx context.Context, source Source, project Project) ([]byte, bool) {
+func (s CheckService) loadGitlabCI(ctx context.Context, source Source, project Project) ([]byte, bool, error) {
 	commit, err := s.SourceClient.ResolveHead(ctx, source, project)
 	if err != nil {
-		return nil, false
+		return nil, false, fmt.Errorf("resolve head for CI checks: %w", err)
 	}
 	content, err := s.SourceClient.FetchFile(ctx, source, project, commit.SHA, gitlabCIFile)
-	if err != nil {
-		return nil, false
+	if errors.Is(err, ErrFileNotFound) {
+		return nil, false, nil
 	}
-	return content, true
+	if err != nil {
+		return nil, false, fmt.Errorf("fetch %s: %w", gitlabCIFile, err)
+	}
+	return content, true, nil
 }
 
 func (s CheckService) loadNextProjectFiles(ctx context.Context, source Source, project Project) ([]byte, bool, bool, error) {
@@ -349,24 +435,24 @@ func packageJSONHasProductionNext(content []byte) (bool, error) {
 	return false, nil
 }
 
-func (s CheckService) loadProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, bool) {
+func (s CheckService) loadProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, bool, error) {
 	branches, err := s.SourceClient.ProtectedBranches(ctx, source, project)
 	if err != nil {
-		return nil, false
+		return nil, false, fmt.Errorf("load protected branches: %w", err)
 	}
-	return branches, true
+	return branches, true, nil
 }
 
-func (s CheckService) loadCISettings(ctx context.Context, source Source, project Project) (CISettings, bool) {
+func (s CheckService) loadCISettings(ctx context.Context, source Source, project Project) (CISettings, bool, error) {
 	client, ok := s.SourceClient.(CISettingsSourceClient)
 	if !ok {
-		return CISettings{}, false
+		return CISettings{}, false, errors.New("CI settings source client is not supported")
 	}
 	settings, err := client.CISettings(ctx, source, project)
 	if err != nil {
-		return CISettings{}, false
+		return CISettings{}, false, fmt.Errorf("load CI settings: %w", err)
 	}
-	return settings, true
+	return settings, true, nil
 }
 
 func protectedBranchesValid(branches []ProtectedBranch) bool {
@@ -416,37 +502,15 @@ func equalIntSets(actual []int, expected []int) bool {
 	return true
 }
 
-func (s CheckService) cacheResult(ctx context.Context, source Source, project Project, checkID string, state CheckState, version string) error {
-	value := "false"
-	switch state {
-	case CheckStatePass:
-		value = "true"
-	case CheckStateWarning:
-		value = string(CheckStateWarning)
-	case CheckStateNotApplicable:
-		value = string(CheckStateNotApplicable)
+func (s CheckService) cacheSnapshot(ctx context.Context, source Source, project Project, results ProjectCheckResults, versions ProjectCheckVersions) error {
+	snapshot := checkSnapshot{Version: checkSnapshotVersion, CheckedAt: time.Now().UTC(), Results: results, Versions: versions}
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("encode project checks snapshot: %w", err)
 	}
-	version = strings.TrimSpace(version)
-	if version != "" {
-		value += "\t" + version
-	}
-	key := checkCacheKey(source.Type, project.ProviderID, checkID)
-	return s.Cache.Set(ctx, CacheNamespaceProjectChecks, key, []byte(value), "text/plain", 0)
+	return s.Cache.Set(ctx, CacheNamespaceProjectChecks, checkSnapshotKey(source, project.ProviderID), payload, "application/json", resultCacheTTL)
 }
 
-func decodeCheckCacheValue(value []byte) (string, string) {
-	parts := strings.SplitN(strings.TrimSpace(string(value)), "\t", 2)
-	if len(parts) == 1 {
-		return parts[0], ""
-	}
-	return parts[0], strings.TrimSpace(parts[1])
-}
-
-func checkCacheKey(sourceType string, projectID string, checkID string) string {
-	parts := []string{
-		strings.TrimSpace(sourceType),
-		strings.TrimSpace(projectID),
-		strings.TrimSpace(checkID),
-	}
-	return strings.Join(parts, ":")
+func checkSnapshotKey(source Source, projectID string) string {
+	return sourceCacheKey(source, projectID, "checks", "snapshot-v1")
 }

@@ -43,6 +43,7 @@ func (s PoliciesScreen) Render(
 	updateForm uikit.PolicyUpdateForm,
 	updateStatus uikit.SettingsStatus,
 	deleteConfirm uikit.DeleteConfirm,
+	searchQuery string,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
@@ -57,15 +58,25 @@ func (s PoliciesScreen) Render(
 	leftContentWidth := uikit.Max(leftTotalWidth-2, 1)
 	rightContentWidth := uikit.Max(rightTotalWidth-2, 1)
 
-	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolPolicy, "Policies", intPtr(len(policies)))
+	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolPolicy, "Policies", intPtr(len(policies)), searchQuery)
 	leftBorder := s.borderForPane(!modalOpen && focus == uikit.PolicyPanePolicies)
 	left := components.NewBox(s.palette, leftBorder).Render(leftContentWidth, contentHeight, leftTitle, s.renderPoliciesContent(leftContentWidth, contentHeight, policies, selectedPolicyID))
 	body := left
 	if hasPolicy {
-		rightTitle := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Pinned deps", intPtr(len(values)))
+		rightTitle := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Pinned deps", intPtr(len(values)), "")
 		rightBorder := s.borderForPane(!modalOpen && focus == uikit.PolicyPaneValues)
 		right := components.NewBox(s.palette, rightBorder).Render(rightContentWidth, contentHeight, rightTitle, s.renderValuesContent(rightContentWidth, contentHeight, values, selectedValueID))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+		if width < narrowLayoutWidth {
+			paneContentWidth := uikit.Max(width-2, 1)
+			if focus == uikit.PolicyPaneValues && !modalOpen {
+				right = components.NewBox(s.palette, rightBorder).Render(paneContentWidth, contentHeight, rightTitle, s.renderValuesContent(paneContentWidth, contentHeight, values, selectedValueID))
+				body = right
+			} else {
+				left = components.NewBox(s.palette, leftBorder).Render(paneContentWidth, contentHeight, leftTitle, s.renderPoliciesContent(paneContentWidth, contentHeight, policies, selectedPolicyID))
+				body = left
+			}
+		}
 	}
 	lines := strings.Split(body, uikit.SymbolLineBreak)
 
@@ -84,7 +95,11 @@ func (s PoliciesScreen) Render(
 
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
 	if updateStatus.Message != "" || updateStatus.Error != "" {
-		footer = components.RenderProgress(s.palette, width, uikit.SymbolDependency, updateStatus.Message, updateStatus.Error, updateStatus.Running, updateStatus.Current, updateStatus.Total)
+		message := updateStatus.Message
+		if updateStatus.Running {
+			message += " [Esc] cancel"
+		}
+		footer = components.RenderProgress(s.palette, width, uikit.SymbolDependency, message, updateStatus.Error, updateStatus.Running, updateStatus.Current, updateStatus.Total)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, strings.Join(lines, uikit.SymbolLineBreak), footer)
 }
@@ -104,7 +119,7 @@ func (s PoliciesScreen) renderPoliciesContent(width, height int, policies []uiki
 		empty := uikit.Text(s.palette, s.palette.Hint, "No policies yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, policy := range policies {
+		for _, policy := range visibleRowsByID(policies, selectedPolicyID, height-1, func(policy uikit.Policy) int64 { return policy.ID }) {
 			lines = append(lines, s.policyRow(width, policy, policy.ID == selectedPolicyID))
 		}
 	}
@@ -118,7 +133,7 @@ func (s PoliciesScreen) renderValuesContent(width, height int, values []uikit.Po
 		empty := uikit.Text(s.palette, s.palette.Hint, "No pinned deps yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, value := range values {
+		for _, value := range visibleRowsByID(values, selectedValueID, height-1, func(value uikit.PolicyValue) int64 { return value.ID }) {
 			lines = append(lines, s.valueRow(width, value, value.ID == selectedValueID))
 		}
 	}

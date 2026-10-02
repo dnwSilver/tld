@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type JavaScriptVulnStrategy struct {
@@ -21,6 +22,10 @@ func (JavaScriptVulnStrategy) Files() []string {
 }
 
 func (s JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
+	return s.ScanContext(context.Background(), files)
+}
+
+func (s JavaScriptVulnStrategy) ScanContext(ctx context.Context, files []File) (VulnReport, error) {
 	var packageJSON []byte
 	var packageLock []byte
 	for _, file := range files {
@@ -35,7 +40,7 @@ func (s JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
 		return VulnReport{}, errors.New("package.json is required for npm audit")
 	}
 
-	output, err := runNpmAudit(packageJSON, packageLock, s.Mode)
+	output, err := runNpmAuditContext(ctx, packageJSON, packageLock, s.Mode)
 	if err != nil {
 		return VulnReport{}, err
 	}
@@ -44,6 +49,10 @@ func (s JavaScriptVulnStrategy) Scan(files []File) (VulnReport, error) {
 }
 
 func runNpmAudit(packageJSON []byte, packageLock []byte, mode VulnScanMode) ([]byte, error) {
+	return runNpmAuditContext(context.Background(), packageJSON, packageLock, mode)
+}
+
+func runNpmAuditContext(ctx context.Context, packageJSON []byte, packageLock []byte, mode VulnScanMode) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "tld-npm-audit-*")
 	if err != nil {
 		return nil, fmt.Errorf("create npm audit temp dir: %w", err)
@@ -61,10 +70,18 @@ func runNpmAudit(packageJSON []byte, packageLock []byte, mode VulnScanMode) ([]b
 		}
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, "npm", npmAuditArgs(mode)...)
 	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
+	var outputBuffer scannerOutput
+	cmd.Stdout = &outputBuffer
+	cmd.Stderr = &outputBuffer
+	err = cmd.Run()
+	if errors.Is(err, errScannerOutputLimit) {
+		return nil, err
+	}
+	output := outputBuffer.Bytes()
 	if len(bytes.TrimSpace(output)) == 0 {
 		if err != nil {
 			return nil, fmt.Errorf("npm audit failed: %w", err)
@@ -90,6 +107,20 @@ func npmAuditArgs(mode VulnScanMode) []string {
 }
 
 func parseNpmAudit(output []byte) (VulnReport, error) {
+	var envelope struct {
+		Error           json.RawMessage `json:"error"`
+		Metadata        json.RawMessage `json:"metadata"`
+		Vulnerabilities json.RawMessage `json:"vulnerabilities"`
+	}
+	if err := json.Unmarshal(output, &envelope); err != nil {
+		return VulnReport{}, fmt.Errorf("parse npm audit output: %w", err)
+	}
+	if len(envelope.Error) > 0 && string(envelope.Error) != "null" {
+		return VulnReport{}, fmt.Errorf("npm audit reported an error: %s", envelope.Error)
+	}
+	if len(envelope.Metadata) == 0 && len(envelope.Vulnerabilities) == 0 {
+		return VulnReport{}, errors.New("npm audit returned no audit data")
+	}
 	var payload struct {
 		Vulnerabilities map[string]struct {
 			Name     string            `json:"name"`
@@ -98,6 +129,9 @@ func parseNpmAudit(output []byte) (VulnReport, error) {
 			Via      []json.RawMessage `json:"via"`
 		} `json:"vulnerabilities"`
 		Metadata struct {
+			Dependencies struct {
+				Total int `json:"total"`
+			} `json:"dependencies"`
 			Vulnerabilities struct {
 				Info     int `json:"info"`
 				Low      int `json:"low"`
@@ -111,8 +145,14 @@ func parseNpmAudit(output []byte) (VulnReport, error) {
 		return VulnReport{}, fmt.Errorf("parse npm audit output: %w", err)
 	}
 
+	coverage := ScannerCoverage{Scanner: "npm audit", Method: "tool reported"}
+	if payload.Metadata.Dependencies.Total > 0 {
+		coverage.Method = "dependency graph"
+		coverage.Packages = payload.Metadata.Dependencies.Total
+	}
 	report := VulnReport{
-		Scanned: true,
+		Scanned:  true,
+		Coverage: []ScannerCoverage{coverage},
 		Counts: VulnCounts{
 			Critical: payload.Metadata.Vulnerabilities.Critical,
 			High:     payload.Metadata.Vulnerabilities.High,
@@ -132,14 +172,14 @@ func parseNpmAudit(output []byte) (VulnReport, error) {
 			}
 
 			var advisory struct {
-				Source      int    `json:"source"`
-				Name        string `json:"name"`
-				Dependency  string `json:"dependency"`
-				Title       string `json:"title"`
-				URL         string `json:"url"`
-				Severity    string `json:"severity"`
-				Cwe         []string `json:"cwe"`
-				Cvss        struct {
+				Source     int      `json:"source"`
+				Name       string   `json:"name"`
+				Dependency string   `json:"dependency"`
+				Title      string   `json:"title"`
+				URL        string   `json:"url"`
+				Severity   string   `json:"severity"`
+				Cwe        []string `json:"cwe"`
+				Cvss       struct {
 					Score        float64 `json:"score"`
 					VectorString string  `json:"vectorString"`
 				} `json:"cvss"`

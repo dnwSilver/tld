@@ -91,8 +91,13 @@ func TestSettingsOperationApplyStartsCommand(t *testing.T) {
 
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	updated := next.(model)
+	if !updated.operationsModalOpen || !updated.operationsConfirm || cmd != nil {
+		t.Fatal("first Enter should show operation preview")
+	}
+	next, cmd = updated.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated = next.(model)
 	if updated.operationsModalOpen {
-		t.Fatal("operations modal did not close on enter")
+		t.Fatal("operations modal did not close after confirmation")
 	}
 	if cmd == nil {
 		t.Fatal("expected operation command")
@@ -107,7 +112,8 @@ func TestSettingsOperationApplyReportsMissingSource(t *testing.T) {
 	m.sources = nil
 	m.operationsModalOpen = true
 
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := next.(model).Update(tea.KeyMsg{Type: tea.KeyEnter})
 	updated := next.(model)
 	if cmd != nil {
 		t.Fatal("operation command started without a source")
@@ -121,7 +127,7 @@ func TestOperationAppliedMsgUpdatesStatus(t *testing.T) {
 	m := settingsModelWithProject()
 	m.checksStatus = ui.SettingsStatus{Message: "Applying...", Running: true}
 
-	next, cmd := m.Update(operationAppliedMsg{title: "Share CI cache with all branches", projectID: 1, project: "repo"})
+	next, cmd := m.Update(operationAppliedMsg{title: "Share CI cache with all branches", projectID: 1, project: "repo", result: projectsync.OperationResult{Outcome: projectsync.OperationOutcomeApplied}})
 	updated := next.(model)
 	if updated.checksStatus.Error != "" {
 		t.Fatalf("unexpected error: %q", updated.checksStatus.Error)

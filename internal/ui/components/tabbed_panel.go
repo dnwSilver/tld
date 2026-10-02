@@ -40,6 +40,7 @@ func (p TabbedPanel) Render(contentWidth int, contentHeight int, title string, t
 }
 
 func (p TabbedPanel) topBorder(width int, title string, tabs []Tab) string {
+	title = ansi.Truncate(title, uikit.Max(width-2, 0), "…")
 	titlePart := p.spaces(1) + title + p.spaces(1)
 	tabsContent := NewTabs(p.palette).RenderInline(tabs)
 	maxTabsWidth := uikit.Max(width-lipgloss.Width(titlePart)-2, 0)

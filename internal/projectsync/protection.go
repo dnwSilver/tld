@@ -67,34 +67,46 @@ func missingProtection(names, required []string) []string {
 }
 
 func (s OperationService) ensureProtection(ctx context.Context, source Source, project Project, operationID string) error {
+	_, err := s.ensureProtectionResult(ctx, source, project, operationID)
+	return err
+}
+
+func (s OperationService) ensureProtectionResult(ctx context.Context, source Source, project Project, operationID string) (OperationResult, error) {
 	if !strings.EqualFold(strings.TrimSpace(source.Type), SourceTypeGitLab) {
-		return fmt.Errorf("project operations are supported only for gitlab")
+		return OperationResult{Outcome: OperationOutcomeFailed}, fmt.Errorf("project operations are supported only for gitlab")
 	}
 	client, ok := s.SourceClient.(ProtectionSourceClient)
 	if !ok {
-		return fmt.Errorf("protection source client is not supported")
+		return OperationResult{Outcome: OperationOutcomeFailed}, fmt.Errorf("protection source client is not supported")
 	}
 	tags := operationID == operationProtectTags
 	names, required, err := protectionNames(ctx, s.SourceClient, source, project, tags)
 	if err != nil {
-		return err
+		return OperationResult{Outcome: OperationOutcomeFailed}, err
 	}
-	for _, name := range missingProtection(names, required) {
+	missing := missingProtection(names, required)
+	result := OperationResult{Outcome: OperationOutcomeApplied, Total: len(missing)}
+	for _, name := range missing {
 		if tags {
 			err = client.ProtectTag(ctx, source, project, name)
 		} else {
 			err = client.ProtectBranch(ctx, source, project, name)
 		}
 		if err != nil {
-			return fmt.Errorf("protect %s: %w", name, err)
+			result.Outcome = OperationOutcomeFailed
+			if result.Applied > 0 {
+				result.Outcome = OperationOutcomePartial
+			}
+			return result, fmt.Errorf("protect %s after %d successful changes: %w", name, result.Applied, err)
 		}
+		result.Applied++
 	}
-	return nil
+	return result, nil
 }
 
 func (c GitLabClient) ProtectedTags(ctx context.Context, source Source, project Project) ([]string, error) {
 	var names []string
-	for page := 1; ; page++ {
+	for page := 1; page <= maxTagPages; page++ {
 		requestURL := gitlabProjectAPIURL(source, project.ProviderID, "protected_tags")
 		values := requestURL.Query()
 		values.Set("per_page", "100")
@@ -113,6 +125,7 @@ func (c GitLabClient) ProtectedTags(ctx context.Context, source Source, project 
 			return names, nil
 		}
 	}
+	return nil, fmt.Errorf("gitlab protected tags exceed page budget")
 }
 
 func (c GitLabClient) ProtectBranch(ctx context.Context, source Source, project Project, name string) error {

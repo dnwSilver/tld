@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/dnwSilver/tld/internal/storage"
 )
@@ -28,6 +29,8 @@ type ReleaseStatusService struct {
 }
 
 func (s ReleaseStatusService) RunProject(ctx context.Context, source Source, project Project, progress ProgressFunc) ([]ReleaseStatusIndicator, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	if s.SourceClient == nil {
 		return nil, errors.New("release status source client is empty")
 	}
@@ -52,7 +55,7 @@ func (s ReleaseStatusService) RunProject(ctx context.Context, source Source, pro
 }
 
 func (s ReleaseStatusService) LoadProject(ctx context.Context, source Source, project Project) ([]ReleaseStatusIndicator, error) {
-	key := releaseStatusCacheKey(source.Type, project.ProviderID)
+	key := releaseStatusSourceCacheKey(source, project.ProviderID)
 	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectReleaseStatus, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrCacheMiss) {
@@ -135,12 +138,12 @@ func (s ReleaseStatusService) cacheStatuses(ctx context.Context, source Source, 
 	if err != nil {
 		return fmt.Errorf("encode release statuses: %w", err)
 	}
-	key := releaseStatusCacheKey(source.Type, project.ProviderID)
-	return s.Cache.Set(ctx, CacheNamespaceProjectReleaseStatus, key, payload, "application/json", 0)
+	key := releaseStatusSourceCacheKey(source, project.ProviderID)
+	return s.Cache.Set(ctx, CacheNamespaceProjectReleaseStatus, key, payload, "application/json", resultCacheTTL)
 }
 
-func releaseStatusCacheKey(sourceType, projectID string) string {
-	return cacheKey(sourceType, projectID, "status", "release")
+func releaseStatusSourceCacheKey(source Source, projectID string) string {
+	return sourceCacheKey(source, projectID, "status", "release")
 }
 
 func resolveMainBranch(ctx context.Context, client SourceClient, source Source, project Project) string {

@@ -46,6 +46,9 @@ func TestParseTrivyReport(t *testing.T) {
 	if report.Counts.High != 1 {
 		t.Fatalf("counts = %#v", report.Counts)
 	}
+	if len(report.Coverage) != 1 || report.Coverage[0].Scanner != "Trivy" || report.Coverage[0].Targets != 1 {
+		t.Fatalf("coverage = %#v", report.Coverage)
+	}
 }
 
 func TestMergeVulnReportsDedupes(t *testing.T) {

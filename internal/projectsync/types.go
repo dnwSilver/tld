@@ -14,11 +14,21 @@ const (
 	CacheNamespaceProjectVulns    = "project-vulnerabilities"
 )
 
+const (
+	fileCacheTTL   = 30 * 24 * time.Hour
+	resultCacheTTL = 24 * time.Hour
+)
+
 type Project struct {
 	ID         int64
 	ProviderID string
 	Name       string
 	StackName  string
+}
+
+type ProjectSourceRef struct {
+	Source  Source
+	Project Project
 }
 
 type Source struct {

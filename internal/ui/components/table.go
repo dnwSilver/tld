@@ -2,6 +2,7 @@ package components
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dnwSilver/tld/internal/ui/uikit"
 )
 
@@ -29,6 +30,9 @@ func RenderTableRow(palette uikit.Palette, background lipgloss.Color, rowWidth i
 
 	rowPalette := palette
 	rowPalette.Background = background
+	if rowWidth > 0 && lipgloss.Width(content) > rowWidth {
+		content = ansi.Cut(content, 0, rowWidth)
+	}
 	return content + uikit.BackgroundSpaces(rowPalette, rowWidth-lipgloss.Width(content))
 }
 

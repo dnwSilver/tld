@@ -14,12 +14,16 @@ import (
 )
 
 type vulnsLoadedMsg struct {
-	rows  []ui.VulnProjectRow
-	items []ui.VulnerabilityItem
-	err   error
+	selectedProjectID int64
+	mode              ui.VulnMode
+	generation        uint64
+	rows              []ui.VulnProjectRow
+	items             []ui.VulnerabilityItem
+	err               error
 }
 
 type vulnSyncMsg struct {
+	runID   uint64
 	message string
 	err     error
 	done    bool
@@ -30,15 +34,38 @@ type vulnSyncMsg struct {
 
 func (m model) loadVulnerabilities() tea.Cmd {
 	projects := activeProjects(m.projects)
-	sources := m.sources
+	sources := m.sourcesWithCredentials()
 	selectedProjectID := m.selectedVulnProjectID
 	mode := projectsync.VulnScanMode(m.vulnMode.Title())
+	uiMode := m.vulnMode
+	var generation uint64
+	if m.vulnsGeneration != nil {
+		generation = m.vulnsGeneration.Add(1)
+	}
 	return func() tea.Msg {
 		if m.store == nil {
-			return vulnsLoadedMsg{rows: []ui.VulnProjectRow{}, items: []ui.VulnerabilityItem{}}
+			return vulnsLoadedMsg{selectedProjectID: selectedProjectID, mode: uiMode, generation: generation, rows: []ui.VulnProjectRow{}, items: []ui.VulnerabilityItem{}}
 		}
 
 		cache := m.store.Cache()
+		refs := make([]projectsync.VulnProjectRef, 0, len(projects))
+		reportIndex := make(map[int64]int, len(projects))
+		for _, project := range projects {
+			source, ok := findByID(sources, project.SourceID, sourceID)
+			if !ok {
+				continue
+			}
+			reportIndex[project.ID] = len(refs)
+			refs = append(refs, projectsync.VulnProjectRef{
+				Source:  projectsync.Source{ID: source.ID, Type: source.Type, URL: source.URL},
+				Project: projectsync.Project{ProviderID: project.ProjectID, StackName: project.StackName},
+			})
+		}
+		service := projectsync.VulnScanService{Cache: cache, Mode: mode}
+		reports, err := service.LoadProjects(m.ctx, refs)
+		if err != nil {
+			return vulnsLoadedMsg{selectedProjectID: selectedProjectID, mode: uiMode, generation: generation, err: err}
+		}
 		rows := make([]ui.VulnProjectRow, 0, len(projects))
 		var items []ui.VulnerabilityItem
 		for _, project := range projects {
@@ -50,24 +77,23 @@ func (m model) loadVulnerabilities() tea.Cmd {
 				ProjectFreezing:  project.Freezing,
 				ProjectEndOfLife: project.EndOfLife,
 			}
-			source, ok := findByID(sources, project.SourceID, sourceID)
+			index, ok := reportIndex[project.ID]
 			if !ok {
 				rows = append(rows, row)
 				continue
 			}
-
-			service := projectsync.VulnScanService{
-				Cache: cache,
-				Mode:  mode,
-			}
-			report, err := service.LoadProject(context.Background(), projectsync.Source{Type: source.Type}, projectsync.Project{
-				ProviderID: project.ProjectID,
-				StackName:  project.StackName,
-			})
-			if err != nil {
-				return vulnsLoadedMsg{err: err}
-			}
+			report := reports[index]
 			row.Scanned = report.Scanned
+			if !report.ScannedAt.IsZero() {
+				row.ScannedAt = report.ScannedAt.UTC().Format("2006-01-02 15:04 UTC")
+			}
+			row.Revision = report.Revision
+			row.Coverage = vulnerabilityCoverageSummary(report.Coverage)
+			row.LastOutcome = string(report.LastAttempt.Outcome)
+			if !report.LastAttempt.At.IsZero() {
+				row.LastAttemptAt = report.LastAttempt.At.UTC().Format("2006-01-02 15:04 UTC")
+			}
+			row.Stale = report.Scanned && report.LastAttempt.Outcome != "" && report.LastAttempt.Outcome != projectsync.VulnScanComplete && report.LastAttempt.At.After(report.ScannedAt)
 			row.Counts = toUIVulnCounts(report.Counts)
 			rows = append(rows, row)
 			if project.ID == selectedProjectID {
@@ -75,8 +101,28 @@ func (m model) loadVulnerabilities() tea.Cmd {
 			}
 		}
 
-		return vulnsLoadedMsg{rows: rows, items: items}
+		return vulnsLoadedMsg{selectedProjectID: selectedProjectID, mode: uiMode, generation: generation, rows: rows, items: items}
 	}
+}
+
+func vulnerabilityCoverageSummary(coverage []projectsync.ScannerCoverage) string {
+	if len(coverage) == 0 {
+		return "coverage unknown"
+	}
+	parts := make([]string, 0, len(coverage))
+	for _, scanner := range coverage {
+		part := scanner.Scanner
+		switch {
+		case scanner.Packages > 0:
+			part += fmt.Sprintf(" %d packages", scanner.Packages)
+		case scanner.Targets > 0:
+			part += fmt.Sprintf(" %d targets", scanner.Targets)
+		default:
+			part += " (" + scanner.Method + ")"
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (m model) startVulnsRefresh(projects []ui.Project) (tea.Model, tea.Cmd) {
@@ -85,6 +131,9 @@ func (m model) startVulnsRefresh(projects []ui.Project) (tea.Model, tea.Cmd) {
 	}
 
 	ch := make(chan vulnSyncMsg, 16)
+	jobCtx, cancel := context.WithCancel(m.ctx)
+	m.vulnsCancel = cancel
+	m.vulnsRunID++
 	m.vulnsSyncCh = ch
 	m.vulnsStatus = ui.SettingsStatus{
 		Message: "Scanning vulnerabilities...",
@@ -92,7 +141,7 @@ func (m model) startVulnsRefresh(projects []ui.Project) (tea.Model, tea.Cmd) {
 	}
 
 	mode := projectsync.VulnScanMode(m.vulnMode.Title())
-	return m, tea.Batch(runVulnsRefresh(m.store, projects, m.sources, mode, ch), waitVulnSync(ch))
+	return m, tea.Batch(runVulnsRefresh(jobCtx, m.store, projects, m.sourcesWithCredentials(), mode, ch), waitVulnSync(ch, m.vulnsRunID))
 }
 
 func (m model) selectedVulnProjects() []ui.Project {
@@ -103,6 +152,7 @@ func (m model) selectedVulnProjects() []ui.Project {
 }
 
 func runVulnsRefresh(
+	ctx context.Context,
 	store *storage.Store,
 	projects []ui.Project,
 	sources []ui.Source,
@@ -112,28 +162,24 @@ func runVulnsRefresh(
 	return func() tea.Msg {
 		defer close(ch)
 		if store == nil {
-			ch <- vulnSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true}
+			sendJobMsg(ctx, ch, vulnSyncMsg{message: "store is not ready", err: errors.New("store is not ready"), done: true})
 			return nil
 		}
 
 		cache := store.Cache()
-		total := len(projects)
-		for index, project := range projects {
+		runProjectBatch(ctx, projects, "Scans", "Vulnerability scan complete", func(ctx context.Context, project ui.Project, progress func(string)) error {
 			if _, err := projectsync.ResolveVulnStrategy(project.StackName, mode); err != nil {
-				ch <- vulnSyncMsg{message: fmt.Sprintf("Skipping %s: %s", project.Name, err.Error()), current: index, total: total}
-				continue
+				return err
 			}
 
 			source, ok := findByID(sources, project.SourceID, sourceID)
 			if !ok {
-				ch <- vulnSyncMsg{message: fmt.Sprintf("Skipping %s: source not found", project.Name), current: index, total: total}
-				continue
+				return errors.New("source not found")
 			}
 
 			client, err := projectsync.NewSourceClient(source.Type, nil)
 			if err != nil {
-				ch <- vulnSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
+				return err
 			}
 
 			service := projectsync.VulnScanService{
@@ -141,7 +187,7 @@ func runVulnsRefresh(
 				SourceClient: client,
 				Mode:         mode,
 			}
-			_, err = service.RunProject(context.Background(), projectsync.Source{
+			_, err = service.RunProject(ctx, projectsync.Source{
 				ID:       source.ID,
 				Type:     source.Type,
 				URL:      source.URL,
@@ -151,28 +197,22 @@ func runVulnsRefresh(
 				ProviderID: project.ProjectID,
 				Name:       project.Name,
 				StackName:  project.StackName,
-			}, func(message string) {
-				ch <- vulnSyncMsg{message: project.Name + ": " + message, current: index, total: total}
-			})
-			if err != nil {
-				ch <- vulnSyncMsg{message: err.Error(), err: err, done: true}
-				return nil
-			}
-
-			ch <- vulnSyncMsg{message: project.Name, step: true, current: index + 1, total: total}
-		}
-
-		ch <- vulnSyncMsg{message: "Vulnerability scan complete", done: true, current: total, total: total}
+			}, progress)
+			return err
+		}, func(event projectJobEvent) {
+			sendJobMsg(ctx, ch, vulnSyncMsg{message: event.message, err: event.err, done: event.done, step: event.step, current: event.current, total: event.total})
+		})
 		return nil
 	}
 }
 
-func waitVulnSync(ch <-chan vulnSyncMsg) tea.Cmd {
+func waitVulnSync(ch <-chan vulnSyncMsg, runID uint64) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
 			return nil
 		}
+		msg.runID = runID
 		return msg
 	}
 }

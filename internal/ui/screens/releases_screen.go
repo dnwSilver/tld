@@ -31,12 +31,13 @@ func (s ReleasesScreen) Render(
 	selectedProjectID int64,
 	period uikit.ReleasePeriod,
 	status uikit.SettingsStatus,
+	searchQuery string,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
 	contentWidth := uikit.Max(width-2, 1)
 	count := len(rows)
-	title := components.ScreenTitle(s.palette, uikit.SymbolReleases, "Releases · "+period.Title(), &count)
+	title := components.ScreenTitle(s.palette, uikit.SymbolReleases, "Releases · "+period.Title(), &count, searchQuery)
 	body := s.renderContent(contentWidth, contentHeight, rows, selectedProjectID, period)
 	box := components.NewBox(s.palette, s.palette.Primary).Render(contentWidth, contentHeight, title, body)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
@@ -61,7 +62,7 @@ func (s ReleasesScreen) renderContent(
 		empty := uikit.Text(s.palette, s.palette.Hint, "No projects yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, row := range rows {
+		for _, row := range visibleRowsByID(rows, selectedProjectID, height-1, func(row uikit.ReleaseRow) int64 { return row.ProjectID }) {
 			lines = append(lines, s.renderRow(width, row, monthWidths, row.ProjectID == selectedProjectID))
 		}
 	}
@@ -250,7 +251,11 @@ func (s ReleasesScreen) monthCell(month uikit.ReleaseMonth, monthWidth int) stri
 }
 
 func (s ReleasesScreen) progressLine(width int, status uikit.SettingsStatus) string {
-	return components.RenderProgress(s.palette, width, uikit.SymbolReleases, status.Message, status.Error, status.Running, status.Current, status.Total)
+	message := status.Message
+	if status.Running {
+		message += " [Esc] cancel"
+	}
+	return components.RenderProgress(s.palette, width, uikit.SymbolReleases, message, status.Error, status.Running, status.Current, status.Total)
 }
 
 func centerText(value string, width int) string {

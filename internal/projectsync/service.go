@@ -2,11 +2,14 @@ package projectsync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/dnwSilver/tld/internal/safetext"
 	"github.com/dnwSilver/tld/internal/storage"
 )
 
@@ -27,6 +30,8 @@ type Result struct {
 }
 
 func (s Service) Sync(ctx context.Context, source Source, project Project, progress ProgressFunc) (Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	if s.SourceClient == nil {
 		return Result{}, errors.New("project sync source client is empty")
 	}
@@ -89,6 +94,13 @@ func (s Service) Sync(ctx context.Context, source Source, project Project, progr
 		if err != nil {
 			return Result{}, err
 		}
+		for index := range parsed {
+			parsed[index].Name = safetext.Plain(parsed[index].Name)
+			parsed[index].Version = safetext.Plain(parsed[index].Version)
+			parsed[index].DependencyType = safetext.Plain(parsed[index].DependencyType)
+			parsed[index].SourceFile = safetext.Plain(parsed[index].SourceFile)
+			parsed[index].Ecosystem = dependencyEcosystem(parsed[index])
+		}
 		dependencies = append(dependencies, parsed...)
 	}
 	dependencies = preferNodeFromNvmrc(dependencies)
@@ -111,8 +123,27 @@ func (s Service) Sync(ctx context.Context, source Source, project Project, progr
 	return Result{Run: run, Count: len(dependencies), Dependency: dependencies}, nil
 }
 
+func dependencyEcosystem(dependency storage.ProjectDependency) string {
+	switch dependency.DependencyType {
+	case DependencyTypeRuntime, DependencyTypeDev, DependencyTypePeer, DependencyTypeOptional:
+		return "npm"
+	case DependencyTypeEngines, DependencyTypeNvmrc:
+		return "node"
+	case DependencyTypeGoModule:
+		return "go"
+	case DependencyTypeGradleLibrary, DependencyTypeGradlePlugin:
+		return "maven"
+	case DependencyTypeCocoaPods:
+		return "cocoapods"
+	case DependencyTypeBundler:
+		return "rubygems"
+	default:
+		return ""
+	}
+}
+
 func (s Service) fetchCachedFile(ctx context.Context, source Source, project Project, commit Commit, path string, progress ProgressFunc) ([]byte, error) {
-	key := cacheKey(source.Type, project.ProviderID, commit.ShortSHA, path)
+	key := sourceCacheKey(source, project.ProviderID, commit.SHA, path)
 	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectFiles, key)
 	if err == nil {
 		report(progress, fmt.Sprintf("Cache hit %s", path))
@@ -127,22 +158,18 @@ func (s Service) fetchCachedFile(ctx context.Context, source Source, project Pro
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Cache.Set(ctx, CacheNamespaceProjectFiles, key, content, "application/octet-stream", 0); err != nil {
+	if err := s.Cache.Set(ctx, CacheNamespaceProjectFiles, key, content, "application/octet-stream", fileCacheTTL); err != nil {
 		return nil, err
 	}
 
 	return content, nil
 }
 
-func cacheKey(sourceType string, projectID string, shortSHA string, path string) string {
-	parts := []string{
-		strings.TrimSpace(sourceType),
-		strings.TrimSpace(projectID),
-		strings.TrimSpace(shortSHA),
-		strings.TrimSpace(path),
-	}
-
-	return strings.Join(parts, ":")
+// sourceCacheKey separates provider installations and invalidates ambiguous legacy keys.
+func sourceCacheKey(source Source, projectID, revision, kind string) string {
+	parts := []string{"v2", source.Type, fmt.Sprint(source.ID), source.URL, projectID, revision, kind}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return "v2:" + hex.EncodeToString(sum[:])
 }
 
 func shortSHA(sha string) string {

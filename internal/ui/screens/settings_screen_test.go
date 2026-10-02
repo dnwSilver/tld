@@ -14,6 +14,17 @@ func TestSettingsScreenUsesDashForNotApplicableCheck(t *testing.T) {
 	}
 }
 
+func TestSettingsColumnsFollowSelectedField(t *testing.T) {
+	columns := make([]uikit.ProjectCheck, 14)
+	for index := range columns {
+		columns[index].ID = uikit.FormatInt(index)
+	}
+	visible, offset := visibleSettingsColumns(80, columns, 14)
+	if len(visible) != 7 || offset != 7 || visible[6].ID != "13" {
+		t.Fatalf("visible columns = %v, offset = %d", visible, offset)
+	}
+}
+
 func TestSettingsScreenRendersCheckVersionNextToSymbol(t *testing.T) {
 	screen := NewSettingsScreen(uikit.Palette{})
 	if got := screen.checkValue(uikit.CheckStatePass, "3"); got != uikit.SymbolCheckPass+" 3" {

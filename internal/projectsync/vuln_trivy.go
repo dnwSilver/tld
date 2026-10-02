@@ -8,34 +8,40 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 var errTrivyNotFound = errors.New("trivy is not installed")
 
 func runMobileVulnScan(dir string, files []File, strategy StackStrategy) (VulnReport, error) {
-	osvReport, osvErr := runOsvScan(dir, files, strategy)
+	return runMobileVulnScanContext(context.Background(), dir, files, strategy)
+}
 
-	trivyReport, trivyErr := tryTrivyLockfileScan(dir, files)
+func runMobileVulnScanContext(ctx context.Context, dir string, files []File, strategy StackStrategy) (VulnReport, error) {
+	osvReport, osvErr := runOsvScanContext(ctx, dir, files, strategy)
+	if osvErr != nil {
+		return VulnReport{}, osvErr
+	}
+
+	trivyReport, trivyErr := tryTrivyLockfileScanContext(ctx, dir, files)
 	if trivyErr != nil {
-		if osvErr != nil {
-			return VulnReport{}, osvErr
-		}
 		return osvReport, trivyErr
 	}
 
 	merged := mergeVulnReports(osvReport, trivyReport)
-	if !merged.Scanned && osvErr != nil {
-		return VulnReport{}, osvErr
-	}
 	return merged, nil
 }
 
 func tryTrivyLockfileScan(dir string, files []File) (VulnReport, error) {
+	return tryTrivyLockfileScanContext(context.Background(), dir, files)
+}
+
+func tryTrivyLockfileScanContext(ctx context.Context, dir string, files []File) (VulnReport, error) {
 	if !hasTrivyLockfileInFiles(files) {
 		return VulnReport{}, nil
 	}
 
-	report, err := runTrivyLockfileScan(dir)
+	report, err := runTrivyLockfileScanContext(ctx, dir)
 	if errors.Is(err, errTrivyNotFound) {
 		return VulnReport{}, nil
 	}
@@ -63,19 +69,29 @@ var trivyLockfileNames = []string{
 }
 
 func runTrivyLockfileScan(dir string) (VulnReport, error) {
+	return runTrivyLockfileScanContext(context.Background(), dir)
+}
+
+func runTrivyLockfileScanContext(ctx context.Context, dir string) (VulnReport, error) {
 	binary, err := exec.LookPath("trivy")
 	if err != nil {
 		return VulnReport{}, errTrivyNotFound
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, "fs", "--scanners", "vuln", "--format", "json", dir)
-	var stderr bytes.Buffer
+	var stdout, stderr scannerOutput
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	err = cmd.Run()
+	if errors.Is(err, errScannerOutputLimit) {
+		return VulnReport{}, err
+	}
+	output := stdout.Bytes()
 	if len(bytes.TrimSpace(output)) == 0 {
 		if err != nil {
-			message := strings.TrimSpace(stderr.String())
+			message := strings.TrimSpace(string(stderr.Bytes()))
 			if message != "" {
 				return VulnReport{}, fmt.Errorf("trivy failed: %s", message)
 			}
@@ -112,15 +128,17 @@ func parseTrivyReport(output []byte) (VulnReport, error) {
 	}
 
 	report := VulnReport{
-		Scanned: true,
-		Items:   make([]Vulnerability, 0),
+		Items: make([]Vulnerability, 0),
 	}
 	seen := make(map[string]struct{})
+	targets := 0
 
 	for _, result := range payload.Results {
 		if !isTrivyLockfileTarget(result.Target) {
 			continue
 		}
+		targets++
+		report.Scanned = true
 		for _, vuln := range result.Vulnerabilities {
 			pkg := formatOsvPackage("", vuln.PkgName, vuln.InstalledVersion)
 			title := strings.TrimSpace(vuln.Title)
@@ -147,6 +165,10 @@ func parseTrivyReport(output []byte) (VulnReport, error) {
 			})
 		}
 	}
+	if !report.Scanned {
+		return VulnReport{}, errors.New("trivy returned no lockfile results")
+	}
+	report.Coverage = []ScannerCoverage{{Scanner: "Trivy", Method: "lockfile results", Targets: targets}}
 
 	report.Counts = countVulnSeverities(report.Items)
 	return report, nil
@@ -170,6 +192,7 @@ func mergeVulnReports(reports ...VulnReport) VulnReport {
 
 	for _, report := range reports {
 		merged.Scanned = merged.Scanned || report.Scanned
+		merged.Coverage = append(merged.Coverage, report.Coverage...)
 		for _, item := range report.Items {
 			title := item.Title
 			if title == "" {

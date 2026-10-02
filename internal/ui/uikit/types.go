@@ -1,5 +1,23 @@
 package uikit
 
+type LoadPhase string
+
+const (
+	LoadPhaseIdle    LoadPhase = "idle"
+	LoadPhaseLoading LoadPhase = "loading"
+	LoadPhaseReady   LoadPhase = "ready"
+	LoadPhaseStale   LoadPhase = "stale"
+	LoadPhaseError   LoadPhase = "error"
+)
+
+// LoadState describes the local snapshot shown by one screen. Stale means
+// last-good data remains visible after the newest read failed.
+type LoadState struct {
+	Phase       LoadPhase
+	Error       string
+	HasSnapshot bool
+}
+
 type Screen int
 
 const (
@@ -82,13 +100,23 @@ const (
 )
 
 type TokenRights struct {
-	Checked    bool
-	Maintainer bool
+	Checked     bool
+	Maintainer  bool
+	ProjectName string
+	Projects    []ProjectRight
+}
+
+type ProjectRight struct {
+	ProjectID   int64
+	ProjectName string
+	Checked     bool
+	Maintainer  bool
 }
 
 type DashboardAttentionRow struct {
 	ProjectID        int64
 	ProjectName      string
+	DataUnknown      bool
 	Critical         int
 	High             int
 	Major            int
@@ -152,6 +180,7 @@ type DependencyViewRow struct {
 	ProjectFreezing  bool
 	ProjectEndOfLife bool
 	Versions         map[int64]string
+	PolicyVersions   map[int64]string
 }
 
 type Policy struct {
@@ -400,8 +429,9 @@ type SettingsStatus struct {
 }
 
 type SettingsOperation struct {
-	ID    string
-	Title string
+	ID     string
+	Title  string
+	Change string
 }
 
 type ReleasePeriod int
@@ -499,6 +529,12 @@ type VulnProjectRow struct {
 	ProjectFreezing  bool
 	ProjectEndOfLife bool
 	Scanned          bool
+	ScannedAt        string
+	Revision         string
+	Coverage         string
+	LastOutcome      string
+	LastAttemptAt    string
+	Stale            bool
 	Counts           VulnCounts
 }
 

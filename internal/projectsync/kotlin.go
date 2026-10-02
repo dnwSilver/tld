@@ -1,6 +1,7 @@
 package projectsync
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -29,6 +30,7 @@ var (
 	gradleValPattern       = regexp.MustCompile(`(?m)^\s*(?:val|def)\s+([A-Za-z0-9_]+)\s*=\s*["']([^"']+)["']`)
 	gradleConfigPattern    = regexp.MustCompile(`^"?([A-Za-z][A-Za-z0-9]*)"?[\s(]`)
 	gradleCoordPattern     = regexp.MustCompile(`["']([A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(?::[^"']+)?)["']`)
+	gradleMapPattern       = regexp.MustCompile(`\bgroup\s*:\s*["']([^"']+)["']\s*,\s*name\s*:\s*["']([^"']+)["']\s*,\s*version\s*:\s*["']([^"']+)["']`)
 	gradleDepBlockStartPat = regexp.MustCompile(`dependencies\s*\{`)
 )
 
@@ -43,7 +45,7 @@ func (KotlinStrategy) Parse(path string, content []byte) ([]Dependency, error) {
 	case path == kotlinVersionCatalog:
 		return parseVersionCatalog(content), nil
 	case strings.HasSuffix(path, ".gradle.kts"), strings.HasSuffix(path, ".gradle"):
-		return parseGradleKts(path, content), nil
+		return parseGradleKts(path, content)
 	default:
 		return []Dependency{}, nil
 	}
@@ -136,7 +138,7 @@ func resolveCatalogVersion(line string, versions map[string]string) string {
 	return firstSubmatch(tomlInlineVerPat, line)
 }
 
-func parseGradleKts(sourceFile string, content []byte) []Dependency {
+func parseGradleKts(sourceFile string, content []byte) ([]Dependency, error) {
 	text := string(content)
 	values := make(map[string]string)
 	for _, match := range gradleValPattern.FindAllStringSubmatch(text, -1) {
@@ -144,7 +146,11 @@ func parseGradleKts(sourceFile string, content []byte) []Dependency {
 	}
 
 	dependencies := make([]Dependency, 0)
-	for _, block := range gradleDependencyBlocks(text) {
+	blocks, err := gradleDependencyBlocks(text)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", sourceFile, err)
+	}
+	for _, block := range blocks {
 		for _, line := range strings.Split(block, "\n") {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" || strings.HasPrefix(trimmed, "//") {
@@ -152,10 +158,16 @@ func parseGradleKts(sourceFile string, content []byte) []Dependency {
 			}
 			configMatch := gradleConfigPattern.FindStringSubmatch(trimmed)
 			coordMatch := gradleCoordPattern.FindStringSubmatch(trimmed)
-			if len(configMatch) != 2 || len(coordMatch) != 2 {
+			if len(configMatch) != 2 {
 				continue
 			}
-			name, version, ok := splitGradleCoord(coordMatch[1], values)
+			var name, version string
+			var ok bool
+			if len(coordMatch) == 2 {
+				name, version, ok = splitGradleCoord(coordMatch[1], values)
+			} else if matches := gradleMapPattern.FindStringSubmatch(trimmed); len(matches) == 4 {
+				name, version, ok = matches[1]+":"+matches[2], matches[3], true
+			}
 			if !ok {
 				continue
 			}
@@ -168,16 +180,58 @@ func parseGradleKts(sourceFile string, content []byte) []Dependency {
 		}
 	}
 
-	return sortedDependencies(dependencies)
+	return sortedDependencies(dependencies), nil
 }
 
-func gradleDependencyBlocks(text string) []string {
+func gradleDependencyBlocks(text string) ([]string, error) {
 	blocks := make([]string, 0)
 	for _, loc := range gradleDepBlockStartPat.FindAllStringIndex(text, -1) {
 		depth := 1
 		index := loc[1]
+		var quote byte
+		lineComment := false
+		blockComment := false
 		for index < len(text) && depth > 0 {
+			if lineComment {
+				if text[index] == '\n' {
+					lineComment = false
+				}
+				index++
+				continue
+			}
+			if blockComment {
+				if index+1 < len(text) && text[index] == '*' && text[index+1] == '/' {
+					blockComment = false
+					index += 2
+				} else {
+					index++
+				}
+				continue
+			}
+			if quote != 0 {
+				if text[index] == '\\' && index+1 < len(text) {
+					index += 2
+					continue
+				}
+				if text[index] == quote {
+					quote = 0
+				}
+				index++
+				continue
+			}
+			if index+1 < len(text) && text[index] == '/' && text[index+1] == '/' {
+				lineComment = true
+				index += 2
+				continue
+			}
+			if index+1 < len(text) && text[index] == '/' && text[index+1] == '*' {
+				blockComment = true
+				index += 2
+				continue
+			}
 			switch text[index] {
+			case '\'', '"', '`':
+				quote = text[index]
 			case '{':
 				depth++
 			case '}':
@@ -185,10 +239,13 @@ func gradleDependencyBlocks(text string) []string {
 			}
 			index++
 		}
+		if depth != 0 {
+			return nil, fmt.Errorf("unterminated dependencies block")
+		}
 		blocks = append(blocks, text[loc[1]:index-1])
 	}
 
-	return blocks
+	return blocks, nil
 }
 
 func splitGradleCoord(coord string, values map[string]string) (string, string, bool) {

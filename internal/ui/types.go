@@ -3,8 +3,20 @@ package ui
 import "github.com/dnwSilver/tld/internal/ui/uikit"
 
 type Screen = uikit.Screen
+type LoadState = uikit.LoadState
+type LoadPhase = uikit.LoadPhase
+type ModalKind = uikit.ModalKind
+type ModalActionID = uikit.ModalActionID
+type ActionID = uikit.ActionID
+type ScreenAction = uikit.ScreenAction
 
 const (
+	LoadPhaseIdle    = uikit.LoadPhaseIdle
+	LoadPhaseLoading = uikit.LoadPhaseLoading
+	LoadPhaseReady   = uikit.LoadPhaseReady
+	LoadPhaseStale   = uikit.LoadPhaseStale
+	LoadPhaseError   = uikit.LoadPhaseError
+
 	ScreenDefault         = uikit.ScreenDefault
 	ScreenStacks          = uikit.ScreenStacks
 	ScreenNamespaces      = uikit.ScreenNamespaces
@@ -25,6 +37,7 @@ type Project = uikit.Project
 type DashboardPane = uikit.DashboardPane
 type DashboardAttentionRow = uikit.DashboardAttentionRow
 type TokenRights = uikit.TokenRights
+type ProjectRight = uikit.ProjectRight
 type ProjectDependencyRun = uikit.ProjectDependencyRun
 type ProjectDependency = uikit.ProjectDependency
 type ProjectPane = uikit.ProjectPane
@@ -183,41 +196,84 @@ const (
 type Binding = uikit.Binding
 
 var (
-	KeyHome             = uikit.KeyHome
-	KeyStacks           = uikit.KeyStacks
-	KeyNamespaces       = uikit.KeyNamespaces
-	KeyDependencies     = uikit.KeyDependencies
-	KeyProjects         = uikit.KeyProjects
-	KeySources          = uikit.KeySources
-	KeyPolicies         = uikit.KeyPolicies
-	KeyView             = uikit.KeyView
-	KeySettings         = uikit.KeySettings
-	KeyReleases         = uikit.KeyReleases
-	KeyVulnerabilities  = uikit.KeyVulnerabilities
-	KeyAdd              = uikit.KeyAdd
-	KeyEdit             = uikit.KeyEdit
-	KeyClone            = uikit.KeyClone
-	KeyDelete           = uikit.KeyDelete
-	KeyRefreshDeps      = uikit.KeyRefreshDeps
-	KeyRefreshAll       = uikit.KeyRefreshAll
-	KeyUpdatePins       = uikit.KeyUpdatePins
-	KeyOperations       = uikit.KeyOperations
-	KeySort             = uikit.KeySort
-	KeyColumnPick       = uikit.KeyColumnPick
-	KeyVulnMode         = uikit.KeyVulnMode
-	KeyPrev             = uikit.KeyPrev
-	KeyNext             = uikit.KeyNext
-	KeyStackPick        = uikit.KeyStackPick
-	KeySourcePick       = uikit.KeySourcePick
-	KeySourceTypePick   = uikit.KeySourceTypePick
-	KeyRegistryPick     = uikit.KeyRegistryPick
-	KeyRegistryKindPick = uikit.KeyRegistryKindPick
-	KeyNamespacePick    = uikit.KeyNamespacePick
-	KeyPolicyPick       = uikit.KeyPolicyPick
-	KeyDependencyPick   = uikit.KeyDependencyPick
-	KeyToggleHead       = uikit.KeyToggleHead
-	KeyQuit             = uikit.KeyQuit
+	KeyHome                 = uikit.KeyHome
+	KeyStacks               = uikit.KeyStacks
+	KeyNamespaces           = uikit.KeyNamespaces
+	KeyDependencies         = uikit.KeyDependencies
+	KeyProjects             = uikit.KeyProjects
+	KeySources              = uikit.KeySources
+	KeyPolicies             = uikit.KeyPolicies
+	KeyView                 = uikit.KeyView
+	KeySettings             = uikit.KeySettings
+	KeyReleases             = uikit.KeyReleases
+	KeyVulnerabilities      = uikit.KeyVulnerabilities
+	KeyAdd                  = uikit.KeyAdd
+	KeyEdit                 = uikit.KeyEdit
+	KeyClone                = uikit.KeyClone
+	KeyDelete               = uikit.KeyDelete
+	KeyRefreshDeps          = uikit.KeyRefreshDeps
+	KeyRefreshAll           = uikit.KeyRefreshAll
+	KeyUpdatePins           = uikit.KeyUpdatePins
+	KeyOperations           = uikit.KeyOperations
+	KeySort                 = uikit.KeySort
+	KeyColumnPick           = uikit.KeyColumnPick
+	KeyVulnMode             = uikit.KeyVulnMode
+	KeyToggleFocus          = uikit.KeyToggleFocus
+	KeyPrev                 = uikit.KeyPrev
+	KeyNext                 = uikit.KeyNext
+	KeyStackPick            = uikit.KeyStackPick
+	KeySourcePick           = uikit.KeySourcePick
+	KeySourceTypePick       = uikit.KeySourceTypePick
+	KeyRegistryPick         = uikit.KeyRegistryPick
+	KeyRegistryKindPick     = uikit.KeyRegistryKindPick
+	KeyNamespacePick        = uikit.KeyNamespacePick
+	KeyPolicyPick           = uikit.KeyPolicyPick
+	KeyDependencyPick       = uikit.KeyDependencyPick
+	KeyToggleHead           = uikit.KeyToggleHead
+	KeyRetryLoad            = uikit.KeyRetryLoad
+	KeyQuit                 = uikit.KeyQuit
+	ActionAdd               = uikit.ActionAdd
+	ActionEdit              = uikit.ActionEdit
+	ActionClone             = uikit.ActionClone
+	ActionDelete            = uikit.ActionDelete
+	ActionRefreshRow        = uikit.ActionRefreshRow
+	ActionRefreshAll        = uikit.ActionRefreshAll
+	ActionUpdatePins        = uikit.ActionUpdatePins
+	ActionOperations        = uikit.ActionOperations
+	ActionSort              = uikit.ActionSort
+	ActionVulnMode          = uikit.ActionVulnMode
+	ActionToggleFocus       = uikit.ActionToggleFocus
+	ActionOpenNavigation    = uikit.ActionOpenNavigation
+	ActionSearch            = uikit.ActionSearch
+	ActionReload            = uikit.ActionReload
+	ActionQuit              = uikit.ActionQuit
+	ActionGoHome            = uikit.ActionGoHome
+	ActionGoStacks          = uikit.ActionGoStacks
+	ActionGoNamespaces      = uikit.ActionGoNamespaces
+	ActionGoDependencies    = uikit.ActionGoDependencies
+	ActionGoSources         = uikit.ActionGoSources
+	ActionGoProjects        = uikit.ActionGoProjects
+	ActionGoPolicies        = uikit.ActionGoPolicies
+	ActionGoView            = uikit.ActionGoView
+	ActionGoSettings        = uikit.ActionGoSettings
+	ActionGoReleases        = uikit.ActionGoReleases
+	ActionGoVulnerabilities = uikit.ActionGoVulnerabilities
+	ModalNavigation         = uikit.ModalNavigation
+	ModalOperations         = uikit.ModalOperations
+	ModalActionCancel       = uikit.ModalActionCancel
+	ModalActionPrev         = uikit.ModalActionPrev
+	ModalActionNext         = uikit.ModalActionNext
+	ModalActionConfirm      = uikit.ModalActionConfirm
 )
+
+var GlobalActions = uikit.GlobalActions
+var GlobalActionForKey = uikit.GlobalActionForKey
+var ModalActionForKey = uikit.ModalActionForKey
+
+func ScreenActions(screen Screen) []ScreenAction { return uikit.ScreenActions(screen) }
+func ScreenActionForKey(screen Screen, key string) (ActionID, bool) {
+	return uikit.ScreenActionForKey(screen, key)
+}
 
 type NavSection = uikit.NavSection
 

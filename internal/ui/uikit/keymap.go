@@ -41,6 +41,7 @@ var (
 	KeySort             = Binding{Keys: []string{"s"}, Label: "sort", Symbol: SymbolSort, Hint: "[s] sort"}
 	KeyColumnPick       = Binding{Keys: []string{"shift+left", "shift+right"}, Label: "column", Symbol: SymbolColumnPick, Hint: "[Shift+←/→] field"}
 	KeyVulnMode         = Binding{Keys: []string{"m"}, Label: "vulnerability mode", Symbol: SymbolVulnerabilities, Hint: "[m] prod/dev"}
+	KeyToggleFocus      = Binding{Keys: []string{"tab"}, Label: "focus", Symbol: SymbolSelectNext, Hint: "[Tab] pane"}
 	KeyPrev             = Binding{Keys: []string{"up", "k"}, Label: "prev", Symbol: SymbolSelectPrev, Hint: "[k] prev"}
 	KeyNext             = Binding{Keys: []string{"down", "j"}, Label: "next", Symbol: SymbolSelectNext, Hint: "[j] next"}
 	KeyStackPick        = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "stack", Symbol: SymbolStack, Hint: "[h/l] Stack"}
@@ -53,6 +54,8 @@ var (
 	KeyDependencyPick   = Binding{Keys: []string{"left", "right", "h", "l"}, Label: "dependency", Symbol: SymbolDependency, Hint: "[h/l] Dep"}
 
 	KeyToggleHead = Binding{Keys: []string{"?", "shift+/"}, Label: "sections", Symbol: SymbolToggleHead, Hint: "[Shift+/] sections"}
+	KeySearch     = Binding{Keys: []string{"/"}, Label: "filter", Hint: "[/] filter"}
+	KeyRetryLoad  = Binding{Keys: []string{"ctrl+r"}, Label: "reload", Hint: "[Ctrl+R] reload"}
 	KeyQuit       = Binding{Keys: []string{"ctrl+c", "esc", "q"}, Label: "quit", Symbol: SymbolQuit, Hint: "quit"}
 
 	KeyCancel     = Binding{Keys: []string{"esc"}, Label: "cancel", Hint: "[Esc] Cancel"}

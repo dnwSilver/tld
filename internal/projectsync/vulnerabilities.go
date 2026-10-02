@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/dnwSilver/tld/internal/safetext"
 	"github.com/dnwSilver/tld/internal/storage"
 )
 
@@ -43,15 +45,47 @@ type Vulnerability struct {
 	Range       string
 }
 
+type VulnScanOutcome string
+
+const (
+	VulnScanComplete    VulnScanOutcome = "complete"
+	VulnScanFailed      VulnScanOutcome = "failed"
+	VulnScanCanceled    VulnScanOutcome = "canceled"
+	VulnScanUnsupported VulnScanOutcome = "unsupported"
+)
+
+var ErrUnsupportedVulnStrategy = errors.New("unsupported vulnerability scan")
+
+type VulnScanAttempt struct {
+	Outcome VulnScanOutcome
+	At      time.Time
+}
+
+type ScannerCoverage struct {
+	Scanner  string
+	Method   string
+	Packages int
+	Targets  int
+}
+
 type VulnReport struct {
-	Scanned bool
-	Counts  VulnCounts
-	Items   []Vulnerability
+	Scanned     bool
+	Outcome     VulnScanOutcome
+	Revision    string
+	ScannedAt   time.Time
+	Coverage    []ScannerCoverage
+	Counts      VulnCounts
+	Items       []Vulnerability
+	LastAttempt VulnScanAttempt `json:"-"`
 }
 
 type VulnStrategy interface {
 	Files() []string
 	Scan(files []File) (VulnReport, error)
+}
+
+type contextVulnStrategy interface {
+	ScanContext(ctx context.Context, files []File) (VulnReport, error)
 }
 
 func ResolveVulnStrategy(stackName string, mode VulnScanMode) (VulnStrategy, error) {
@@ -65,7 +99,7 @@ func ResolveVulnStrategy(stackName string, mode VulnScanMode) (VulnStrategy, err
 	case "swift", "ios":
 		return IOSVulnStrategy{}, nil
 	default:
-		return nil, fmt.Errorf("unsupported vulnerability scan for stack %q", stackName)
+		return nil, fmt.Errorf("%w for stack %q", ErrUnsupportedVulnStrategy, stackName)
 	}
 }
 
@@ -75,7 +109,37 @@ type VulnScanService struct {
 	Mode         VulnScanMode
 }
 
+type VulnProjectRef = ProjectSourceRef
+
 func (s VulnScanService) RunProject(ctx context.Context, source Source, project Project, progress ProgressFunc) (VulnReport, error) {
+	result, err := s.runProjectOnce(ctx, source, project, progress)
+	if project.ProviderID == "" {
+		return result, err
+	}
+	outcome := VulnScanComplete
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		outcome = VulnScanCanceled
+	case errors.Is(err, ErrUnsupportedVulnStrategy):
+		outcome = VulnScanUnsupported
+	case err != nil:
+		outcome = VulnScanFailed
+	}
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	attemptErr := s.cacheAttempt(writeCtx, source, project, VulnScanAttempt{Outcome: outcome, At: time.Now().UTC()})
+	if err != nil {
+		return result, err
+	}
+	if attemptErr != nil {
+		return VulnReport{}, attemptErr
+	}
+	return result, nil
+}
+
+func (s VulnScanService) runProjectOnce(ctx context.Context, source Source, project Project, progress ProgressFunc) (VulnReport, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	if s.SourceClient == nil {
 		return VulnReport{}, errors.New("vulnerability source client is empty")
 	}
@@ -111,11 +175,22 @@ func (s VulnScanService) RunProject(ctx context.Context, source Source, project 
 	}
 
 	report(progress, "Running vulnerability scan...")
-	result, err := strategy.Scan(files)
+	var result VulnReport
+	if contextual, ok := strategy.(contextVulnStrategy); ok {
+		result, err = contextual.ScanContext(ctx, files)
+	} else {
+		result, err = strategy.Scan(files)
+	}
 	if err != nil {
 		return VulnReport{}, err
 	}
-	result.Scanned = true
+	if !result.Scanned {
+		return VulnReport{}, errors.New("vulnerability scanner returned no coverage")
+	}
+	result.Outcome = VulnScanComplete
+	result.Revision = commit.SHA
+	result.ScannedAt = time.Now().UTC()
+	sanitizeVulnerabilityItems(result.Items)
 
 	if err := s.cacheReport(ctx, source, project, result); err != nil {
 		return VulnReport{}, err
@@ -125,25 +200,61 @@ func (s VulnScanService) RunProject(ctx context.Context, source Source, project 
 }
 
 func (s VulnScanService) LoadProject(ctx context.Context, source Source, project Project) (VulnReport, error) {
-	key := vulnCacheKey(source.Type, project.ProviderID, s.mode())
-	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectVulns, key)
+	reports, err := s.LoadProjects(ctx, []VulnProjectRef{{Source: source, Project: project}})
 	if err != nil {
-		if errors.Is(err, storage.ErrCacheMiss) {
-			return VulnReport{}, nil
-		}
 		return VulnReport{}, err
 	}
+	return reports[0], nil
+}
 
-	var report VulnReport
-	if err := json.Unmarshal(entry.Value, &report); err != nil {
-		return VulnReport{}, fmt.Errorf("decode cached vulnerabilities: %w", err)
+// LoadProjects reads all visible project reports through one cache query.
+// A missing report is represented by a zero-value VulnReport at its input index.
+func (s VulnScanService) LoadProjects(ctx context.Context, projects []VulnProjectRef) ([]VulnReport, error) {
+	reports := make([]VulnReport, len(projects))
+	keys := make([]string, len(projects))
+	for i, ref := range projects {
+		keys[i] = vulnSourceCacheKey(ref.Source, ref.Project.ProviderID, s.mode())
 	}
+	entries, err := s.Cache.GetMany(ctx, CacheNamespaceProjectVulns, keys)
+	if err != nil {
+		return nil, err
+	}
+	attemptKeys := make([]string, len(projects))
+	for i, ref := range projects {
+		attemptKeys[i] = vulnAttemptCacheKey(ref.Source, ref.Project.ProviderID, s.mode())
+	}
+	attemptEntries, err := s.Cache.GetMany(ctx, CacheNamespaceProjectVulns, attemptKeys)
+	if err != nil {
+		return nil, err
+	}
+	for i, key := range keys {
+		entry, ok := entries[key]
+		if ok {
+			if err := json.Unmarshal(entry.Value, &reports[i]); err != nil {
+				return nil, fmt.Errorf("decode cached vulnerabilities for project %q: %w", projects[i].Project.ProviderID, err)
+			}
+			sanitizeVulnerabilityItems(reports[i].Items)
+		}
+		if attemptEntry, ok := attemptEntries[attemptKeys[i]]; ok {
+			if err := json.Unmarshal(attemptEntry.Value, &reports[i].LastAttempt); err != nil {
+				return nil, fmt.Errorf("decode scan attempt for project %q: %w", projects[i].Project.ProviderID, err)
+			}
+		}
+	}
+	return reports, nil
+}
 
-	return report, nil
+func sanitizeVulnerabilityItems(items []Vulnerability) {
+	for index := range items {
+		items[index].Package = safetext.Plain(items[index].Package)
+		items[index].Title = safetext.Plain(items[index].Title)
+		items[index].Description = safetext.Plain(items[index].Description)
+		items[index].Range = safetext.Plain(items[index].Range)
+	}
 }
 
 func (s VulnScanService) fetchCachedFile(ctx context.Context, source Source, project Project, commit Commit, path string, progress ProgressFunc) ([]byte, error) {
-	key := cacheKey(source.Type, project.ProviderID, commit.ShortSHA, path)
+	key := sourceCacheKey(source, project.ProviderID, commit.SHA, path)
 	entry, err := s.Cache.Get(ctx, CacheNamespaceProjectFiles, key)
 	if err == nil {
 		report(progress, fmt.Sprintf("Cache hit %s", path))
@@ -158,7 +269,7 @@ func (s VulnScanService) fetchCachedFile(ctx context.Context, source Source, pro
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Cache.Set(ctx, CacheNamespaceProjectFiles, key, content, "application/octet-stream", 0); err != nil {
+	if err := s.Cache.Set(ctx, CacheNamespaceProjectFiles, key, content, "application/octet-stream", fileCacheTTL); err != nil {
 		return nil, err
 	}
 
@@ -171,7 +282,15 @@ func (s VulnScanService) cacheReport(ctx context.Context, source Source, project
 		return fmt.Errorf("encode vulnerabilities: %w", err)
 	}
 
-	return s.Cache.Set(ctx, CacheNamespaceProjectVulns, vulnCacheKey(source.Type, project.ProviderID, s.mode()), payload, "application/json", 0)
+	return s.Cache.Set(ctx, CacheNamespaceProjectVulns, vulnSourceCacheKey(source, project.ProviderID, s.mode()), payload, "application/json", resultCacheTTL)
+}
+
+func (s VulnScanService) cacheAttempt(ctx context.Context, source Source, project Project, attempt VulnScanAttempt) error {
+	payload, err := json.Marshal(attempt)
+	if err != nil {
+		return fmt.Errorf("encode vulnerability scan attempt: %w", err)
+	}
+	return s.Cache.Set(ctx, CacheNamespaceProjectVulns, vulnAttemptCacheKey(source, project.ProviderID, s.mode()), payload, "application/json", resultCacheTTL)
 }
 
 func (s VulnScanService) mode() VulnScanMode {
@@ -185,6 +304,10 @@ func normalizeVulnScanMode(mode VulnScanMode) VulnScanMode {
 	return VulnScanModeProd
 }
 
-func vulnCacheKey(sourceType string, projectID string, mode VulnScanMode) string {
-	return cacheKey(sourceType, projectID, "vulns", string(normalizeVulnScanMode(mode))+"/report")
+func vulnSourceCacheKey(source Source, projectID string, mode VulnScanMode) string {
+	return sourceCacheKey(source, projectID, "vulns", string(normalizeVulnScanMode(mode))+"/report")
+}
+
+func vulnAttemptCacheKey(source Source, projectID string, mode VulnScanMode) string {
+	return sourceCacheKey(source, projectID, "vulns", string(normalizeVulnScanMode(mode))+"/attempt")
 }

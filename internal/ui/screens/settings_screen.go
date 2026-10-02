@@ -27,12 +27,13 @@ func (s SettingsScreen) Render(
 	selectedProjectID int64,
 	tableState uikit.SettingsTableState,
 	status uikit.SettingsStatus,
+	searchQuery string,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
 	contentWidth := uikit.Max(width-2, 1)
 	count := len(rows)
-	title := components.ScreenTitle(s.palette, uikit.SymbolSettings, "Settings", &count)
+	title := components.ScreenTitle(s.palette, uikit.SymbolSettings, "Settings", &count, searchQuery)
 	body := s.renderContent(contentWidth, contentHeight, checkColumns, rows, selectedProjectID, tableState)
 	box := components.NewBox(s.palette, s.palette.Primary).Render(contentWidth, contentHeight, title, body)
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
@@ -51,24 +52,40 @@ func (s SettingsScreen) renderContent(
 	tableState uikit.SettingsTableState,
 ) string {
 	lines := make([]string, 0, height)
-	lines = append(lines, s.tableHeader(width, checkColumns, tableState))
+	visibleColumns, columnOffset := visibleSettingsColumns(width, checkColumns, tableState.SelectedColumn)
+	lines = append(lines, s.tableHeader(width, visibleColumns, columnOffset, tableState))
 	if len(rows) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No projects yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, row := range rows {
-			lines = append(lines, s.renderRow(width, checkColumns, row, row.ProjectID == selectedProjectID))
+		for _, row := range visibleRowsByID(rows, selectedProjectID, height-1, func(row uikit.ProjectCheckRow) int64 { return row.ProjectID }) {
+			lines = append(lines, s.renderRow(width, visibleColumns, checkColumns, row, row.ProjectID == selectedProjectID))
 		}
 	}
 	return fillLines(s.palette, lines, width, height)
 }
 
-func (s SettingsScreen) tableHeader(width int, checkColumns []uikit.ProjectCheck, tableState uikit.SettingsTableState) string {
+func visibleSettingsColumns(width int, columns []uikit.ProjectCheck, selectedColumn int) ([]uikit.ProjectCheck, int) {
+	capacity := uikit.Max((width-settingsProjectColumnWidth)/settingsCheckColumnWidth, 1)
+	if len(columns) <= capacity {
+		return columns, 0
+	}
+	start := selectedColumn - capacity
+	if start < 0 {
+		start = 0
+	}
+	if start+capacity > len(columns) {
+		start = len(columns) - capacity
+	}
+	return columns[start : start+capacity], start
+}
+
+func (s SettingsScreen) tableHeader(width int, checkColumns []uikit.ProjectCheck, columnOffset int, tableState uikit.SettingsTableState) string {
 	cells := []components.TableCell{
 		s.headerCell("project", settingsProjectColumnWidth, 0, tableState),
 	}
 	for index, check := range checkColumns {
-		cells = append(cells, s.headerCell(check.Title, settingsCheckColumnWidth, index+1, tableState))
+		cells = append(cells, s.headerCell(check.Title, settingsCheckColumnWidth, columnOffset+index+1, tableState))
 	}
 	return components.RenderTableRow(s.palette, s.palette.Background, width, cells)
 }
@@ -94,12 +111,12 @@ func (s SettingsScreen) headerCell(title string, width int, column int, tableSta
 	}
 }
 
-func (s SettingsScreen) renderRow(width int, checkColumns []uikit.ProjectCheck, row uikit.ProjectCheckRow, selected bool) string {
+func (s SettingsScreen) renderRow(width int, checkColumns, allCheckColumns []uikit.ProjectCheck, row uikit.ProjectCheckRow, selected bool) string {
 	background := s.palette.Background
 	if selected {
 		background = s.palette.Hover
 	}
-	iconColor := s.projectIconColor(checkColumns, row.Results, lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor)))
+	iconColor := s.projectIconColor(allCheckColumns, row.Results, lipgloss.Color(uikit.NormalizeHexColor(row.ProjectColor)))
 	projectCell := uikit.RenderProjectWithIcon(
 		s.palette,
 		row.ProjectIcon,
@@ -199,5 +216,9 @@ func (s SettingsScreen) checkColor(state uikit.CheckState) lipgloss.Color {
 }
 
 func (s SettingsScreen) progressLine(width int, status uikit.SettingsStatus) string {
-	return components.RenderProgress(s.palette, width, uikit.SymbolSettings, status.Message, status.Error, status.Running, status.Current, status.Total)
+	message := status.Message
+	if status.Running {
+		message += " [Esc] cancel"
+	}
+	return components.RenderProgress(s.palette, width, uikit.SymbolSettings, message, status.Error, status.Running, status.Current, status.Total)
 }

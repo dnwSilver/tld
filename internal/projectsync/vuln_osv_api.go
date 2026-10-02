@@ -32,14 +32,18 @@ type osvAPIBatchResponse struct {
 }
 
 func scanOsvAPI(ctx context.Context, files []File, strategy StackStrategy) (VulnReport, error) {
-	queries := buildOsvAPIQueries(files, strategy)
+	queries, err := buildOsvAPIQueries(files, strategy)
+	if err != nil {
+		return VulnReport{}, err
+	}
 	if len(queries) == 0 {
-		return VulnReport{Scanned: true}, nil
+		return VulnReport{}, fmt.Errorf("no supported dependency versions found for OSV scan")
 	}
 
 	report := VulnReport{
-		Scanned: true,
-		Items:   make([]Vulnerability, 0),
+		Scanned:  true,
+		Coverage: []ScannerCoverage{{Scanner: "OSV API", Method: "exact queries", Packages: len(queries)}},
+		Items:    make([]Vulnerability, 0),
 	}
 	seen := make(map[string]struct{})
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -54,6 +58,9 @@ func scanOsvAPI(ctx context.Context, files []File, strategy StackStrategy) (Vuln
 		batch, err := queryOsvAPIBatch(ctx, queries[start:end])
 		if err != nil {
 			return VulnReport{}, err
+		}
+		if len(batch.Results) != end-start {
+			return VulnReport{}, fmt.Errorf("OSV returned %d results for %d queries", len(batch.Results), end-start)
 		}
 
 		for index, result := range batch.Results {
@@ -98,9 +105,10 @@ func scanOsvAPI(ctx context.Context, files []File, strategy StackStrategy) (Vuln
 	return report, nil
 }
 
-func buildOsvAPIQueries(files []File, strategy StackStrategy) []osvAPIQuery {
+func buildOsvAPIQueries(files []File, strategy StackStrategy) ([]osvAPIQuery, error) {
 	queries := make([]osvAPIQuery, 0)
 	seen := make(map[string]struct{})
+	skipped := 0
 
 	for _, path := range strategy.Files() {
 		var content []byte
@@ -116,12 +124,13 @@ func buildOsvAPIQueries(files []File, strategy StackStrategy) []osvAPIQuery {
 
 		dependencies, err := strategy.Parse(path, content)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("parse %s for OSV scan: %w", path, err)
 		}
 
 		for _, dependency := range dependencies {
 			ecosystem, name, version, ok := osvPackageRef(dependency)
 			if !ok {
+				skipped++
 				continue
 			}
 			key := ecosystem + ":" + name + "@" + version
@@ -137,7 +146,10 @@ func buildOsvAPIQueries(files []File, strategy StackStrategy) []osvAPIQuery {
 		}
 	}
 
-	return queries
+	if skipped > 0 {
+		return nil, fmt.Errorf("OSV cannot query %d parsed dependencies", skipped)
+	}
+	return queries, nil
 }
 
 func osvPackageRef(dependency Dependency) (ecosystem, name, version string, ok bool) {

@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dnwSilver/tld/internal/sourceurl"
 )
 
 const (
@@ -20,6 +22,7 @@ const (
 	SourceTypeGitLab    = "gitlab"
 	SourceTypeGitea     = "gitea"
 	SourceTypeBitbucket = "bitbucket"
+	maxTagPages         = 100
 )
 
 type HTTPDoer interface {
@@ -29,6 +32,25 @@ type HTTPDoer interface {
 func NewSourceClient(sourceType string, httpClient HTTPDoer) (SourceClient, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 20 * time.Second}
+	}
+	if client, ok := httpClient.(*http.Client); ok {
+		copy := *client
+		originalCheckRedirect := copy.CheckRedirect
+		copy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if len(via) > 0 {
+				if err := sourceurl.SameOrigin(via[0].URL, req.URL); err != nil {
+					return err
+				}
+			}
+			if originalCheckRedirect != nil {
+				return originalCheckRedirect(req, via)
+			}
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		}
+		httpClient = &copy
 	}
 
 	switch strings.ToLower(strings.TrimSpace(sourceType)) {
@@ -145,8 +167,51 @@ func (c GitHubClient) ProtectedBranches(context.Context, Source, Project) ([]Pro
 	return nil, fmt.Errorf("protected branches check is supported only for gitlab")
 }
 
-func (c GitHubClient) Tags(context.Context, Source, Project) ([]Tag, error) {
-	return []Tag{}, nil
+func (c GitHubClient) Tags(ctx context.Context, source Source, project Project) ([]Tag, error) {
+	tags := make([]Tag, 0)
+	for page := 1; page <= maxTagPages; page++ {
+		requestURL := githubAPIURL(source, "repos", project.ProviderID, "tags")
+		query := requestURL.Query()
+		query.Set("per_page", "100")
+		query.Set("page", strconv.Itoa(page))
+		requestURL.RawQuery = query.Encode()
+		var raw []struct {
+			Name   string `json:"name"`
+			Commit struct {
+				SHA string `json:"sha"`
+			} `json:"commit"`
+		}
+		if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+			return nil, err
+		}
+		for _, item := range raw {
+			tag := Tag{Name: item.Name}
+			if _, relevant := releaseKindForTag(item.Name); relevant {
+				if item.Commit.SHA == "" {
+					return nil, fmt.Errorf("github tag %s has no commit SHA", item.Name)
+				}
+				var commit struct {
+					Commit struct {
+						Committer struct {
+							Date time.Time `json:"date"`
+						} `json:"committer"`
+					} `json:"commit"`
+				}
+				if err := c.getJSON(ctx, source, githubAPIURL(source, "repos", project.ProviderID, "commits", item.Commit.SHA), &commit); err != nil {
+					return nil, err
+				}
+				tag.CreatedAt = commit.Commit.Committer.Date
+				if tag.CreatedAt.IsZero() {
+					return nil, fmt.Errorf("github tag %s has no commit date", item.Name)
+				}
+			}
+			tags = append(tags, tag)
+		}
+		if len(raw) < 100 {
+			return tags, nil
+		}
+	}
+	return nil, errors.New("github tags exceed page budget")
 }
 
 func (c GitHubClient) getJSON(ctx context.Context, source Source, requestURL url.URL, target any) error {
@@ -279,27 +344,30 @@ func (c GitLabClient) DefaultBranch(ctx context.Context, source Source, project 
 }
 
 func (c GitLabClient) Tags(ctx context.Context, source Source, project Project) ([]Tag, error) {
-	requestURL := gitlabProjectAPIURL(source, project.ProviderID, "repository", "tags")
-	values := requestURL.Query()
-	values.Set("per_page", "100")
-	requestURL.RawQuery = values.Encode()
-
-	var raw []struct {
-		Name   string `json:"name"`
-		Commit struct {
-			CreatedAt time.Time `json:"created_at"`
-		} `json:"commit"`
+	tags := make([]Tag, 0)
+	for page := 1; page <= maxTagPages; page++ {
+		requestURL := gitlabProjectAPIURL(source, project.ProviderID, "repository", "tags")
+		values := requestURL.Query()
+		values.Set("per_page", "100")
+		values.Set("page", strconv.Itoa(page))
+		requestURL.RawQuery = values.Encode()
+		var raw []struct {
+			Name   string `json:"name"`
+			Commit struct {
+				CreatedAt time.Time `json:"created_at"`
+			} `json:"commit"`
+		}
+		if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+			return nil, err
+		}
+		for _, item := range raw {
+			tags = append(tags, Tag{Name: item.Name, CreatedAt: item.Commit.CreatedAt})
+		}
+		if len(raw) < 100 {
+			return tags, nil
+		}
 	}
-	if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
-		return nil, err
-	}
-
-	tags := make([]Tag, 0, len(raw))
-	for _, item := range raw {
-		tags = append(tags, Tag{Name: item.Name, CreatedAt: item.Commit.CreatedAt})
-	}
-
-	return tags, nil
+	return nil, errors.New("gitlab tags exceed page budget")
 }
 
 func (c GitLabClient) ProtectedBranches(ctx context.Context, source Source, project Project) ([]ProtectedBranch, error) {
@@ -314,7 +382,7 @@ func (c GitLabClient) ProtectedBranches(ctx context.Context, source Source, proj
 		} `json:"merge_access_levels"`
 	}
 	var raw []rawBranch
-	for page := 1; ; page++ {
+	for page := 1; page <= maxTagPages; page++ {
 		requestURL := gitlabProjectAPIURL(source, project.ProviderID, "protected_branches")
 		values := requestURL.Query()
 		values.Set("page", fmt.Sprint(page))
@@ -328,6 +396,9 @@ func (c GitLabClient) ProtectedBranches(ctx context.Context, source Source, proj
 		if len(batch) < 100 {
 			break
 		}
+	}
+	if len(raw) >= maxTagPages*100 {
+		return nil, errors.New("gitlab protected branches exceed page budget")
 	}
 
 	branches := make([]ProtectedBranch, 0, len(raw))
@@ -349,7 +420,7 @@ func (c GitLabClient) PipelineSchedules(ctx context.Context, source Source, proj
 	const pageSize = 100
 
 	schedules := make([]PipelineSchedule, 0)
-	for pageNumber := 1; ; pageNumber++ {
+	for pageNumber := 1; pageNumber <= maxTagPages; pageNumber++ {
 		requestURL := gitlabProjectAPIURL(source, project.ProviderID, "pipeline_schedules")
 		values := requestURL.Query()
 		values.Set("page", fmt.Sprintf("%d", pageNumber))
@@ -378,21 +449,25 @@ func (c GitLabClient) PipelineSchedules(ctx context.Context, source Source, proj
 			return schedules, nil
 		}
 	}
+	return nil, errors.New("gitlab pipeline schedules exceed page budget")
 }
 
 // CISettings reads project-level CI/CD settings from GET /projects/:id.
-// GitLab returns ci_separated_caches only when the token has at least
-// the Maintainer role, otherwise the field is omitted and decodes as false.
+// GitLab can omit ci_separated_caches for insufficient permissions. Treat that
+// as unknown rather than accepting the zero value as a confirmed false.
 func (c GitLabClient) CISettings(ctx context.Context, source Source, project Project) (CISettings, error) {
 	var raw struct {
-		SeparatedCaches bool `json:"ci_separated_caches"`
+		SeparatedCaches *bool `json:"ci_separated_caches"`
 	}
 	if err := c.getJSON(ctx, source, gitlabProjectAPIURL(source, project.ProviderID), &raw); err != nil {
 		return CISettings{}, err
 	}
+	if raw.SeparatedCaches == nil {
+		return CISettings{}, errors.New("GitLab did not return ci_separated_caches; check token permissions")
+	}
 
 	return CISettings{
-		SeparatedCaches: raw.SeparatedCaches,
+		SeparatedCaches: *raw.SeparatedCaches,
 	}, nil
 }
 
@@ -600,27 +675,30 @@ func (c GiteaClient) ProtectedBranches(context.Context, Source, Project) ([]Prot
 }
 
 func (c GiteaClient) Tags(ctx context.Context, source Source, project Project) ([]Tag, error) {
-	requestURL := giteaAPIURL(source, "repos", project.ProviderID, "tags")
-	values := requestURL.Query()
-	values.Set("limit", "100")
-	requestURL.RawQuery = values.Encode()
-
-	var raw []struct {
-		Name   string `json:"name"`
-		Commit struct {
-			Created time.Time `json:"created"`
-		} `json:"commit"`
+	tags := make([]Tag, 0)
+	for page := 1; page <= maxTagPages; page++ {
+		requestURL := giteaAPIURL(source, "repos", project.ProviderID, "tags")
+		values := requestURL.Query()
+		values.Set("limit", "100")
+		values.Set("page", strconv.Itoa(page))
+		requestURL.RawQuery = values.Encode()
+		var raw []struct {
+			Name   string `json:"name"`
+			Commit struct {
+				Created time.Time `json:"created"`
+			} `json:"commit"`
+		}
+		if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+			return nil, err
+		}
+		for _, item := range raw {
+			tags = append(tags, Tag{Name: item.Name, CreatedAt: item.Commit.Created})
+		}
+		if len(raw) < 100 {
+			return tags, nil
+		}
 	}
-	if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
-		return nil, err
-	}
-
-	tags := make([]Tag, 0, len(raw))
-	for _, item := range raw {
-		tags = append(tags, Tag{Name: item.Name, CreatedAt: item.Commit.Created})
-	}
-
-	return tags, nil
+	return nil, errors.New("gitea tags exceed page budget")
 }
 
 func (c GiteaClient) getJSON(ctx context.Context, source Source, requestURL url.URL, target any) error {
@@ -738,6 +816,9 @@ func (c BitbucketClient) bitbucketBranchCommitCount(ctx context.Context, source 
 		if err != nil {
 			return 0, fmt.Errorf("parse bitbucket next page: %w", err)
 		}
+		if err := sourceurl.SameOrigin(&requestURL, nextURL); err != nil {
+			return 0, fmt.Errorf("bitbucket next page: %w", err)
+		}
 		requestURL = *nextURL
 	}
 }
@@ -767,24 +848,41 @@ func (c BitbucketClient) Tags(ctx context.Context, source Source, project Projec
 	values.Set("pagelen", "100")
 	requestURL.RawQuery = values.Encode()
 
-	var raw struct {
-		Values []struct {
-			Name   string `json:"name"`
-			Target struct {
-				Date time.Time `json:"date"`
-			} `json:"target"`
-		} `json:"values"`
+	tags := make([]Tag, 0)
+	seen := make(map[string]struct{})
+	for page := 0; page < maxTagPages; page++ {
+		if _, ok := seen[requestURL.String()]; ok {
+			return nil, errors.New("bitbucket tags pagination cycle")
+		}
+		seen[requestURL.String()] = struct{}{}
+		var raw struct {
+			Values []struct {
+				Name   string `json:"name"`
+				Target struct {
+					Date time.Time `json:"date"`
+				} `json:"target"`
+			} `json:"values"`
+			Next string `json:"next"`
+		}
+		if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
+			return nil, err
+		}
+		for _, item := range raw.Values {
+			tags = append(tags, Tag{Name: item.Name, CreatedAt: item.Target.Date})
+		}
+		if raw.Next == "" {
+			return tags, nil
+		}
+		nextURL, err := url.Parse(raw.Next)
+		if err != nil {
+			return nil, fmt.Errorf("parse bitbucket tags next page: %w", err)
+		}
+		if err := sourceurl.SameOrigin(&requestURL, nextURL); err != nil {
+			return nil, fmt.Errorf("bitbucket tags next page: %w", err)
+		}
+		requestURL = *nextURL
 	}
-	if err := c.getJSON(ctx, source, requestURL, &raw); err != nil {
-		return nil, err
-	}
-
-	tags := make([]Tag, 0, len(raw.Values))
-	for _, item := range raw.Values {
-		tags = append(tags, Tag{Name: item.Name, CreatedAt: item.Target.Date})
-	}
-
-	return tags, nil
+	return nil, errors.New("bitbucket tags exceed page budget")
 }
 
 func (c BitbucketClient) getJSON(ctx context.Context, source Source, requestURL url.URL, target any) error {
@@ -925,9 +1023,12 @@ func gitlabAPIBase(source Source) url.URL {
 }
 
 func parseBaseURL(raw string) url.URL {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Host == "" {
+	if strings.TrimSpace(raw) == "" {
 		return url.URL{}
+	}
+	parsed, err := sourceurl.Parse(raw)
+	if err != nil {
+		return url.URL{Scheme: "invalid", Host: "invalid.invalid"}
 	}
 
 	return *parsed

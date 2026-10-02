@@ -35,6 +35,7 @@ func (s DependenciesScreen) Render(
 	sources []uikit.Source,
 	form uikit.DependencyForm,
 	deleteConfirm uikit.DeleteConfirm,
+	searchQuery string,
 ) string {
 	boxWidth := uikit.Max(width, 2)
 	boxHeight := uikit.Max(height-1, 3)
@@ -42,7 +43,7 @@ func (s DependenciesScreen) Render(
 	contentHeight := uikit.Max(boxHeight-2, 1)
 
 	count := len(dependencies)
-	title := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Dependencies", &count)
+	title := components.ScreenTitle(s.palette, uikit.SymbolDependency, "Dependencies", &count, searchQuery)
 	content := s.renderContent(contentWidth, contentHeight, dependencies, selectedDependencyID, stacks, sources, form, deleteConfirm)
 	borderColor := s.palette.Primary
 	if form.Open || deleteConfirm.Open {
@@ -65,17 +66,18 @@ func (s DependenciesScreen) renderContent(
 	deleteConfirm uikit.DeleteConfirm,
 ) string {
 	lines := make([]string, 0, height)
-	iconColumnWidth := components.ColumnWidth(dependencies, func(d uikit.Dependency) string { return d.Icon }, 2)
-	nameColumnWidth := components.ColumnWidth(dependencies, func(d uikit.Dependency) string { return d.Name }, dependencyNameColumnMinWidth)
-	registryColumnWidth := components.ColumnWidth(dependencies, func(d uikit.Dependency) string { return dependencyRegistryName(d) }, dependencyRegistryColumnMinWidth)
-	stackColumnWidth := components.ColumnWidth(dependencies, func(d uikit.Dependency) string { return d.StackName }, 5)
+	visibleDependencies := visibleRowsByID(dependencies, selectedDependencyID, height-1, func(dependency uikit.Dependency) int64 { return dependency.ID })
+	iconColumnWidth := components.ColumnWidth(visibleDependencies, func(d uikit.Dependency) string { return d.Icon }, 2)
+	nameColumnWidth := components.ColumnWidth(visibleDependencies, func(d uikit.Dependency) string { return d.Name }, dependencyNameColumnMinWidth)
+	registryColumnWidth := components.ColumnWidth(visibleDependencies, func(d uikit.Dependency) string { return dependencyRegistryName(d) }, dependencyRegistryColumnMinWidth)
+	stackColumnWidth := components.ColumnWidth(visibleDependencies, func(d uikit.Dependency) string { return d.StackName }, 5)
 	lines = append(lines, s.tableHeader(width, iconColumnWidth, nameColumnWidth, registryColumnWidth, stackColumnWidth))
 
 	if len(dependencies) == 0 {
 		empty := uikit.Text(s.palette, s.palette.Hint, "No dependencies yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, dependency := range dependencies {
+		for _, dependency := range visibleDependencies {
 			lines = append(lines, s.renderDependencyRow(width, dependency, dependency.ID == selectedDependencyID, iconColumnWidth, nameColumnWidth, registryColumnWidth, stackColumnWidth))
 		}
 	}

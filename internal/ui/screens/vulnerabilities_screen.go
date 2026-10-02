@@ -33,6 +33,7 @@ func (s VulnerabilitiesScreen) Render(
 	focus uikit.VulnPane,
 	mode uikit.VulnMode,
 	status uikit.SettingsStatus,
+	searchQuery string,
 ) string {
 	boxHeight := uikit.Max(height-1, 3)
 	contentHeight := uikit.Max(boxHeight-2, 1)
@@ -42,20 +43,57 @@ func (s VulnerabilitiesScreen) Render(
 	rightContentWidth := uikit.Max(rightTotalWidth-2, 1)
 
 	count := len(rows)
-	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolVulnerabilities, "Vulnerabilities", &count)
+	leftTitle := components.ScreenTitle(s.palette, uikit.SymbolVulnerabilities, "Vulnerabilities", &count, searchQuery)
 	leftBorder := s.borderForPane(focus == uikit.VulnPaneProjects)
 	left := components.NewBox(s.palette, leftBorder).Render(leftContentWidth, contentHeight, leftTitle, s.renderProjectsContent(leftContentWidth, contentHeight, rows, selectedProjectID))
-	rightTitle := components.ScreenTitle(s.palette, uikit.SymbolVulnHigh, "CVE", intPtr(len(items)))
+	rightTitle := components.ScreenTitle(s.palette, uikit.SymbolVulnHigh, "CVE", intPtr(len(items)), "")
 	rightBorder := s.borderForPane(focus == uikit.VulnPaneDetails)
 	right := components.NewTabbedPanel(s.palette, rightBorder).Render(
 		rightContentWidth,
 		contentHeight,
 		rightTitle,
 		vulnModeTabs(mode),
-		s.renderDetailsContent(rightContentWidth, contentHeight, items, selectedItemIndex),
+		s.renderDetailsContent(rightContentWidth, contentHeight, items, selectedItemIndex, selectedVulnScanned(rows, selectedProjectID)),
 	)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	if width < narrowLayoutWidth {
+		paneContentWidth := uikit.Max(width-2, 1)
+		if focus == uikit.VulnPaneDetails {
+			right = components.NewTabbedPanel(s.palette, s.palette.Primary).Render(
+				paneContentWidth, contentHeight, rightTitle, vulnModeTabs(mode),
+				s.renderDetailsContent(paneContentWidth, contentHeight, items, selectedItemIndex, selectedVulnScanned(rows, selectedProjectID)),
+			)
+			body = right
+		} else {
+			left = components.NewBox(s.palette, s.palette.Primary).Render(paneContentWidth, contentHeight, leftTitle, s.renderProjectsContent(paneContentWidth, contentHeight, rows, selectedProjectID))
+			body = left
+		}
+	}
 	footer := components.ScreenFooter(s.palette, width, "Kolosov Aleksandr")
+	for _, row := range rows {
+		if row.ProjectID == selectedProjectID && row.Scanned {
+			revision := row.Revision
+			if len(revision) > 8 {
+				revision = revision[:8]
+			}
+			label := "Scan time/revision unknown"
+			if row.ScannedAt != "" {
+				label = "Scanned " + row.ScannedAt
+				if revision != "" {
+					label += " @" + revision
+				}
+			}
+			if row.Stale {
+				label = "STALE · last attempt " + row.LastOutcome + " " + row.LastAttemptAt + " · " + label
+			}
+			footer = components.ScreenFooter(s.palette, width, label+" · "+row.Coverage)
+			break
+		}
+		if row.ProjectID == selectedProjectID && row.LastOutcome != "" && row.LastOutcome != "complete" {
+			footer = components.ScreenFooter(s.palette, width, "Last scan "+row.LastOutcome+" "+row.LastAttemptAt)
+			break
+		}
+	}
 	if status.Message != "" || status.Error != "" {
 		footer = s.progressLine(width, status)
 	}
@@ -84,7 +122,7 @@ func (s VulnerabilitiesScreen) renderProjectsContent(width, height int, rows []u
 		empty := uikit.Text(s.palette, s.palette.Hint, "No projects yet")
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for _, row := range rows {
+		for _, row := range visibleRowsByID(rows, selectedProjectID, height-1, func(row uikit.VulnProjectRow) int64 { return row.ProjectID }) {
 			lines = append(lines, s.renderProjectRow(width, row, row.ProjectID == selectedProjectID))
 		}
 	}
@@ -155,7 +193,16 @@ func (s VulnerabilitiesScreen) countTableCell(value int, scanned bool, activeCol
 	}
 }
 
-func (s VulnerabilitiesScreen) renderDetailsContent(width, height int, items []uikit.VulnerabilityItem, selectedIndex int) string {
+func selectedVulnScanned(rows []uikit.VulnProjectRow, selectedProjectID int64) bool {
+	for _, row := range rows {
+		if row.ProjectID == selectedProjectID {
+			return row.Scanned
+		}
+	}
+	return false
+}
+
+func (s VulnerabilitiesScreen) renderDetailsContent(width, height int, items []uikit.VulnerabilityItem, selectedIndex int, scanned bool) string {
 	lines := make([]string, 0, height)
 	titleWidth := uikit.Max(width-vulnItemSeverityWidth, 1)
 	lines = append(lines, components.RenderTableRow(s.palette, s.palette.Background, width, []components.TableCell{
@@ -164,10 +211,16 @@ func (s VulnerabilitiesScreen) renderDetailsContent(width, height int, items []u
 	}))
 
 	if len(items) == 0 {
-		empty := uikit.Text(s.palette, s.palette.Hint, "No CVE yet")
+		message := "Not scanned"
+		if scanned {
+			message = "No CVE found"
+		}
+		empty := uikit.Text(s.palette, s.palette.Hint, message)
 		lines = append(lines, uikit.CenterLine(s.palette, width, empty))
 	} else {
-		for index, item := range visibleVulnItems(items, selectedIndex, height-1) {
+		start, visible := visibleVulnItems(items, selectedIndex, height-1)
+		for localIndex, item := range visible {
+			index := start + localIndex
 			background := s.palette.Background
 			if index == selectedIndex {
 				background = s.palette.Hover
@@ -189,9 +242,9 @@ func (s VulnerabilitiesScreen) renderDetailsContent(width, height int, items []u
 	return fillLines(s.palette, lines, width, height)
 }
 
-func visibleVulnItems(items []uikit.VulnerabilityItem, selectedIndex int, visibleRows int) []uikit.VulnerabilityItem {
+func visibleVulnItems(items []uikit.VulnerabilityItem, selectedIndex int, visibleRows int) (int, []uikit.VulnerabilityItem) {
 	if visibleRows <= 0 || len(items) <= visibleRows {
-		return items
+		return 0, items
 	}
 	start := selectedIndex - visibleRows + 1
 	if start < 0 {
@@ -200,7 +253,7 @@ func visibleVulnItems(items []uikit.VulnerabilityItem, selectedIndex int, visibl
 	if start+visibleRows > len(items) {
 		start = len(items) - visibleRows
 	}
-	return items[start : start+visibleRows]
+	return start, items[start : start+visibleRows]
 }
 
 func (s VulnerabilitiesScreen) descriptionLine(width int, item uikit.VulnerabilityItem) string {
@@ -256,5 +309,9 @@ func (s VulnerabilitiesScreen) severityColor(severity string) lipgloss.Color {
 }
 
 func (s VulnerabilitiesScreen) progressLine(width int, status uikit.SettingsStatus) string {
-	return components.RenderProgress(s.palette, width, uikit.SymbolVulnerabilities, status.Message, status.Error, status.Running, status.Current, status.Total)
+	message := status.Message
+	if status.Running {
+		message += " [Esc] cancel"
+	}
+	return components.RenderProgress(s.palette, width, uikit.SymbolVulnerabilities, message, status.Error, status.Running, status.Current, status.Total)
 }

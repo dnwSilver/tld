@@ -60,7 +60,7 @@ func TestReleaseKindsSurviveCacheAndLegacyDatesLoad(t *testing.T) {
 		t.Fatalf("cached: %#v %v", loaded, err)
 	}
 	legacy, _ := json.Marshal([]time.Time{date.UTC()})
-	if err := store.Cache().Set(ctx, CacheNamespaceProjectReleases, releaseCacheKey(source.Type, project.ProviderID), legacy, "application/json", 0); err != nil {
+	if err := store.Cache().Set(ctx, CacheNamespaceProjectReleases, releaseSourceCacheKey(source, project.ProviderID), legacy, "application/json", 0); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err = service.LoadProject(ctx, source, project)

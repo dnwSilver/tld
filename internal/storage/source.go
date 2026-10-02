@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/dnwSilver/tld/internal/sourceurl"
 	"time"
 )
 
@@ -112,6 +113,9 @@ func (r SourceRepository) CreateWithRegistryKind(ctx context.Context, name strin
 	if sourceURL == "" {
 		return Source{}, errors.New("source url is empty")
 	}
+	if _, err := sourceurl.Parse(sourceURL); err != nil {
+		return Source{}, err
+	}
 	appearance, err := getSourceAppearance(sourceType)
 	if err != nil {
 		return Source{}, err
@@ -164,6 +168,9 @@ func (r SourceRepository) UpdateWithRegistryKind(ctx context.Context, id int64, 
 	}
 	if sourceURL == "" {
 		return errors.New("source url is empty")
+	}
+	if _, err := sourceurl.Parse(sourceURL); err != nil {
+		return err
 	}
 	appearance, err := getSourceAppearance(sourceType)
 	if err != nil {

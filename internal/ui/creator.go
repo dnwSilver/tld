@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/dnwSilver/tld/internal/safetext"
 	"github.com/dnwSilver/tld/internal/ui/components"
 	"github.com/dnwSilver/tld/internal/ui/screens"
 	"github.com/dnwSilver/tld/internal/ui/uikit"
@@ -51,74 +53,8 @@ func NewCreator() Creator {
 	}
 }
 
-func (c Creator) Render(
-	width int,
-	height int,
-	screen uikit.Screen,
-	stacks []uikit.Stack,
-	dashboardTokenRights uikit.TokenRights,
-	dashboardAttentionRows []uikit.DashboardAttentionRow,
-	dashboardFocus uikit.DashboardPane,
-	selectedAttentionProjectID int64,
-	selectedStackID int64,
-	namespaces []uikit.Namespace,
-	selectedNamespaceID int64,
-	dependencies []uikit.Dependency,
-	selectedDependencyID int64,
-	projects []uikit.Project,
-	selectedProjectID int64,
-	projectDependencies []uikit.ProjectDependency,
-	selectedProjectDepID int64,
-	projectLatestRun uikit.ProjectDependencyRun,
-	projectSyncStatus uikit.ProjectSyncStatus,
-	projectFocus uikit.ProjectPane,
-	sources []uikit.Source,
-	selectedSourceID int64,
-	policies []uikit.Policy,
-	selectedPolicyID int64,
-	policyValues []uikit.PolicyValue,
-	selectedPolicyValueID int64,
-	policyFocus uikit.PolicyPane,
-	policyUpdateStatus uikit.SettingsStatus,
-	dependencyView uikit.DependencyView,
-	selectedViewProjectID int64,
-	viewColumnOffset int,
-	checkColumns []uikit.ProjectCheck,
-	projectCheckRows []uikit.ProjectCheckRow,
-	selectedCheckProjectID int64,
-	settingsTableState uikit.SettingsTableState,
-	settingsStatus uikit.SettingsStatus,
-	releaseRows []uikit.ReleaseRow,
-	selectedReleaseProjectID int64,
-	releasePeriod uikit.ReleasePeriod,
-	releasesStatus uikit.SettingsStatus,
-	vulnRows []uikit.VulnProjectRow,
-	selectedVulnProjectID int64,
-	vulnItems []uikit.VulnerabilityItem,
-	selectedVulnItemIndex int,
-	vulnFocus uikit.VulnPane,
-	vulnMode uikit.VulnMode,
-	vulnsStatus uikit.SettingsStatus,
-	stackForm uikit.StackForm,
-	namespaceForm uikit.StackForm,
-	dependencyForm uikit.DependencyForm,
-	projectForm uikit.ProjectForm,
-	sourceForm uikit.SourceForm,
-	policyForm uikit.PolicyForm,
-	policyValueForm uikit.PolicyValueForm,
-	policyUpdateForm uikit.PolicyUpdateForm,
-	deleteConfirm uikit.DeleteConfirm,
-	namespaceDeleteConfirm uikit.DeleteConfirm,
-	dependencyDeleteConfirm uikit.DeleteConfirm,
-	projectDeleteConfirm uikit.DeleteConfirm,
-	sourceDeleteConfirm uikit.DeleteConfirm,
-	policyDeleteConfirm uikit.DeleteConfirm,
-	navModalOpen bool,
-	navModalIndex int,
-	settingsOperations []uikit.SettingsOperation,
-	operationsModalOpen bool,
-	operationsModalIndex int,
-) string {
+func (c Creator) Render(state RenderState) string {
+	width, height, screen := state.Width, state.Height, state.Screen
 	base := lipgloss.NewStyle().
 		Width(width).
 		Height(height).
@@ -127,113 +63,177 @@ func (c Creator) Render(
 
 	top := c.renderTopBar(width, screen)
 	topHeight := lipgloss.Height(top)
-	bodyHeight := uikit.Max(height-topHeight, 1)
-	body := c.defaultScreen.Render(width, bodyHeight, len(stacks), dashboardTokenRights, dashboardAttentionRows, dashboardFocus, selectedAttentionProjectID)
+	searchLine := c.renderSearchLine(width, state.Overlay)
+	searchHeight := 0
+	if searchLine != "" {
+		searchHeight = lipgloss.Height(searchLine)
+	}
+	loadLine := c.renderLoadState(width, state.Overlay.LoadState)
+	errorLine := ""
+	if state.Overlay.GlobalError != "" {
+		plain := safetext.Plain("Error: " + state.Overlay.GlobalError + "  [Esc to dismiss]")
+		errorLine = lipgloss.NewStyle().Foreground(c.palette.Error).Background(c.palette.Background).Render(ansi.Cut(plain, 0, width))
+	}
+	bodyHeight := uikit.Max(height-topHeight-searchHeight-lipgloss.Height(loadLine)-lipgloss.Height(errorLine), 1)
+	body := ""
+	if screen == uikit.ScreenDefault {
+		body = c.defaultScreen.Render(width, bodyHeight, len(state.Stacks.Items), state.Dashboard.TokenRights, state.Dashboard.AttentionRows, state.Dashboard.Focus, state.Dashboard.SelectedProjectID, state.Overlay.SearchQuery)
+	}
 	if screen == uikit.ScreenStacks {
-		body = c.stacksScreen.Render(width, bodyHeight, stacks, selectedStackID, nil, stackForm, deleteConfirm)
+		body = c.stacksScreen.Render(width, bodyHeight, state.Stacks.Items, state.Stacks.SelectedID, nil, state.Stacks.Form, state.Stacks.Delete, state.Overlay.SearchQuery)
 	}
 	if screen == uikit.ScreenNamespaces {
 		body = c.namespacesScreen.Render(
 			width,
 			bodyHeight,
-			toNamespaceItems(namespaces, policies),
-			selectedNamespaceID,
-			policies,
-			namespaceForm,
-			namespaceDeleteConfirm,
+			toNamespaceItems(state.Namespaces.Items, state.Policies.Items),
+			state.Namespaces.SelectedID,
+			state.Policies.Items,
+			state.Namespaces.Form,
+			state.Namespaces.Delete,
+			state.Overlay.SearchQuery,
 		)
 	}
 	if screen == uikit.ScreenDependencies {
 		body = c.dependenciesScreen.Render(
 			width,
 			bodyHeight,
-			dependencies,
-			selectedDependencyID,
-			stacks,
-			registrySources(sources),
-			dependencyForm,
-			dependencyDeleteConfirm,
+			state.Dependencies.Items,
+			state.Dependencies.SelectedID,
+			state.Stacks.Items,
+			registrySources(state.Sources.Items),
+			state.Dependencies.Form,
+			state.Dependencies.Delete,
+			state.Overlay.SearchQuery,
 		)
 	}
 	if screen == uikit.ScreenProjects {
 		body = c.projectsScreen.Render(
 			width,
 			bodyHeight,
-			projects,
-			selectedProjectID,
-			projectDependencies,
-			selectedProjectDepID,
-			projectLatestRun,
-			projectSyncStatus,
-			projectFocus,
-			namespaces,
-			projectSources(sources),
-			stacks,
-			projectForm,
-			projectDeleteConfirm,
+			state.Projects.Items,
+			state.Projects.SelectedID,
+			state.Projects.Dependencies,
+			state.Projects.SelectedDependencyID,
+			state.Projects.LatestRun,
+			state.Projects.SyncStatus,
+			state.Projects.Focus,
+			state.Namespaces.Items,
+			projectSources(state.Sources.Items),
+			state.Stacks.Items,
+			state.Projects.Form,
+			state.Projects.Delete,
+			state.Overlay.SearchQuery,
 		)
 	}
 	if screen == uikit.ScreenSources {
 		body = c.sourcesScreen.Render(
 			width,
 			bodyHeight,
-			sources,
-			selectedSourceID,
-			sourceForm,
-			sourceDeleteConfirm,
+			state.Sources.Items,
+			state.Sources.SelectedID,
+			state.Sources.Form,
+			state.Sources.Delete,
+			state.Overlay.SearchQuery,
 		)
 	}
 	if screen == uikit.ScreenPolicies {
 		body = c.policiesScreen.Render(
 			width,
 			bodyHeight,
-			policies,
-			selectedPolicyID,
-			policyValues,
-			selectedPolicyValueID,
-			policyFocus,
-			namespaces,
-			dependencies,
-			stacks,
-			registrySources(sources),
-			policyForm,
-			policyValueForm,
-			policyUpdateForm,
-			policyUpdateStatus,
-			policyDeleteConfirm,
+			state.Policies.Items,
+			state.Policies.SelectedID,
+			state.Policies.Values,
+			state.Policies.SelectedValueID,
+			state.Policies.Focus,
+			state.Namespaces.Items,
+			state.Dependencies.Items,
+			state.Stacks.Items,
+			registrySources(state.Sources.Items),
+			state.Policies.Form,
+			state.Policies.ValueForm,
+			state.Policies.UpdateForm,
+			state.Policies.UpdateStatus,
+			state.Policies.Delete,
+			state.Overlay.SearchQuery,
 		)
 	}
 	if screen == uikit.ScreenView {
-		body = c.viewScreen.Render(width, bodyHeight, stacks, dependencyView.StackID, dependencyView, selectedViewProjectID, viewColumnOffset, projectSyncStatus)
+		body = c.viewScreen.Render(width, bodyHeight, state.Stacks.Items, state.View.View.StackID, state.View.View, state.View.SelectedProjectID, state.View.ColumnOffset, state.Projects.SyncStatus, state.Overlay.SearchQuery)
 	}
 	if screen == uikit.ScreenSettings {
-		body = c.settingsScreen.Render(width, bodyHeight, checkColumns, projectCheckRows, selectedCheckProjectID, settingsTableState, settingsStatus)
+		body = c.settingsScreen.Render(width, bodyHeight, state.Settings.Columns, state.Settings.Rows, state.Settings.SelectedProjectID, state.Settings.TableState, state.Settings.Status, state.Overlay.SearchQuery)
 	}
 	if screen == uikit.ScreenReleases {
-		body = c.releasesScreen.Render(width, bodyHeight, releaseRows, selectedReleaseProjectID, releasePeriod, releasesStatus)
+		body = c.releasesScreen.Render(width, bodyHeight, state.Releases.Rows, state.Releases.SelectedProjectID, state.Releases.Period, state.Releases.Status, state.Overlay.SearchQuery)
 	}
 	if screen == uikit.ScreenVulnerabilities {
-		body = c.vulnerabilitiesScreen.Render(width, bodyHeight, vulnRows, selectedVulnProjectID, vulnItems, selectedVulnItemIndex, vulnFocus, vulnMode, vulnsStatus)
+		body = c.vulnerabilitiesScreen.Render(width, bodyHeight, state.Vulnerabilities.Rows, state.Vulnerabilities.SelectedProjectID, state.Vulnerabilities.Items, state.Vulnerabilities.SelectedItemIndex, state.Vulnerabilities.Focus, state.Vulnerabilities.Mode, state.Vulnerabilities.Status, state.Overlay.SearchQuery)
 	}
 
-	result := base.Render(lipgloss.JoinVertical(lipgloss.Left, top, body))
-	if !navModalOpen && !operationsModalOpen {
+	parts := []string{top}
+	if searchLine != "" {
+		parts = append(parts, searchLine)
+	}
+	if loadLine != "" {
+		parts = append(parts, loadLine)
+	}
+	if errorLine != "" {
+		parts = append(parts, errorLine)
+	}
+	parts = append(parts, body)
+	result := base.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
+	if !state.Overlay.NavigationOpen && !state.Overlay.OperationsOpen {
 		return result
 	}
 
 	lines := strings.Split(result, uikit.SymbolLineBreak)
 	modal := components.NewModal(c.palette, c.palette.Primary)
-	if navModalOpen {
-		block := c.navModal.Render(width, navModalIndex, screen)
+	if state.Overlay.NavigationOpen {
+		block := c.navModal.Render(width, height, state.Overlay.NavigationIndex, screen)
 		lines = modal.Overlay(lines, width, height, block)
 	}
-	if operationsModalOpen {
-		projectName := checkProjectName(projectCheckRows, selectedCheckProjectID)
-		block := c.operationsModal.Render(width, settingsOperations, operationsModalIndex, projectName)
+	if state.Overlay.OperationsOpen {
+		projectName := checkProjectName(state.Settings.Rows, state.Settings.SelectedProjectID)
+		preview := ""
+		if state.Overlay.OperationsConfirm {
+			for _, project := range state.Projects.Items {
+				if project.ID == state.Settings.SelectedProjectID {
+					for _, source := range state.Sources.Items {
+						if source.ID == project.SourceID {
+							preview = source.URL + " / " + project.ProjectID
+							break
+						}
+					}
+				}
+			}
+		}
+		block := c.operationsModal.Render(width, height, state.Overlay.Operations, state.Overlay.OperationsIndex, projectName, preview, state.Overlay.OperationsConfirm)
 		lines = modal.Overlay(lines, width, height, block)
 	}
 
 	return strings.Join(lines, uikit.SymbolLineBreak)
+}
+
+func (c Creator) renderLoadState(width int, state uikit.LoadState) string {
+	message := ""
+	color := c.palette.Hint
+	switch state.Phase {
+	case uikit.LoadPhaseLoading:
+		message = "Loading..."
+	case uikit.LoadPhaseStale:
+		message = "STALE: " + state.Error + "  [Ctrl+R to retry]"
+		color = c.palette.Warning
+	case uikit.LoadPhaseError:
+		message = "Load failed: " + state.Error + "  [Ctrl+R to retry]"
+		color = c.palette.Error
+	}
+	if message == "" {
+		return ""
+	}
+	return lipgloss.NewStyle().Foreground(color).Background(c.palette.Background).Render(
+		ansi.Cut(safetext.Plain(message), 0, width),
+	)
 }
 
 func checkProjectName(rows []uikit.ProjectCheckRow, selectedProjectID int64) string {

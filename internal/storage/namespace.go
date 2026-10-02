@@ -107,6 +107,42 @@ func (r NamespaceRepository) SetPolicy(ctx context.Context, id int64, policyID i
 	return nil
 }
 
+// SaveWithPolicy stores the namespace and its policy as one transaction.
+// id == 0 creates a new namespace; a nonzero id updates the existing one.
+func (r NamespaceRepository) SaveWithPolicy(ctx context.Context, id int64, icon, name, color string, policyID int64) (Namespace, error) {
+	if err := validateIconItem(namespaceLabel, icon, name, color); err != nil {
+		return Namespace{}, err
+	}
+	if policyID == 0 {
+		return Namespace{}, errors.New("namespace policy is empty")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Namespace{}, fmt.Errorf("begin namespace save: %w", err)
+	}
+	defer tx.Rollback()
+	now := time.Now().Unix()
+	var result sql.Result
+	if id == 0 {
+		result, err = tx.ExecContext(ctx, `INSERT INTO namespaces (icon, name, color, policy_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, icon, name, color, policyID, now, now)
+		if err == nil {
+			id, err = result.LastInsertId()
+		}
+	} else {
+		result, err = tx.ExecContext(ctx, `UPDATE namespaces SET icon = ?, name = ?, color = ?, policy_id = ?, updated_at = ? WHERE id = ?`, icon, name, color, policyID, now, id)
+		if err == nil {
+			err = requireRowsAffected(result, "read updated namespaces count")
+		}
+	}
+	if err != nil {
+		return Namespace{}, fmt.Errorf("save namespace: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Namespace{}, fmt.Errorf("commit namespace: %w", err)
+	}
+	return Namespace{ID: id, Icon: icon, Name: name, Color: color, PolicyID: policyID, UpdatedAt: time.Unix(now, 0).UTC()}, nil
+}
+
 func toNamespaces(items []iconItem) []Namespace {
 	namespaces := make([]Namespace, 0, len(items))
 	for _, item := range items {
