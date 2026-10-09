@@ -310,7 +310,7 @@ func (i *projectVersionIndex) add(ecosystem, name, version string) {
 		return
 	}
 	ecosystem = strings.ToLower(strings.TrimSpace(ecosystem))
-	name = normalizeDependencyViewName(name)
+	name = normalizeDependencyPackageName(ecosystem, name)
 	i.exact[ecosystem+"\x00"+name] = version
 	if i.byName[name] == nil {
 		i.byName[name] = make(map[string]string)
@@ -323,11 +323,22 @@ func (i *projectVersionIndex) version(ecosystem, name string) string {
 		return ""
 	}
 	ecosystem = strings.ToLower(strings.TrimSpace(ecosystem))
-	name = normalizeDependencyViewName(name)
+	name = normalizeDependencyPackageName(ecosystem, name)
 	if ecosystem != "" {
 		return i.exact[ecosystem+"\x00"+name]
 	}
-	candidates := i.byName[name]
+	// Dependencies without a registry still need ecosystem-specific name rules.
+	// Keep all matching ecosystems so an ambiguous name never picks one at random.
+	candidates := make(map[string]string)
+	for candidateEcosystem, version := range i.byName[name] {
+		candidates[candidateEcosystem] = version
+	}
+	for _, candidateEcosystem := range []string{"npm", "node"} {
+		canonicalName := normalizeDependencyPackageName(candidateEcosystem, name)
+		if version, ok := i.exact[candidateEcosystem+"\x00"+canonicalName]; ok {
+			candidates[candidateEcosystem] = version
+		}
+	}
 	if len(candidates) != 1 {
 		return ""
 	}
@@ -345,4 +356,20 @@ func normalizeDependencyViewName(name string) string {
 	default:
 		return name
 	}
+}
+
+// npm package references accept the same scope shorthand as the registry client.
+// Preserve punctuation and case for other ecosystems (notably Go and Maven).
+func normalizeDependencyPackageName(ecosystem, name string) string {
+	name = normalizeDependencyViewName(name)
+	switch ecosystem {
+	case "npm":
+		name = strings.ToLower(name)
+		if strings.Contains(name, "/") && !strings.HasPrefix(name, "@") {
+			name = "@" + name
+		}
+	case "node":
+		name = strings.ToLower(name)
+	}
+	return name
 }

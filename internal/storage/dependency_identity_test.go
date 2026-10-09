@@ -35,7 +35,7 @@ func TestDependencyViewDoesNotMergeDistinctPackageNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids := make(map[string]int64)
-	for _, name := range []string{"foo-bar", "foo_bar"} {
+	for _, name := range []string{"foo-bar", "foo_bar", "React", "spectrum/auth"} {
 		dependency, err := store.Dependencies().CreateWithRegistryName(ctx, stack.ID, "D", name, "#FFFFFF", name)
 		if err != nil {
 			t.Fatal(err)
@@ -49,7 +49,11 @@ func TestDependencyViewDoesNotMergeDistinctPackageNames(t *testing.T) {
 	_, err = store.ProjectDependencies().ReplaceForProjectRun(ctx, project.ID, ProjectDependencyRun{
 		CommitSHA: "abcdef1234567890", CommitShortSHA: "abcdef12", Status: ProjectDependencyRunStatusSuccess,
 		StartedAt: now, FinishedAt: &now,
-	}, []ProjectDependency{{Name: "foo_bar", Version: "1.0.0", DependencyType: "dependencies", SourceFile: "package.json"}})
+	}, []ProjectDependency{
+		{Name: "foo_bar", Ecosystem: "npm", Version: "1.0.0", DependencyType: "dependencies", SourceFile: "package.json"},
+		{Name: "react", Ecosystem: "npm", Version: "19.3.0", DependencyType: "dependencies", SourceFile: "package.json"},
+		{Name: "@spectrum/auth", Ecosystem: "npm", Version: "7.1.0", DependencyType: "dependencies", SourceFile: "package.json"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,12 +64,26 @@ func TestDependencyViewDoesNotMergeDistinctPackageNames(t *testing.T) {
 	if len(view.Rows) != 1 || view.Rows[0].Versions[ids["foo-bar"]] != "" || view.Rows[0].Versions[ids["foo_bar"]] != "1.0.0" {
 		t.Fatalf("versions = %#v", view.Rows)
 	}
+	for name, want := range map[string]string{"React": "19.3.0", "spectrum/auth": "7.1.0"} {
+		if got := view.Rows[0].Versions[ids[name]]; got != want {
+			t.Fatalf("%s version = %q, want %q", name, got, want)
+		}
+	}
 	comparisons, err := store.ProjectDependencies().ListPolicyVersionComparisons(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(comparisons) != 1 {
+	if len(comparisons) != 3 {
 		t.Fatalf("comparisons = %#v", comparisons)
+	}
+	actual := make(map[string]string)
+	for _, comparison := range comparisons {
+		actual[comparison.Actual] = comparison.Policy
+	}
+	for _, version := range []string{"1.0.0", "19.3.0", "7.1.0"} {
+		if actual[version] != "2.0.0" {
+			t.Fatalf("missing policy comparison for %s: %#v", version, comparisons)
+		}
 	}
 }
 
@@ -106,5 +124,36 @@ func TestDependencyViewSeparatesSameNameAcrossEcosystems(t *testing.T) {
 	}
 	if got := view.Rows[0].Versions[mavenDependency.ID]; got != "4.0.0" {
 		t.Fatalf("maven version = %q", got)
+	}
+}
+
+func TestProjectVersionIndexPackageNames(t *testing.T) {
+	index := newProjectVersionIndex()
+	index.add("npm", "react", "19.3.0")
+	index.add("npm", "@spectrum/auth", "7.1.0")
+	index.add("npm", "foo_bar", "1.0.0")
+	index.add("go", "github.com/Acme/module", "2.0.0")
+	index.add("maven", "React", "3.0.0")
+	index.add("node", "node", "24.18.0")
+	for _, tt := range []struct{ ecosystem, name, want string }{
+		{"npm", "React", "19.3.0"},
+		{"npm", " spectrum/auth ", "7.1.0"},
+		{"", "spectrum/auth", "7.1.0"},
+		{"", "REACT", "19.3.0"},
+		{"", "React", ""}, // Ambiguous between npm and Maven.
+		{"npm", "foo-bar", ""},
+		{"", "foo-bar", ""},
+		{"go", "github.com/acme/module", ""},
+		{"go", "github.com/Acme/module", "2.0.0"},
+		{"maven", "react", ""},
+		{"maven", "React", "3.0.0"},
+		{"node", "Node.js", "24.18.0"},
+		{"", "NODE", "24.18.0"},
+	} {
+		t.Run(tt.ecosystem+"/"+tt.name, func(t *testing.T) {
+			if got := index.version(tt.ecosystem, tt.name); got != tt.want {
+				t.Fatalf("version(%q, %q) = %q, want %q", tt.ecosystem, tt.name, got, tt.want)
+			}
+		})
 	}
 }
